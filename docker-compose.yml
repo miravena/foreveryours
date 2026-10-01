@@ -1,0 +1,12 @@
+services:
+  foreveryours:
+    build: .
+    container_name: foreveryours-demo
+    ports:
+      - "7860:7860"
+    environment:
+      - NEBIUS_API_KEY=${NEBIUS_API_KEY:-}
+      - NEBIUS_BASE_URL=${NEBIUS_BASE_URL:-https://api.tokenfactory.nebius.com/v1}
+      - PORT=7860
+      - MAX_DAILY_REQUESTS=100
+    restart: unless-stopped

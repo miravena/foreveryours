@@ -1,0 +1,1 @@
+"""ForeverYours test suite."""

@@ -59,7 +59,18 @@ cp .env.example .env   # fill in NEBIUS_API_KEY — see "Nebius access" below
 .venv/bin/python main.py beat2 --audio samples/senior_jazz.wav     # senior turn with real voice
 .venv/bin/python main.py beat3 --audio samples/senior_distress.wav # safety fast-path with voice
 .venv/bin/python main.py beat4 --audio samples/senior_grandson.wav # day-2 recall with voice
-# (Pass typed text arguments instead of --audio if running without sound)
+.venv/bin/python main.py chat                                      # interactive multi-turn CLI session
+# (Pass typed text arguments instead of --audio if running without sound, or add --no-play)
+```
+
+### Running Automated Tests
+
+```bash
+# Zero extra dependencies required (standard library unittest):
+python -m unittest discover tests -v
+
+# Or with pytest if installed:
+pytest tests/
 ```
 
 `beat1` runs fully offline. `beat2` needs `NEBIUS_API_KEY` set — it calls a real open-weight
@@ -87,6 +98,14 @@ This is what we'll host as the "working demo" link the hackathon requires; see
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env   # fill in NEBIUS_API_KEY for the full pipeline; works without one too
 .venv/bin/python webapp.py
+# open http://localhost:7860
+```
+
+### Docker Container Deployment (Nebius AI Cloud / Self-Hosting)
+
+```bash
+# Build and run with Docker Compose (includes system audio/espeak-ng dependencies):
+docker compose up --build
 # open http://localhost:7860
 ```
 

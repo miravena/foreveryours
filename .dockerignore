@@ -1,0 +1,13 @@
+.git
+.github
+.env
+data/*.json
+data/*.tmp
+out/audio/*.wav
+video/output/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+tests/

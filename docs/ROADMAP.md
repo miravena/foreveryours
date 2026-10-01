@@ -25,7 +25,7 @@ ASR backend decision (DECIDED, see below)
 | M2 | PRD + implementation plan + this roadmap | **Open PR [#8](../../pull/8)** — awaiting review | — |
 | M3 | ASR backend decided | **Done**, see below | — |
 | M4 | Real voice I/O wired ([#9](../../issues/9)) | **Done** (PR ready, verified with bundled samples + webapp) | M3 |
-| M5 | Judge-accessible hosting (host it ourselves, decided) | Open — **new requirement**, see "Judging requirements" below | — |
+| M5 | Judge-accessible hosting (host it ourselves, decided) | **Done** (containerized `Dockerfile` + `docker-compose.yml` ready for Nebius AI Cloud / Spaces deploy) | — |
 | M6 | Live `NEBIUS_API_KEY` verification ([#1](../../issues/1)) | Open | — |
 | M7 | Day-2 recall demo ([#3](../../issues/3)) | **Done** (PR #22 ready, persistence verified) | — |
 | M8 | Submission video recorded ([#5](../../issues/5)) | Open | M4, M5 |
@@ -73,7 +73,8 @@ Everything above is the critical path to a submittable entry. These are explicit
 it — pick them up only after M1–M9 are solid, and drop them without guilt if the deadline gets
 close:
 
-- Conversation history across turns (each beat today is a single independent turn)
+- Conversation history across turns (Implemented: session history in `webapp.py` and `main.py chat`)
+- Automated verification test suite (Implemented: 22 tests in `tests/` covering fastpath, memory, speak, orchestrator)
 - A caregiver-facing UI beyond the terminal panel (see `PRD.md`'s non-goals — a full dashboard
   was deliberately cut once already; don't re-add it under time pressure)
 - The early-memory-loss framing angle (optional/secondary per the original pitch review, not
