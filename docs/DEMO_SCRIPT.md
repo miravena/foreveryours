@@ -25,7 +25,7 @@ widget is UI polish, not pipeline work):
 ## Beat 2 — Senior conversation uses that context
 
 ```bash
-python main.py beat2 "Hi, how's it going today? By the way, my daughter is visiting tomorrow."
+python main.py beat2 "Hi, how's it going today?"
 ```
 
 **Expect:**
@@ -60,11 +60,11 @@ Shows a memory saved in one session surfacing correctly in a *later* session
 isn't just in-memory-per-run.
 
 ```bash
-python main.py beat4 "Who is visiting me tomorrow?"
+python main.py beat4 "I forgot, what is my grandson's name?"
 ```
 
 **Expect:**
-- The companion naturally recalls the new durable fact mentioned in Beat 2 (that the daughter is visiting).
+- The companion naturally recalls the durable fact from the caregiver memo (that the grandson is Leo).
 
 ## What the video should NOT open on
 

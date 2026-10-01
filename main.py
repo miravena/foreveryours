@@ -9,9 +9,9 @@ Usage:
     cd competitions/nebius-foreveryours/app
     cp .env.example .env   # fill in NEBIUS_API_KEY
     python -m main beat1   # caregiver memo
-    python -m main beat2 "Hi, how's it going today? By the way, my daughter is visiting tomorrow."
+    python -m main beat2 "Hi, how's it going today?"
     python -m main beat3 "I fell down earlier and I'm scared"
-    python -m main beat4 "Who is visiting me tomorrow?"
+    python -m main beat4 "I forgot, what is my grandson's name?"
 """
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     elif beat == "beat3":
         beat3_worrying_remark(args[1] if len(args) > 1 else "I fell down earlier and I'm scared")
     elif beat == "beat4":
-        beat4_day2_recall(args[1] if len(args) > 1 else "Who is visiting me tomorrow?")
+        beat4_day2_recall(args[1] if len(args) > 1 else "I forgot, what is my grandson's name?")
     else:
         print(f"unknown beat: {beat}")
         sys.exit(1)
