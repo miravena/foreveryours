@@ -135,12 +135,12 @@ def day2_recall_check() -> None:
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
     items = store.all()
     if not items:
-        print(f"No memory file found at {store.path} -- run `python main.py beat1` first.")
+        print(f"No memory file found at {store.path.name} -- run `python main.py beat1` first.")
         return
 
     now = time.time()
     print(f"This process (PID {os.getpid()}) started just now and has no in-memory state from")
-    print(f"whatever process originally wrote {store.path}. It only read the file on disk:\n")
+    print(f"whatever process originally wrote {store.path.name}. It only read the file on disk:\n")
     for item in items:
         age_s = now - item.created_at
         print(f"  [{item.source}] \"{item.text}\" -- saved {age_s:.0f}s ago by a different process")
