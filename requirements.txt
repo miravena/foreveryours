@@ -1,0 +1,4 @@
+openai>=1.40.0          # OpenAI-compatible client, points at Nebius Token Factory base_url
+python-dotenv>=1.0.1
+pyttsx3>=2.90            # offline local TTS fallback (real audio, no API key needed)
+faster-whisper>=1.0.0    # ASR fallback if no NVIDIA/Nebius-hosted ASR model is reachable
