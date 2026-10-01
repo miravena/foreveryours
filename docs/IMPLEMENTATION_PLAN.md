@@ -31,7 +31,7 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
 | Orchestrator | `pipeline/orchestrator.py` | Done — ties the above together, graceful degradation without a live API key |
 | CLI demo runner | `main.py` | Done for the 4-beat demo script + interactive multi-turn session (`python main.py chat`), cross-platform audio playback (Windows/macOS/Linux) |
 | Automated test suite | `tests/` | Done — 22 automated tests covering fastpath, memory, speak, think, orchestrator, caregiver, and CLI (zero-dependency `unittest` & `pytest` compatible) |
-| Containerization (M5) | `Dockerfile`, `docker-compose.yml` | Done — Linux system audio packages (`espeak-ng`), healthcheck, and cloud container configuration ready for Nebius AI Cloud / Spaces |
+| Cloud hosting (M5) | Cloudflare Pages, `app.py`, `packages.txt` | Done — Zero-Docker hosting via Cloudflare Pages (presentation/landing site) + Hugging Face Spaces / Cloudflare Tunnel |
 
 ## Open design decisions
 

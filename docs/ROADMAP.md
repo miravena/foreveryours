@@ -25,7 +25,7 @@ ASR backend decision (DECIDED, see below)
 | M2 | PRD + implementation plan + this roadmap | **Open PR [#8](../../pull/8)** — awaiting review | — |
 | M3 | ASR backend decided | **Done**, see below | — |
 | M4 | Real voice I/O wired ([#9](../../issues/9)) | **Done** (PR ready, verified with bundled samples + webapp) | M3 |
-| M5 | Judge-accessible hosting (host it ourselves, decided) | **Done** (containerized `Dockerfile` + `docker-compose.yml` ready for Nebius AI Cloud / Spaces deploy) | — |
+| M5 | Judge-accessible hosting (host it ourselves, decided) | **Done** (Cloudflare Pages landing site + Zero-Docker `app.py` & `packages.txt` for Spaces / Tunnel) | — |
 | M6 | Live `NEBIUS_API_KEY` verification ([#1](../../issues/1)) | Open | — |
 | M7 | Day-2 recall demo ([#3](../../issues/3)) | **Done** (PR #22 ready, persistence verified) | — |
 | M8 | Submission video recorded ([#5](../../issues/5)) | Open | M4, M5 |

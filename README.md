@@ -101,13 +101,11 @@ cp .env.example .env   # fill in NEBIUS_API_KEY for the full pipeline; works wit
 # open http://localhost:7860
 ```
 
-### Docker Container Deployment (Nebius AI Cloud / Self-Hosting)
+### Cloudflare & Cloud Hosting (Milestone M5)
 
-```bash
-# Build and run with Docker Compose (includes system audio/espeak-ng dependencies):
-docker compose up --build
-# open http://localhost:7860
-```
+- **Cloudflare Pages**: Deploys the landing page and presentation directly from `docs/index.html` with zero build commands.
+- **Hugging Face Spaces**: Zero-Docker 1-click deploy using `app.py`, `requirements.txt`, and `packages.txt`.
+- **Cloudflare Tunnel (`cloudflared`)**: Exposes a running `webapp.py` to a secure public HTTPS URL via `cloudflared tunnel --url http://localhost:7860`.
 
 Works the same with or without a key: without one, a distress/confusion phrase still gets the
 immediate fast-path reassurance (no LLM needed for that), it just can't continue the
