@@ -9,10 +9,14 @@ Usage:
     cp .env.example .env   # fill in NEBIUS_API_KEY
     python main.py beat1   # caregiver memo
     python main.py beat2 "Hi, how's it going today?"
+    python main.py beat2 --audio senior_turn.wav   # real voice in, instead of typed text
     python main.py beat3 "I fell down earlier and I'm scared"
+
+Pass --no-play to skip audio playback (e.g. on a headless box with no speaker).
 """
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -20,10 +24,21 @@ from dotenv import load_dotenv
 
 from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, CaregiverFlags
 from memory.store import MemoryStore
+from pipeline import hear
 from pipeline.orchestrator import run_turn
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
+
+
+def _play(audio_path: Path) -> None:
+    player = "afplay" if sys.platform == "darwin" else "aplay"
+    try:
+        subprocess.run([player, str(audio_path)], check=True, capture_output=True)
+    except FileNotFoundError:
+        print(f"  (no {player} found -- skipping playback of {audio_path.name})")
+    except subprocess.CalledProcessError as exc:
+        print(f"  (playback of {audio_path.name} failed: {exc})")
 
 
 def _print_memory_panel(store: MemoryStore, flags: CaregiverFlags) -> None:
@@ -56,7 +71,11 @@ def beat1_caregiver_memo() -> None:
     _print_memory_panel(store, CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR))
 
 
-def beat2_senior_turn(transcript: str) -> None:
+def beat2_senior_turn(transcript: str | None, audio_in: Path | None = None, play: bool = True) -> None:
+    if audio_in is not None:
+        transcript = hear.transcribe(audio_in)
+        print(f'Heard from "{audio_in.name}": "{transcript}"')
+
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR)
     result = run_turn(transcript, store, flags, AUDIO_DIR, caregiver_name=DEFAULT_CAREGIVER_NAME)
@@ -68,6 +87,9 @@ def beat2_senior_turn(transcript: str) -> None:
         print(f"Time to first audio: {result.time_to_first_audio_s:.2f}s [{tag}]")
     print(f"Memories recalled: {result.memories_used}")
     print(f"Audio chunks: {[str(p) for p in result.audio_paths]}")
+    if play:
+        for audio_path in result.audio_paths:
+            _play(audio_path)
 
     if result.background_thread is not None:
         result.background_thread.join(timeout=10)  # the audit/memory-save LLM call can be slower than a fixed sleep
@@ -78,11 +100,11 @@ def beat2_senior_turn(transcript: str) -> None:
     _print_memory_panel(store, flags)
 
 
-def beat3_worrying_remark(transcript: str) -> None:
+def beat3_worrying_remark(transcript: str | None, audio_in: Path | None = None, play: bool = True) -> None:
     """Same code path as beat2 -- the fast-path in safety/fastpath.py is what
     makes this beat different (immediate disclosure + caregiver flag, then
     the turn continues naturally instead of ending)."""
-    beat2_senior_turn(transcript)
+    beat2_senior_turn(transcript, audio_in=audio_in, play=play)
 
 
 if __name__ == "__main__":
@@ -93,12 +115,27 @@ if __name__ == "__main__":
         sys.exit(1)
 
     beat = args[0]
+    rest = args[1:]
+    play = "--no-play" not in rest
+    rest = [a for a in rest if a != "--no-play"]
+
+    audio_in: Path | None = None
+    if "--audio" in rest:
+        idx = rest.index("--audio")
+        audio_in = Path(rest[idx + 1])
+        rest = rest[:idx] + rest[idx + 2:]
+    text_in = rest[0] if rest else None
+
     if beat == "beat1":
         beat1_caregiver_memo()
     elif beat == "beat2":
-        beat2_senior_turn(args[1] if len(args) > 1 else "Hi, how's it going today? I've been listening to a lot of Miles Davis lately, I love him.")
+        beat2_senior_turn(
+            text_in or "Hi, how's it going today? I've been listening to a lot of Miles Davis lately, I love him.",
+            audio_in=audio_in,
+            play=play,
+        )
     elif beat == "beat3":
-        beat3_worrying_remark(args[1] if len(args) > 1 else "I fell down earlier and I'm scared")
+        beat3_worrying_remark(text_in or "I fell down earlier and I'm scared", audio_in=audio_in, play=play)
     else:
         print(f"unknown beat: {beat}")
         sys.exit(1)
