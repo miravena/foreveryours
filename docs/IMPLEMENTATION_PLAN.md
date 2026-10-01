@@ -37,14 +37,15 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
   `faster-whisper`. Rationale and the offline-capability tradeoff are in `ROADMAP.md`'s
   "Decided: ASR backend" section. This unblocks [Issue #9](../../issues/9) (real voice I/O).
   `faster-whisper` stays in `hear.py` as a fallback/dev convenience, not the primary path.
-- **Judge-accessible hosting — newly required, not yet decided.** The hackathon's rules page
-  requires a live/testable demo link OR a test build — these aren't equivalent effort. A test
-  build (our README's existing setup steps) is near-free but assumes the judge gets their own
-  free `NEBIUS_API_KEY`; a hosted demo on Nebius AI Cloud compute costs some of our $50 credit
-  + deploy effort but removes that friction *and* doubles as the required proof of deployment
-  on sponsor infrastructure. Leaning test-build-first (cheapest), hosted demo as a stretch if
-  credit/time allow. See `ROADMAP.md`'s "Judging requirements" table and
-  [Issue #11](../../issues/11).
+- **Judge-accessible hosting — DECIDED: host it ourselves, not a test build.** A test build
+  (our README's existing setup steps) is near-free but assumes a judge will sign up for their
+  own `NEBIUS_API_KEY` mid-review — unrealistic at hackathon judging speed/volume, and the
+  downside (a judge just skips it) silently loses us the whole "functioning demo" credit.
+  Hosting on Nebius AI Cloud compute with our own key already configured costs some of our $50
+  credit + deploy effort, but removes that friction *and* doubles as the required proof of
+  deployment on sponsor infrastructure. README setup steps stay documented as a convenience for
+  the other collaborator and anyone who wants to run it locally, not as the primary judging
+  path. See `ROADMAP.md`'s "Judging requirements" table and [Issue #11](../../issues/11).
 - **THINK model ID — tentatively decided, unverified.** Default is
   `nvidia/Llama-3_1-Nemotron-70B-Instruct-HF` (`pipeline/think.py`), chosen before Nebius's
   2025-11 Token Factory relaunch exposed a newer Nemotron 3 lineup (Nano 30B, Nano Omni,
