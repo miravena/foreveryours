@@ -22,7 +22,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv():  # noqa: E731
+        pass
 
 from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, CaregiverFlags
 from memory.store import MemoryStore
@@ -34,6 +38,15 @@ AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
 
 
 def _play(audio_path: Path) -> None:
+    if sys.platform == "win32":
+        try:
+            import winsound
+
+            winsound.PlaySound(str(audio_path), winsound.SND_FILENAME)
+        except Exception as exc:
+            print(f"  (windows playback failed for {audio_path.name}: {exc})")
+        return
+
     player = "afplay" if sys.platform == "darwin" else "aplay"
     try:
         subprocess.run([player, str(audio_path)], check=True, capture_output=True)
@@ -88,7 +101,7 @@ def beat2_senior_turn(transcript: str | None, audio_in: Path | None = None, play
         tag = "OK" if result.time_to_first_audio_s < 2.0 else "SLOW"
         print(f"Time to first audio: {result.time_to_first_audio_s:.2f}s [{tag}]")
     print(f"Memories recalled: {result.memories_used}")
-    print(f"Audio chunks: {[str(p) for p in result.audio_paths]}")
+    print(f"Audio chunks: {[p.name for p in result.audio_paths]}")
     if play:
         for audio_path in result.audio_paths:
             _play(audio_path)
@@ -134,11 +147,27 @@ def day2_recall_check() -> None:
     print(f"\n{len(items)} fact(s) recalled from a prior run. Persistence confirmed.")
 
 
-def beat4_day2_recall(transcript: str) -> None:
+def beat4_day2_recall(transcript: str | None, audio_in: Path | None = None, play: bool = True) -> None:
     """Demonstrates persistence by surfacing a memory saved in a previous session
-    (e.g., beat2) across process boundaries."""
-    print("[Testing Day-2 Recall: Simulating a new session on a different day]")
-    beat2_senior_turn(transcript)
+    (e.g., beat1) across process boundaries."""
+    import os
+    from pipeline.nebius_client import NebiusNotConfigured
+
+    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
+    items = store.all()
+    if not items:
+        print(f"No memory file found at {store.path} -- run `python main.py beat1` first.")
+        return
+
+    print(f"[Testing Day-2 Recall: PID {os.getpid()} starting fresh with no in-memory state]")
+    try:
+        beat2_senior_turn(transcript, audio_in=audio_in, play=play)
+    except NebiusNotConfigured:
+        print(
+            "beat4 needs NEBIUS_API_KEY for the conversational reply. "
+            "For the no-key persistence proof, run `python main.py day2`."
+        )
+        sys.exit(2)
 
 
 if __name__ == "__main__":
@@ -171,7 +200,7 @@ if __name__ == "__main__":
     elif beat == "beat3":
         beat3_worrying_remark(text_in or "I fell down earlier and I'm scared", audio_in=audio_in, play=play)
     elif beat == "beat4":
-        beat4_day2_recall(text_in or "I forgot, what is my grandson's name?")
+        beat4_day2_recall(text_in or "I forgot, what is my grandson's name?", audio_in=audio_in, play=play)
     elif beat == "day2":
         day2_recall_check()
     else:

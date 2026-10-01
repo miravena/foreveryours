@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import os
 
-from openai import OpenAI
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from openai import OpenAI
 
 
 class NebiusNotConfigured(RuntimeError):
@@ -23,6 +26,11 @@ def get_client() -> OpenAI:
             "NEBIUS_API_KEY is not set. Copy .env.example to .env and fill it in "
             "-- see README.md -> Setup -> Nebius access."
         )
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise RuntimeError("openai package is required for Nebius Token Factory: pip install openai") from exc
+
     # Confirmed against Nebius's own first-party docs (docs.tokenfactory.nebius.com/
     # api-reference/introduction, 2026-10-01) -- NOT yet exercised against a live
     # key, but this is the documented endpoint, not a guess from a secondary source.

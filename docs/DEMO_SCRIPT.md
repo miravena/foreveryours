@@ -66,13 +66,25 @@ python main.py beat3 "I fell down earlier"
   completes (degrades gracefully — see the audit verdict line printed), it
   just doesn't continue past the immediate reassurance.
 
-## Beat 4 — Day-2 recall (Persistence)
+## Day-2 recall (`python main.py day2`, built and verified)
 
 Shows a memory saved in one session surfacing correctly in a *later* session
 (different process run, same `data/` directory) — run after beat1, as a
 genuinely separate process invocation. Proves persistence isn't just
 in-memory-per-run; good footage for the video since it's a visible "fresh
-process, PID printed, still remembers" moment.
+process, PID printed, still remembers" moment. Runs completely offline without an API key.
+
+```bash
+python main.py day2
+```
+
+**Expect:**
+- Terminal prints its own new process PID and verifies facts loaded directly from disk.
+- Output confirms: `"4 fact(s) recalled from a prior run. Persistence confirmed."`
+
+## Beat 4 — Conversational Day-2 recall (needs `NEBIUS_API_KEY`)
+
+The conversational version of Day-2 recall: senior asks for a durable fact established in Beat 1 ("Leo"), proving the companion retrieves it across session boundaries.
 
 ```bash
 python main.py beat4 "I forgot, what is my grandson's name?"
@@ -80,6 +92,7 @@ python main.py beat4 "I forgot, what is my grandson's name?"
 
 **Expect:**
 - The companion naturally recalls the durable fact from the caregiver memo (that the grandson is Leo).
+- When run without `NEBIUS_API_KEY`, it prints a clean, friendly message directing to `python main.py day2` instead of crashing.
 
 ## What the video should NOT open on
 
