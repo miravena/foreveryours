@@ -24,6 +24,38 @@ class MemoryItem:
     created_at: float = field(default_factory=time.time)
 
 
+STOPWORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "my", "your", "i", "you",
+    "he", "she", "it", "we", "they", "in", "on", "at", "to", "for", "with",
+    "of", "and", "or", "what", "where", "who", "when", "why", "how", "tell",
+    "about", "me", "do", "did", "does", "have", "had", "has", "s", "t", "d",
+}
+
+DOMAIN_SYNONYMS: dict[str, set[str]] = {
+    "grandson": {"grandson", "grandchild", "grandkid", "granddaughter"},
+    "granddaughter": {"granddaughter", "grandchild", "grandkid", "grandson"},
+    "grandchild": {"grandchild", "grandkid", "grandson", "granddaughter"},
+    "grandkid": {"grandkid", "grandchild", "grandson", "granddaughter"},
+    "son": {"son", "child", "boy"},
+    "daughter": {"daughter", "child", "girl"},
+    "wife": {"wife", "spouse", "married", "partner"},
+    "husband": {"husband", "spouse", "married", "partner"},
+    "driving": {"driving", "drive", "car", "vehicle", "automobile"},
+    "drive": {"driving", "drive", "car", "vehicle", "automobile"},
+    "car": {"car", "driving", "drive", "vehicle", "automobile"},
+    "vehicle": {"car", "driving", "drive", "vehicle", "automobile"},
+    "doctor": {"doctor", "physician", "appointment", "clinic", "hospital"},
+    "physician": {"doctor", "physician", "appointment", "clinic", "hospital"},
+    "medicine": {"medicine", "medication", "pills", "prescription"},
+    "medication": {"medicine", "medication", "pills", "prescription"},
+    "pills": {"medicine", "medication", "pills", "prescription"},
+    "music": {"music", "jazz", "song", "tunes"},
+    "jazz": {"jazz", "music", "song", "tunes"},
+    "groceries": {"groceries", "food", "shopping", "market"},
+    "food": {"groceries", "food", "dinner", "lunch", "breakfast"},
+}
+
+
 class MemoryStore:
     def __init__(self, profile_id: str, data_dir: Path):
         self.profile_id = profile_id
@@ -66,20 +98,33 @@ class MemoryStore:
         return [i for i in self._items if i.source in CAREGIVER_SOURCES]
 
     def search(self, query: str, k: int = 5) -> list[MemoryItem]:
-        """Keyword-overlap scoring over conversation-derived memories only
-        (caregiver context is returned separately, unconditionally, by
-        caregiver_context()). Good enough for the demo's small memo set;
-        swap for embeddings + ChromaDB if memory volume grows past a few
-        dozen items per profile."""
-        query_terms = set(re.findall(r"[a-z0-9]+", query.lower()))
+        """Scored memory retrieval with stopword pruning and semantic synonym
+        expansion over conversation-derived memories. Caregiver context is
+        returned separately, unconditionally, by caregiver_context().
+        Direct matches are weighted higher than synonym matches."""
+        raw_query = set(re.findall(r"[a-z0-9]+", query.lower()))
+        meaningful_query = {t for t in raw_query if t not in STOPWORDS and len(t) > 1}
+        if not meaningful_query:
+            meaningful_query = raw_query
+
+        expanded_query = set(meaningful_query)
+        for term in meaningful_query:
+            if term in DOMAIN_SYNONYMS:
+                expanded_query.update(DOMAIN_SYNONYMS[term])
+
+        synonym_only = expanded_query - meaningful_query
+
         scored = []
         for item in self._items:
             if item.source in CAREGIVER_SOURCES:
                 continue
             item_terms = set(re.findall(r"[a-z0-9]+", item.text.lower()))
-            overlap = len(query_terms & item_terms)
-            if overlap:
-                scored.append((overlap, item))
+            meaningful_item_terms = {t for t in item_terms if t not in STOPWORDS and len(t) > 1} or item_terms
+            direct_hits = len(meaningful_query & meaningful_item_terms)
+            synonym_hits = len(synonym_only & meaningful_item_terms)
+            score = (direct_hits * 2) + synonym_hits
+            if score > 0:
+                scored.append((score, item))
         scored.sort(key=lambda pair: pair[0], reverse=True)
         return [item for _, item in scored[:k]]
 

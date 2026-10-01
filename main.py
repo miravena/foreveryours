@@ -16,6 +16,7 @@ Usage:
     python main.py beat4 "I forgot, what is my grandson's name?"
     python main.py beat4 --audio samples/senior_grandson.wav # day-2 recall with voice
     python main.py day2   # run AFTER beat1, in a separate invocation -- proves persistence
+    python main.py chat   # interactive multi-turn session in terminal (bounded history)
 
 Pass --no-play to skip audio playback (e.g. on a headless box with no speaker).
 """
@@ -24,6 +25,12 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 try:
     from dotenv import load_dotenv
@@ -177,6 +184,80 @@ def beat4_day2_recall(transcript: str | None, audio_in: Path | None = None, play
         sys.exit(2)
 
 
+def chat_loop(play: bool = True) -> None:
+    """Interactive multi-turn session in the terminal.
+    Maintains session history across turns, bounded to the last 6 turns.
+    Runs full voice synthesis and memory recall."""
+    from pipeline.nebius_client import NebiusNotConfigured
+
+    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
+    flags = CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR)
+    history: list[dict] = []
+    max_history_turns = 6
+
+    print("\n=======================================================")
+    print(" ForeverYours Interactive Conversational Companion")
+    print(" Type 'exit', 'quit', or Ctrl+C to end the session.")
+    print(" Distress triggers run 100% offline with instant voice.")
+    print("=======================================================\n")
+    _print_memory_panel(store, flags)
+
+    while True:
+        try:
+            senior_input = input("Senior (you) > ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting interactive chat.")
+            break
+
+        if not senior_input:
+            continue
+        if senior_input.lower() in ("exit", "quit", "q"):
+            print("Goodbye! Ending session.")
+            break
+
+        try:
+            result = run_turn(
+                senior_input,
+                store,
+                flags,
+                AUDIO_DIR,
+                caregiver_name=DEFAULT_CAREGIVER_NAME,
+                history=history,
+            )
+        except NebiusNotConfigured:
+            print("\n  [NOTE] Conversational turns require NEBIUS_API_KEY in .env.")
+            print("  [FASTPATH] Distress triggers (e.g. 'I fell down and need help', 'Where am I?')")
+            print("             work completely offline with instant voice reassurance!\n")
+            continue
+        except Exception as exc:
+            print(f"\n  Turn error: {exc}\n")
+            continue
+
+        print(f"\nCompanion: \"{result.reply_text}\"")
+        if result.time_to_first_audio_s is not None:
+            tag = "OK" if result.time_to_first_audio_s < 2.0 else "SLOW"
+            print(f"Time to first audio: {result.time_to_first_audio_s:.2f}s [{tag}]")
+        if result.caregiver_flag:
+            print(f"[FLAGGED] Caregiver alert: {result.caregiver_flag}")
+        print(f"Audio chunks: {[p.name for p in result.audio_paths]}")
+
+        if play:
+            for audio_path in result.audio_paths:
+                _play(audio_path)
+
+        if result.background_thread is not None:
+            result.background_thread.join(timeout=10)
+        if result.memory_saved:
+            print(f"[MEMORY] New memory saved: {result.memory_saved}")
+        if result.audit_verdict and not result.caregiver_flag:
+            print(f"Audit: {result.audit_verdict}")
+
+        history.append({"role": "user", "content": senior_input})
+        history.append({"role": "assistant", "content": result.reply_text})
+        history = history[-(max_history_turns * 2):]
+        print("")
+
+
 if __name__ == "__main__":
     load_dotenv()
     args = sys.argv[1:]
@@ -210,6 +291,8 @@ if __name__ == "__main__":
         beat4_day2_recall(text_in or "I forgot, what is my grandson's name?", audio_in=audio_in, play=play)
     elif beat == "day2":
         day2_recall_check()
+    elif beat in ("chat", "interactive", "--chat"):
+        chat_loop(play=play)
     else:
         print(f"unknown beat: {beat}")
         sys.exit(1)

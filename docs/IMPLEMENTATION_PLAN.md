@@ -22,14 +22,16 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
 | Component | File | Status |
 |---|---|---|
 | Fast-path safety check | `safety/fastpath.py` | Done — regex-based, synchronous, continues into THINK after an immediate reassurance (not a dead end) |
-| Memory store | `memory/store.py` | Done — caregiver facts always recalled, conversation memories overlap-searched, dedupe on save, atomic writes |
+| Memory store | `memory/store.py` | Done — caregiver facts always recalled, stopword pruning & semantic domain synonym expansion, dedupe on save, atomic writes |
 | Caregiver flags | `caregiver.py` | Done — `disclosed_to_senior` is a required, honest argument everywhere |
-| THINK (model call) | `pipeline/think.py` | Done — streamed, sentence-chunked (abbreviation-aware), facts/guardrails split in the prompt |
+| THINK (model call) | `pipeline/think.py` | Done — streamed, sentence-chunked (abbreviation-aware), facts/guardrails split in prompt, off-critical-path async memory extraction |
 | SPEAK (TTS) | `pipeline/speak.py` | Done — `pyttsx3`, local/offline, per-turn-unique filenames |
 | HEAR (ASR) | `pipeline/hear.py` | Done — wired with `--audio` into all CLI beats & `webapp.py`, backed by `faster-whisper` / Nebius Parakeet, bundled with `samples/` audio |
 | AUDIT (async safety pass) | `pipeline/audit.py` | Done — runs off the critical path, considers both the senior's words and the reply, discloses via a spoken follow-up |
 | Orchestrator | `pipeline/orchestrator.py` | Done — ties the above together, graceful degradation without a live API key |
-| CLI demo runner | `main.py` | Done for the 4-beat demo script; cross-platform audio playback (Windows/macOS/Linux), real voice I/O |
+| CLI demo runner | `main.py` | Done for the 4-beat demo script + interactive multi-turn session (`python main.py chat`), cross-platform audio playback (Windows/macOS/Linux) |
+| Automated test suite | `tests/` | Done — 22 automated tests covering fastpath, memory, speak, think, orchestrator, caregiver, and CLI (zero-dependency `unittest` & `pytest` compatible) |
+| Containerization (M5) | `Dockerfile`, `docker-compose.yml` | Done — Linux system audio packages (`espeak-ng`), healthcheck, and cloud container configuration ready for Nebius AI Cloud / Spaces |
 
 ## Open design decisions
 
@@ -60,11 +62,10 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
   (docs.tokenfactory.nebius.com/api-reference/introduction, 2026-10-01) — not a live-key test,
   but a first-party source, replacing two earlier unverified guesses. Still worth a live sanity
   check once a key exists (bundled into [Issue #1](../../issues/1)), but no longer blocking.
-- **Conversation history across turns**: each beat today is a single, independent turn (no
-  memory of what was said earlier *in the same conversation*, only durable facts saved across
-  sessions). Explicitly deferred — not needed for the three-beat demo script, but a real
-  caregiver/senior conversation would span many turns. No issue filed yet; file one if this
-  becomes a priority before the deadline.
+- **Conversation history across turns — IMPLEMENTED.** `webapp.py` maintains
+  session history across browser turns, and `main.py chat` provides an interactive
+  terminal REPL maintaining session history (bounded to `MAX_HISTORY_TURNS = 6`
+  turns) while strictly isolating session history from durable cross-session `MemoryStore`.
 
 ## Known-issues backlog (seeded from the first adversarial review, 2026-10-01)
 

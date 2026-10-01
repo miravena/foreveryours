@@ -159,10 +159,13 @@ def run_turn(
             except Exception as exc:  # pragma: no cover - best-effort background task
                 result.audit_verdict = f"audit error: {exc}"
 
-            saved = think.extract_new_memory(transcript, reply_text)
-            if saved:
-                memory_store.add(saved, source="conversation_extract")
-                result.memory_saved = saved
+            try:
+                saved = think.extract_new_memory(transcript, reply_text)
+                if saved:
+                    memory_store.add(saved, source="conversation_extract")
+                    result.memory_saved = saved
+            except Exception:  # pragma: no cover - best-effort background extraction
+                pass
 
         thread = threading.Thread(target=background, daemon=True)
         thread.start()

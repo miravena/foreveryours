@@ -1,0 +1,66 @@
+"""Tests for safety fast-path triggers, invariants, and normalization."""
+import unittest
+
+from safety import fastpath
+
+
+class TestFastPath(unittest.TestCase):
+    def test_distress_triggers(self):
+        cases = [
+            "I fell down earlier and I'm scared",
+            "Help me, I can't get up",
+            "I have bad chest pain",
+            "My chest hurts so much",
+            "I'm dizzy and nauseous",
+            "Call 911 right now",
+            "I am bleeding from my hand",
+        ]
+        for phrase in cases:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered, f"Expected '{phrase}' to trigger fast-path")
+                self.assertEqual(res.severity, "distress")
+                self.assertIsNotNone(res.immediate_reply)
+                self.assertIn("notifying their family", res.continuation_note)
+                self.assertIn("URGENT: possible distress", res.caregiver_flag)
+
+    def test_unicode_curly_quotes_normalization(self):
+        # Curly apostrophes from phone keyboard or ASR
+        res = fastpath.check("I’m dizzy")
+        self.assertTrue(res.triggered)
+        self.assertEqual(res.severity, "distress")
+
+    def test_confusion_triggers(self):
+        cases = [
+            "Where am I right now?",
+            "I don't know where I am",
+            "I don't know what day it is",
+        ]
+        for phrase in cases:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered, f"Expected '{phrase}' to trigger confusion")
+                self.assertEqual(res.severity, "confusion")
+                self.assertIn("You're safe", res.immediate_reply)
+                self.assertIn("Possible confusion", res.caregiver_flag)
+
+    def test_neutral_phrases_do_not_trigger(self):
+        cases = [
+            "I really love jazz music",
+            "What is my grandson's name?",
+            "It is sunny outside today",
+            "Let's talk about Miles Davis",
+            "I had a nice breakfast this morning",
+        ]
+        for phrase in cases:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertFalse(res.triggered, f"Neutral phrase '{phrase}' should not trigger")
+                self.assertEqual(res.severity, "none")
+                self.assertIsNone(res.immediate_reply)
+                self.assertIsNone(res.continuation_note)
+                self.assertIsNone(res.caregiver_flag)
+
+
+if __name__ == "__main__":
+    unittest.main()

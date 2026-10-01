@@ -126,20 +126,69 @@ DURABLE_MARKERS = (
     r"\bmy name is\b",
     r"\bi love\b",
     r"\bmy grandson\b",
+    r"\bmy granddaughter\b",
     r"\bmy daughter\b",
     r"\bmy son\b",
+    r"\bmy wife\b",
+    r"\bmy husband\b",
     r"\bi like\b",
+    r"\bmy favorite\b",
+    r"\bcall me\b",
+    r"\bi used to work as\b",
+    r"\bi grew up in\b",
+    r"\bi was born in\b",
 )
 
+EXTRACTION_SYSTEM_PROMPT = """\
+You are an eldercare memory extractor. Analyze the senior's statement and companion reply.
+If the senior disclosed a durable, personal fact about their life (e.g. family member's name,
+past job, hometown, strong preference, beloved hobby), extract it as a single concise fact sentence
+(e.g., "Senior used to work as a carpenter in Chicago" or "Loves Earl Grey tea").
+If the statement is just small talk, transient feeling, greeting, or contains no durable life facts,
+respond with the word NONE. Do not provide commentary or explanation.
+"""
 
-def extract_new_memory(transcript: str, reply: str) -> str | None:
+
+def extract_memory_llm(transcript: str, reply: str) -> str | None:
+    """Async background extraction via Nemotron. Off critical path, called
+    from orchestrator's background thread."""
+    try:
+        client = get_client()
+        model = os.environ.get("THINK_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                {"role": "user", "content": f'Senior: "{transcript}"\nCompanion: "{reply}"'},
+            ],
+            max_tokens=60,
+            temperature=0.2,
+        )
+        content = completion.choices[0].message.content if completion.choices else None
+        if not content:
+            return None
+        text = content.strip().strip('"')
+        if text.upper() == "NONE" or len(text) < 4:
+            return None
+        return text
+    except Exception:
+        return None
+
+
+def extract_new_memory(transcript: str, reply: str, use_llm: bool = True) -> str | None:
     """Background extraction: does this turn contain a durable fact worth
     saving (name, preference, event)? Runs off the critical path -- see
-    orchestrator.py's async call. Thin-slice heuristic now; swap for a cheap
-    LLM extraction call once latency budget allows a second THINK-sized call
-    per turn without affecting first-audio time."""
+    orchestrator.py's async background thread. Fast regex heuristic first,
+    falling back to async LLM extraction when online, or None when no durable
+    facts exist."""
     lowered = transcript.lower()
     for pattern in DURABLE_MARKERS:
         if re.search(pattern, lowered):
             return transcript.strip()
+
+    if use_llm:
+        extracted = extract_memory_llm(transcript, reply)
+        if extracted:
+            return extracted
+
     return None
