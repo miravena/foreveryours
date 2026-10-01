@@ -11,6 +11,8 @@ pyttsx3.init() raises OSError without it.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import itertools
 import time
 from collections.abc import Iterator
@@ -32,5 +34,12 @@ def speak_sentences(sentences: Iterator[str], out_dir: Path) -> Iterator[tuple[s
     for i, sentence in enumerate(sentences):
         out_path = out_dir / f"reply_{turn_id}_{i:03d}.wav"
         engine.save_to_file(sentence, str(out_path))
-        engine.runAndWait()
+        # pyttsx3's espeak driver prints "Audio saved to <absolute path>" to
+        # stdout from its own _onSynth callback -- not something we call
+        # directly, so it can't be fixed by changing our own print calls.
+        # Suppressed here rather than left to leak the real filesystem path
+        # into anything that captures this process's stdout (e.g. a terminal
+        # recording meant for public release).
+        with contextlib.redirect_stdout(io.StringIO()):
+            engine.runAndWait()
         yield sentence, out_path
