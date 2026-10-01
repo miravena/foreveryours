@@ -60,6 +60,12 @@ python main.py beat3 --audio samples/senior_distress.wav # real voice distress
   you, and I'm taking this seriously. I'm letting your family know right now
   so someone can check on you."* — never a silent report. That line itself
   IS the disclosure (see `docs/SAFETY_AND_PRIVACY.md`).
+  **Planned addition (review finding, 2026-10-01, not yet implemented):**
+  this line discloses the one instance but doesn't state the standing rule.
+  Adding something like *"I'll only tell [caregiver] if I'm worried about
+  your safety"* states the boundary up front, which answers the "elder
+  surveillance" objection more directly — see `docs/SAFETY_AND_PRIVACY.md`'s
+  "Planned refinement" note.
 - A caregiver flag appears in the panel, severity `distress`, marked
   "disclosed to senior."
 - The fast-path's regex check (`safety/fastpath.py`) never calls the LLM for
