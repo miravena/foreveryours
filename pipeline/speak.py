@@ -11,6 +11,8 @@ pyttsx3.init() raises OSError without it.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import itertools
 import sys
 import time
@@ -32,7 +34,14 @@ def _get_tts_engine():
 def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
     if engine is not None:
         engine.save_to_file(sentence, str(out_path))
-        engine.runAndWait()
+        # pyttsx3's espeak driver prints "Audio saved to <absolute path>" to
+        # stdout from its own _onSynth callback -- not something we call
+        # directly, so it can't be fixed by changing our own print calls.
+        # Suppressed here rather than left to leak the real filesystem path
+        # into anything that captures this process's stdout (e.g. a terminal
+        # recording meant for public release).
+        with contextlib.redirect_stdout(io.StringIO()):
+            engine.runAndWait()
         return
 
     if sys.platform == "win32":
