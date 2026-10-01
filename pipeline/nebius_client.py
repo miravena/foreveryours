@@ -2,7 +2,8 @@
 
 Nebius exposes an OpenAI-compatible Chat Completions API, so the `openai`
 SDK works unmodified with base_url pointed at Nebius. No key = NebiusNotConfigured,
-raised loudly rather than silently mocked -- AC2 requires a real model call.
+raised loudly rather than silently mocked -- a real model call is required,
+never a mocked reply.
 """
 from __future__ import annotations
 
@@ -19,9 +20,11 @@ def get_client() -> OpenAI:
     api_key = os.environ.get("NEBIUS_API_KEY", "").strip()
     if not api_key:
         raise NebiusNotConfigured(
-            "NEBIUS_API_KEY is not set. See app/.env.example and "
-            "kaggle-compete/competitions/nebius-foreveryours/STATUS.md "
-            "(open decision: wq #9033) -- this is a founder signup, not a bug."
+            "NEBIUS_API_KEY is not set. Copy .env.example to .env and fill it in "
+            "-- see README.md -> Setup -> Nebius access."
         )
-    base_url = os.environ.get("NEBIUS_BASE_URL", "https://api.studio.nebius.ai/v1")
+    # Confirmed against Nebius's own first-party docs (docs.tokenfactory.nebius.com/
+    # api-reference/introduction, 2026-10-01) -- NOT yet exercised against a live
+    # key, but this is the documented endpoint, not a guess from a secondary source.
+    base_url = os.environ.get("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
     return OpenAI(api_key=api_key, base_url=base_url)

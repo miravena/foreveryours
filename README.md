@@ -17,8 +17,9 @@ Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackat
 2. **Senior conversation.** Dad talks to the companion; it recalls Leo, avoids driving, mentions
    the 4 PM groceries — with a live memory panel showing exactly what was retrieved and what's new.
 3. **A worrying remark.** If Dad says something that sounds like distress or confusion, the
-   companion flags the caregiver immediately **and tells Dad so, honestly, in the conversation**
-   ("I'm letting your family know right now") — never a silent report behind his back.
+   companion speaks an immediate, honest reassurance **and tells Dad so, in the conversation**
+   ("I'm letting your family know right now") — never a silent report behind his back — then the
+   conversation keeps going instead of dead-ending there.
 
 ## Pipeline
 
@@ -49,16 +50,21 @@ surveillance, no medical claims, what's stored and why.
 ## Setup
 
 ```bash
+# pyttsx3 (local TTS) needs the espeak-ng system package on Linux:
+sudo apt-get install -y espeak-ng
+
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env   # fill in NEBIUS_API_KEY — see "Nebius access" below
-.venv/bin/python main.py beat1                               # caregiver memo
-.venv/bin/python main.py beat2 "Hi, how's it going today?"   # senior turn, uses memory
-.venv/bin/python main.py beat3 "I fell down earlier and I'm scared"  # safety fast-path
+.venv/bin/python main.py beat1   # caregiver memo
+.venv/bin/python main.py beat2   # senior turn, uses memory + a real model call
+.venv/bin/python main.py beat3   # safety fast-path, then the conversation continues
 ```
 
-`beat1` and `beat3` run fully offline (no API key needed — the fast-path and local TTS don't call
-Nebius). `beat2` needs `NEBIUS_API_KEY` set, since it calls a real open-weight model; without a
-key it fails loudly with a clear message rather than returning a mocked reply.
+`beat1` runs fully offline. `beat2` needs `NEBIUS_API_KEY` set — it calls a real open-weight
+model with no fallback, so without a key it fails loudly with a clear message rather than
+returning a mocked reply. `beat3`'s immediate safety reassurance is offline (fast-path, no LLM),
+but the turn then tries to continue into a real model call like beat2 does; without a key it
+degrades gracefully to just the immediate reassurance instead of crashing.
 
 ### Nebius access
 
