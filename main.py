@@ -11,6 +11,7 @@ Usage:
     python main.py beat2 "Hi, how's it going today?"
     python main.py beat2 --audio senior_turn.wav   # real voice in, instead of typed text
     python main.py beat3 "I fell down earlier and I'm scared"
+    python main.py day2   # run AFTER beat1, in a separate invocation -- proves persistence
 
 Pass --no-play to skip audio playback (e.g. on a headless box with no speaker).
 """
@@ -107,6 +108,31 @@ def beat3_worrying_remark(transcript: str | None, audio_in: Path | None = None, 
     beat2_senior_turn(transcript, audio_in=audio_in, play=play)
 
 
+def day2_recall_check() -> None:
+    """Proves memory persists ACROSS separate process runs, not just within
+    one -- run this as its own `python main.py day2` invocation sometime
+    after beat1/beat2, ideally in a separate terminal session or even after
+    a reboot. MemoryStore reads straight from data/<profile>.json on
+    __init__ (see memory/store.py); this process never saw beat1 run, it's
+    just reading what beat1's process wrote to disk."""
+    import os
+    import time
+
+    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
+    items = store.all()
+    if not items:
+        print(f"No memory file found at {store.path} -- run `python main.py beat1` first.")
+        return
+
+    now = time.time()
+    print(f"This process (PID {os.getpid()}) started just now and has no in-memory state from")
+    print(f"whatever process originally wrote {store.path}. It only read the file on disk:\n")
+    for item in items:
+        age_s = now - item.created_at
+        print(f"  [{item.source}] \"{item.text}\" -- saved {age_s:.0f}s ago by a different process")
+    print(f"\n{len(items)} fact(s) recalled from a prior run. Persistence confirmed.")
+
+
 if __name__ == "__main__":
     load_dotenv()
     args = sys.argv[1:]
@@ -136,6 +162,8 @@ if __name__ == "__main__":
         )
     elif beat == "beat3":
         beat3_worrying_remark(text_in or "I fell down earlier and I'm scared", audio_in=audio_in, play=play)
+    elif beat == "day2":
+        day2_recall_check()
     else:
         print(f"unknown beat: {beat}")
         sys.exit(1)
