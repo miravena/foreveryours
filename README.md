@@ -69,11 +69,16 @@ Tavily credits).
 
 ## Docs
 
+- [`docs/PRINCIPLES.md`](docs/PRINCIPLES.md) — the handful of non-negotiables (honest
+  disclosure, no medical claims, fail loud never fake) that every other doc defers to.
 - [`docs/PRD.md`](docs/PRD.md) — product requirements: personas, explicit non-goals, and the
   demo script as the acceptance bar.
-- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — architecture pointer, build
-  status per component, open design decisions, and the known-issues backlog. We code from the
-  PRD + this plan, not from memory of a conversation.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — what we're working on, in what order, and why — the
+  single place to check "what's next." Also tracks the hackathon's actual judging requirements
+  against our current status.
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — build status per component,
+  open design decisions, and the known-issues backlog. We code from the PRD + roadmap + this
+  plan, not from memory of a conversation.
 - [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — the exact beat-by-beat script.
 - [`docs/SAFETY_AND_PRIVACY.md`](docs/SAFETY_AND_PRIVACY.md) — no silent surveillance, no
   medical claims, what's stored and why.

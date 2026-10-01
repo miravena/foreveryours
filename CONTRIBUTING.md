@@ -42,13 +42,21 @@ one, so treat it like a normal open-source project, not a scratch space.
   safety-relevant decision changes (new flag type, new audit behavior,
   anything touching `safety/` or `pipeline/audit.py`) — don't let the code
   and the stated design diverge.
+- **`docs/PRINCIPLES.md`** is the half-page of non-negotiables that every
+  other doc defers to instead of restating. Change it only when we're
+  actually changing what we stand for, not for a one-off feature call.
 - **`docs/PRD.md`** is the product requirements doc — personas, explicit
   non-goals, and the demo script as the acceptance bar. Update it when the
   pitch or scope actually changes, not for implementation detail.
+- **`docs/ROADMAP.md`** is the single place for "what are we working on, in
+  what order, and why" — including the hackathon's actual judging
+  requirements mapped against our status. Update its status column in the
+  same PR that changes it; don't let it and the GitHub Issues disagree.
 - **`docs/IMPLEMENTATION_PLAN.md`** is the single place for build status per
   component, open design decisions, and the known-issues backlog. We code
-  from these two docs plus the PRD, not from memory of a conversation — if a
-  design decision changes, update the doc in the same PR.
+  from `PRINCIPLES.md` + `PRD.md` + `ROADMAP.md` + this plan, not from memory
+  of a conversation — if a design decision changes, update the doc in the
+  same PR.
 - **Still no separate architecture doc beyond that.** The pipeline diagram
   and latency rationale live in README's "Pipeline" section and in each
   module's module-level docstring (`pipeline/*.py`) — `IMPLEMENTATION_PLAN.md`
