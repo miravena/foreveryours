@@ -96,6 +96,11 @@ offers $25 in sponsor credits via activation code `NEBIUS-DEVPOST-GLOBAL26`, plu
 through the free [Nebius Builders Program](https://dev.nebius.com/builders) (which also unlocks
 Tavily credits).
 
+## Self-judging
+
+We score our own mock submissions against the real Devpost rubric before a real judge ever
+sees it — see [`docs/SELF_JUDGING.md`](docs/SELF_JUDGING.md).
+
 ## Status / what's not here yet
 
 This is a thin vertical slice, intentionally. Out of scope for this build: weather/news, a

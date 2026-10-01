@@ -59,6 +59,14 @@ not a hidden scoring strategy, just what's actually required, so nothing gets mi
 | Written text description of features/functionality/tech used | Not written yet — needed for the Devpost submission form itself, separate from this repo |
 | One designated team Representative to submit | Open — [#6](../../issues/6) |
 
+## Self-judging
+
+We don't have to wait for a real judge to find out we're weak on Design. See
+[`docs/SELF_JUDGING.md`](SELF_JUDGING.md) — a rubric mirroring the real one, scored
+independently by both of us against whatever mock submission exists at the time, logged so the
+trend is visible. Run it after each real milestone (key live, hosted, video v1, text drafted),
+not on a fixed schedule.
+
 ## Where stretch goals fit
 
 Everything above is the critical path to a submittable entry. These are explicitly *not* on
