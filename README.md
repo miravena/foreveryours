@@ -67,8 +67,20 @@ offers $25 in sponsor credits via activation code `NEBIUS-DEVPOST-GLOBAL26`, plu
 through the free [Nebius Builders Program](https://dev.nebius.com/builders) (which also unlocks
 Tavily credits).
 
+## Docs
+
+- [`docs/PRD.md`](docs/PRD.md) — product requirements: personas, explicit non-goals, and the
+  demo script as the acceptance bar.
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — architecture pointer, build
+  status per component, open design decisions, and the known-issues backlog. We code from the
+  PRD + this plan, not from memory of a conversation.
+- [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — the exact beat-by-beat script.
+- [`docs/SAFETY_AND_PRIVACY.md`](docs/SAFETY_AND_PRIVACY.md) — no silent surveillance, no
+  medical claims, what's stored and why.
+
 ## Status / what's not here yet
 
 This is a thin vertical slice, intentionally. Out of scope for this build: weather/news, a
-weekly digest, physical hardware, medical certification. See open GitHub Issues for the current
-remaining-work list, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for how we work on this together.
+weekly digest, physical hardware, medical certification — see `docs/PRD.md`'s non-goals. See
+open GitHub Issues and `docs/IMPLEMENTATION_PLAN.md` for the current remaining-work list, and
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for how we work on this together.
