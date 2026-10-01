@@ -38,10 +38,23 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
   "Decided: ASR backend" section. This unblocks [Issue #9](../../issues/9) (real voice I/O).
   `faster-whisper` stays in `hear.py` as a fallback/dev convenience, not the primary path.
 - **Judge-accessible hosting — newly required, not yet decided.** The hackathon's rules page
-  requires a live/testable demo link or test build, not just a video + repo (we'd assumed the
-  latter was enough). See `ROADMAP.md`'s "Judging requirements" table and the tracking issue
-  for where this is landing — likely Nebius AI Cloud compute, since that doubles as the
-  required proof of deployment on sponsor infrastructure.
+  requires a live/testable demo link OR a test build — these aren't equivalent effort. A test
+  build (our README's existing setup steps) is near-free but assumes the judge gets their own
+  free `NEBIUS_API_KEY`; a hosted demo on Nebius AI Cloud compute costs some of our $50 credit
+  + deploy effort but removes that friction *and* doubles as the required proof of deployment
+  on sponsor infrastructure. Leaning test-build-first (cheapest), hosted demo as a stretch if
+  credit/time allow. See `ROADMAP.md`'s "Judging requirements" table and
+  [Issue #11](../../issues/11).
+- **THINK model ID — tentatively decided, unverified.** Default is
+  `nvidia/Llama-3_1-Nemotron-70B-Instruct-HF` (`pipeline/think.py`), chosen before Nebius's
+  2025-11 Token Factory relaunch exposed a newer Nemotron 3 lineup (Nano 30B, Nano Omni,
+  Super 120B, Ultra 550B — see nebius.com/services/token-factory/nemotron). **Nemotron 3 Nano**
+  is the better fit for this project specifically: a compact MoE model optimized for efficient
+  chat/reasoning matches the <2s-to-first-audio latency budget better than a dense 70B model,
+  without giving up the "open-weight NVIDIA model" sponsor-tech requirement. Not switched in
+  code yet — the exact Token Factory model-ID string for Nemotron 3 Nano needs confirming
+  against a live key, same as the `NEBIUS_BASE_URL` question below. Bundle both checks into
+  [Issue #1](../../issues/1) rather than opening a separate issue.
 - **`NEBIUS_BASE_URL` domain**: changed to `https://api.studio.nebius.com/v1` based on a
   secondary source during a code review; **unverified against a live key** (see
   `pipeline/nebius_client.py`'s comment). Confirm once someone has a real `NEBIUS_API_KEY` —

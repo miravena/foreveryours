@@ -53,7 +53,7 @@ not a hidden scoring strategy, just what's actually required, so nothing gets mi
 | Public repo, OSS license visible in GitHub's About section | **Done** (MIT, confirmed visible) |
 | README with setup + running instructions | **Done** |
 | Documentation of NVIDIA model + Nebius tool usage | **Done** — see `README.md`'s Pipeline section; keep it current as the ASR decision above gets implemented |
-| **A live/testable demo link, or a test build** — judges don't just watch the video | **Open — M5 above.** We assumed video+repo was enough; it isn't, except for the Physical AI track, which we're not in. |
+| **A live/testable demo link, or a test build** — judges don't just watch the video | **Open — M5 above.** We assumed video+repo was enough; it isn't, except for the Physical AI track, which we're not in. Leaning **test-build-first** (our existing README setup steps, near-zero cost) over a hosted demo (costs credit + deploy effort) — see [#11](../../issues/11) for the tradeoff. The catch: a test build only works for a judge who gets their own free `NEBIUS_API_KEY`. |
 | Demo video, <=3 minutes, shows the project functioning, uploaded to YouTube public | Open — M8, needs M4+M5 first |
 | Runtime proof: a real call to Token Factory, or deployment on Nebius AI Cloud compute | Partially done (THINK already calls Token Factory at runtime); hosting on Nebius AI Cloud compute for M5 would satisfy the "deployed on" half too — two requirements, one deployment decision |
 | Written text description of features/functionality/tech used | Not written yet — needed for the Devpost submission form itself, separate from this repo |
