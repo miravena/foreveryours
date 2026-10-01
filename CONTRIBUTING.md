@@ -6,19 +6,22 @@ one, so treat it like a normal open-source project, not a scratch space.
 
 ## Workflow
 
-- **Branch per feature/fix.** No direct commits to `main` for anything beyond
-  a one-line typo fix.
-  ```bash
-  git checkout -b <name>/<short-description>
-  ```
-- **Open a PR, get the other person's eyes on it before merging.** With two
-  people, that can be quick — a skim is enough for most changes — but don't
-  self-merge silently on anything touching the pipeline (`pipeline/`,
-  `safety/`, `memory/`).
-- **Keep `main` demo-able at all times.** Judges and teammates should be able
-  to `git pull` and run the three-beat demo (`README.md`) at any point before
-  the deadline. If a branch leaves things broken, don't merge it until it's
-  fixed.
+The repo is still young and moving fast under a hard deadline, so **PRs are
+an invitation for feedback, not a merge gate.** Changes land on `main`
+directly and iterate from there — reverting is cheap (`git revert`), so
+don't let an open PR sit unreviewed and block progress.
+
+- **Direct commits to `main` are fine**, including for pipeline/safety/memory
+  changes. Use a branch + PR when you want the other person's eyes on
+  something *before* it's final, or when you want to leave something open
+  for discussion — not because it's required.
+- **Comment, don't gate.** If you spot something after it's merged, open an
+  issue or comment on the commit — we'll fix it in the next pass, not revert
+  by default. Revert only if `main` is actually broken.
+- **Keep `main` demo-able.** Judges and teammates should be able to
+  `git pull` and run the three-beat demo (`README.md`) at any point before
+  the deadline. If a change breaks that, fix it forward quickly or revert —
+  don't leave it broken.
 - **Commit messages:** say what changed and why, not just what file moved.
 
 ## What never gets committed
