@@ -23,8 +23,8 @@ def get_client() -> OpenAI:
             "NEBIUS_API_KEY is not set. Copy .env.example to .env and fill it in "
             "-- see README.md -> Setup -> Nebius access."
         )
-    # NEBIUS_BASE_URL default here should be re-verified against current Nebius
-    # docs once a real key is in hand -- .ai and .com variants both exist and
-    # both 401 without a key, so this hasn't been confirmed live yet.
-    base_url = os.environ.get("NEBIUS_BASE_URL", "https://api.studio.nebius.com/v1")
+    # Confirmed against Nebius's own first-party docs (docs.tokenfactory.nebius.com/
+    # api-reference/introduction, 2026-10-01) -- NOT yet exercised against a live
+    # key, but this is the documented endpoint, not a guess from a secondary source.
+    base_url = os.environ.get("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
     return OpenAI(api_key=api_key, base_url=base_url)

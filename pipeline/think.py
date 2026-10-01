@@ -40,7 +40,11 @@ def build_prompt(transcript: str, facts: list[str], guardrails: list[str] | None
 
 def stream_reply(transcript: str, facts: list[str], guardrails: list[str] | None = None) -> Iterator[str]:
     client = get_client()
-    model = os.environ.get("THINK_MODEL", "nvidia/Llama-3_1-Nemotron-70B-Instruct-HF")
+    # nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B: compact MoE, better latency fit for our
+    # <2s-to-first-audio budget than a dense 70B model. Exact casing/availability
+    # from third-party aggregators, not Nebius's own docs -- verify against the
+    # live Token Factory model list once a key is in hand (see IMPLEMENTATION_PLAN.md).
+    model = os.environ.get("THINK_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
     stream = client.chat.completions.create(
         model=model,
         messages=build_prompt(transcript, facts, guardrails),
