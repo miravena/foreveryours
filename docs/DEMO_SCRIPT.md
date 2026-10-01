@@ -66,11 +66,13 @@ python main.py beat3 "I fell down earlier"
   completes (degrades gracefully — see the audit verdict line printed), it
   just doesn't continue past the immediate reassurance.
 
-## Day-2 recall (not yet built — tracked as a GitHub Issue)
+## Day-2 recall (`python main.py day2`, built and verified)
 
 Shows a memory saved in one session surfacing correctly in a *later* session
-(different process run, same `data/` directory). Needed to prove persistence
-isn't just in-memory-per-run.
+(different process run, same `data/` directory) — run after beat1, as a
+genuinely separate process invocation. Proves persistence isn't just
+in-memory-per-run; good footage for the video since it's a visible "fresh
+process, PID printed, still remembers" moment.
 
 ## What the video should NOT open on
 

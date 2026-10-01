@@ -68,7 +68,8 @@ degrades gracefully to just the immediate reassurance instead of crashing.
 
 ### Nebius access
 
-Get a free key at [Nebius AI Studio](https://studio.nebius.ai/) (Token Factory). The hackathon
+Get a free key at [Nebius Token Factory](https://tokenfactory.nebius.com/) (the base URL in
+`.env.example` is `api.tokenfactory.nebius.com`, not the old `studio.nebius.ai` domain). The hackathon
 offers $25 in sponsor credits via activation code `NEBIUS-DEVPOST-GLOBAL26`, plus another $25
 through the free [Nebius Builders Program](https://dev.nebius.com/builders) (which also unlocks
 Tavily credits).
