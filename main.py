@@ -108,7 +108,7 @@ def beat2_senior_turn(transcript: str | None, audio_in: Path | None = None, play
         tag = "OK" if result.time_to_first_audio_s < 2.0 else "SLOW"
         print(f"Time to first audio: {result.time_to_first_audio_s:.2f}s [{tag}]")
     print(f"Memories recalled: {result.memories_used}")
-    print(f"Audio chunks: {[str(p) for p in result.audio_paths]}")
+    print(f"Audio chunks: {[p.name for p in result.audio_paths]}")
     if play:
         for audio_path in result.audio_paths:
             _play(audio_path)
@@ -156,9 +156,25 @@ def day2_recall_check() -> None:
 
 def beat4_day2_recall(transcript: str | None, audio_in: Path | None = None, play: bool = True) -> None:
     """Demonstrates persistence by surfacing a memory saved in a previous session
-    across process boundaries."""
-    print("[Testing Day-2 Recall: Simulating a new session on a different day]")
-    beat2_senior_turn(transcript, audio_in=audio_in, play=play)
+    (e.g., beat1) across process boundaries."""
+    import os
+    from pipeline.nebius_client import NebiusNotConfigured
+
+    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
+    items = store.all()
+    if not items:
+        print(f"No memory file found at {store.path} -- run `python main.py beat1` first.")
+        return
+
+    print(f"[Testing Day-2 Recall: PID {os.getpid()} starting fresh with no in-memory state]")
+    try:
+        beat2_senior_turn(transcript, audio_in=audio_in, play=play)
+    except NebiusNotConfigured:
+        print(
+            "beat4 needs NEBIUS_API_KEY for the conversational reply. "
+            "For the no-key persistence proof, run `python main.py day2`."
+        )
+        sys.exit(2)
 
 
 if __name__ == "__main__":
