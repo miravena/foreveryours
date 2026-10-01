@@ -46,20 +46,20 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
   deployment on sponsor infrastructure. README setup steps stay documented as a convenience for
   the other collaborator and anyone who wants to run it locally, not as the primary judging
   path. See `ROADMAP.md`'s "Judging requirements" table and [Issue #11](../../issues/11).
-- **THINK model ID — tentatively decided, unverified.** Default is
-  `nvidia/Llama-3_1-Nemotron-70B-Instruct-HF` (`pipeline/think.py`), chosen before Nebius's
-  2025-11 Token Factory relaunch exposed a newer Nemotron 3 lineup (Nano 30B, Nano Omni,
-  Super 120B, Ultra 550B — see nebius.com/services/token-factory/nemotron). **Nemotron 3 Nano**
-  is the better fit for this project specifically: a compact MoE model optimized for efficient
-  chat/reasoning matches the <2s-to-first-audio latency budget better than a dense 70B model,
-  without giving up the "open-weight NVIDIA model" sponsor-tech requirement. Not switched in
-  code yet — the exact Token Factory model-ID string for Nemotron 3 Nano needs confirming
-  against a live key, same as the `NEBIUS_BASE_URL` question below. Bundle both checks into
-  [Issue #1](../../issues/1) rather than opening a separate issue.
-- **`NEBIUS_BASE_URL` domain**: changed to `https://api.studio.nebius.com/v1` based on a
-  secondary source during a code review; **unverified against a live key** (see
-  `pipeline/nebius_client.py`'s comment). Confirm once someone has a real `NEBIUS_API_KEY` —
-  tracked in [Issue #1](../../issues/1).
+- **THINK model ID — switched, casing still unverified.** Default is now
+  `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (`pipeline/think.py`), replacing the older dense
+  `Llama-3_1-Nemotron-70B-Instruct-HF` default from before Nebius's Token Factory relaunch
+  exposed the newer Nemotron 3 lineup (Nano 30B, Nano Omni, Super 120B, Ultra 550B — see
+  nebius.com/services/token-factory/nemotron). Nemotron 3 Nano is a compact MoE model, a better
+  fit for the <2s-to-first-audio budget than a dense 70B model, without giving up the
+  "open-weight NVIDIA model" sponsor-tech requirement. The exact string's **casing** comes from
+  third-party aggregators, not Nebius's own docs — confirm against the live Token Factory model
+  list once someone has a real key, tracked in [Issue #1](../../issues/1).
+- **`NEBIUS_BASE_URL` domain — RESOLVED.** `https://api.tokenfactory.nebius.com/v1`, confirmed
+  directly against Nebius's own first-party docs
+  (docs.tokenfactory.nebius.com/api-reference/introduction, 2026-10-01) — not a live-key test,
+  but a first-party source, replacing two earlier unverified guesses. Still worth a live sanity
+  check once a key exists (bundled into [Issue #1](../../issues/1)), but no longer blocking.
 - **Conversation history across turns**: each beat today is a single, independent turn (no
   memory of what was said earlier *in the same conversation*, only durable facts saved across
   sessions). Explicitly deferred — not needed for the three-beat demo script, but a real
