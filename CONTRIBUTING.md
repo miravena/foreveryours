@@ -90,6 +90,40 @@ inference. Options if you need another one (e.g., your current tool's credits ru
   to test something like `faster-whisper` without your own GPU): **Google Colab**'s free GPU
   tier, or **Kaggle Notebooks**' free ~30h/week GPU quota.
 
+## Working with AI-assisted code
+
+Some of this codebase is written with AI assistance. That's fine, but it changes what
+"reviewing a PR" means and it's worth being explicit about, especially if this is new to you:
+
+- **Read the comments that explain WHY, not just WHAT.** Good comments in this repo
+  (`orchestrator.py`'s disclosure invariant, `fastpath.py`'s false-positive-is-cheaper
+  tradeoff, `webapp.py`'s polling-vs-push note) exist because the reasoning isn't obvious
+  from the code alone and would otherwise need to be re-derived or re-asked every time.
+  If you can't tell *why* something was built a certain way, that's a real gap worth
+  asking about — it usually means a decision was made that should've been written down
+  better, not that you're missing something you should already know.
+- **Match effort to what the demo/deadline actually needs, not to generic "best
+  practice."** There's no fixed "right" amount of testing, error handling, or
+  abstraction — the right amount depends on what could actually go wrong and what the
+  cost of being wrong is. A regex safety check that might over-trigger is worth real
+  care (issue #15); a polling interval for a UI panel almost never is. If you're ever
+  unsure whether something needs more rigor, ask "what breaks, for whom, if this is
+  wrong?" — that question is more useful than a checklist.
+- **Safety-critical code gets more scrutiny than everything else.** `safety/fastpath.py`,
+  the disclosure logic in `orchestrator.py`, and anything touching what gets stored about
+  someone (`memory/store.py`, `caregiver.py`) should get read carefully, line by line,
+  even under deadline pressure — these are the parts where a bug has a real person on
+  the other end, not just a worse demo. Everything else can move faster.
+- **It's fine, and expected, to push back or ask "why not do X instead?"** on anything
+  in a PR, AI-written or not. Treating a diff as settled because it compiles and runs is
+  how `.env.example` drifted from the actual code for a full day (see the PR that fixed
+  it) — a question would've caught it faster than a careful read would have.
+- **The docs are part of the deliverable, not an afterthought.** `docs/PRINCIPLES.md`,
+  `docs/SAFETY_AND_PRIVACY.md`, and this file exist so a decision only has to be explained
+  once. If you make a call that isn't obvious from the code, write it down somewhere
+  (an issue, `docs/ROADMAP.md`, a comment) instead of leaving it in chat — chat doesn't
+  outlive the hackathon, the repo does.
+
 ## Secrets
 
 Nebius Token Factory key setup is in `README.md` → Setup. If you get your own

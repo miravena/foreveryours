@@ -73,7 +73,12 @@ def run_turn(
     flags: CaregiverFlags,
     audio_out_dir: Path,
     caregiver_name: str = "your family",
+    history: list[dict] | None = None,
 ) -> TurnResult:
+    """`history` is session-scoped prior-turn context (see think.build_prompt's
+    docstring for why this is kept separate from memory_store) -- pass None
+    for a one-shot call like main.py's CLI beats; webapp.py keeps a real list
+    across clicks in one browser session and passes it in each turn."""
     t0 = time.monotonic()
 
     fast = fastpath.check(transcript)
@@ -104,7 +109,7 @@ def run_turn(
     think_audio_paths: list[Path] = []
     think_unavailable = False
     try:
-        token_stream = think.stream_reply(think_input, caregiver_facts, caregiver_guardrails)
+        token_stream = think.stream_reply(think_input, caregiver_facts, caregiver_guardrails, history)
         sentences = think.sentence_chunks(token_stream)
         reply_text, think_audio_paths, think_first_audio_time = _speak_turn(sentences, audio_out_dir)
         if first_audio_time is None:

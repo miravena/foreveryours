@@ -25,20 +25,39 @@ happened.
 """
 
 
-def build_prompt(transcript: str, facts: list[str], guardrails: list[str] | None = None) -> list[dict]:
+def build_prompt(
+    transcript: str,
+    facts: list[str],
+    guardrails: list[str] | None = None,
+    history: list[dict] | None = None,
+) -> list[dict]:
+    """`history` is prior (user, assistant) turns from THIS session only --
+    never persisted to disk, never loaded from memory_store. Deliberately
+    separate from RECALL: history is "what we just said," memory is "what
+    the caregiver told us was durably true." Conflating them would mean a
+    throwaway remark ("I'm a bit tired") outliving the conversation it was
+    said in. See issue #16 -- without this, a judge talking to the hosted
+    demo for 3+ turns meets a companion that forgets the last sentence."""
     facts_block = "\n".join(f"- {f}" for f in facts) or "(none yet)"
     guardrails = guardrails or []
     guardrails_block = "\n".join(f"- {g}" for g in guardrails) or "(none)"
-    return [
+    messages = [
         {
             "role": "system",
             "content": SYSTEM_PROMPT + f"\nFACTS:\n{facts_block}\n\nDO NOT RAISE:\n{guardrails_block}",
         },
-        {"role": "user", "content": transcript},
     ]
+    messages.extend(history or [])
+    messages.append({"role": "user", "content": transcript})
+    return messages
 
 
-def stream_reply(transcript: str, facts: list[str], guardrails: list[str] | None = None) -> Iterator[str]:
+def stream_reply(
+    transcript: str,
+    facts: list[str],
+    guardrails: list[str] | None = None,
+    history: list[dict] | None = None,
+) -> Iterator[str]:
     client = get_client()
     # nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B: compact MoE, better latency fit for our
     # <2s-to-first-audio budget than a dense 70B model. Exact casing/availability
@@ -47,7 +66,7 @@ def stream_reply(transcript: str, facts: list[str], guardrails: list[str] | None
     model = os.environ.get("THINK_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
     stream = client.chat.completions.create(
         model=model,
-        messages=build_prompt(transcript, facts, guardrails),
+        messages=build_prompt(transcript, facts, guardrails, history),
         stream=True,
         max_tokens=200,
         temperature=0.6,

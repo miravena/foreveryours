@@ -66,33 +66,38 @@ returning a mocked reply. `beat3`'s immediate safety reassurance is offline (fas
 but the turn then tries to continue into a real model call like beat2 does; without a key it
 degrades gracefully to just the immediate reassurance instead of crashing.
 
+## Web demo (judge-facing, same pipeline)
+
+[`webapp.py`](webapp.py) wraps the exact same pipeline in a one-page browser UI (mic in, reply
+audio out, live memory/flags panel) — no new pipeline logic, just a UI on top of `run_turn`.
+This is what we'll host as the "working demo" link the hackathon requires; see
+[`docs/ROADMAP.md`](docs/ROADMAP.md) and [`VENDOR_DECISIONS.md`](VENDOR_DECISIONS.md) for why.
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env   # fill in NEBIUS_API_KEY for the full pipeline; works without one too
+.venv/bin/python webapp.py
+# open http://localhost:7860
+```
+
+Works the same with or without a key: without one, a distress/confusion phrase still gets the
+immediate fast-path reassurance (no LLM needed for that), it just can't continue the
+conversation past it — same graceful-degradation behavior as `main.py beat3`. Record or upload
+a short clip and hit Send; the memory panel updates live underneath.
+
+`MAX_DAILY_REQUESTS` (default 50) caps how many turns the app will run per day once it's
+public, so a shared link can't burn through the whole Nebius credit balance — bump it locally
+with `MAX_DAILY_REQUESTS=1000 .venv/bin/python webapp.py` if you're iterating and hitting it.
+
 ### Nebius access
 
-Get a free key at [Nebius Token Factory](https://tokenfactory.nebius.com/) (the base URL in
-`.env.example` is `api.tokenfactory.nebius.com`, not the old `studio.nebius.ai` domain). The hackathon
+Get a free key at [Nebius AI Studio](https://studio.nebius.ai/) (Token Factory). The hackathon
 offers $25 in sponsor credits via activation code `NEBIUS-DEVPOST-GLOBAL26`, plus another $25
 through the free [Nebius Builders Program](https://dev.nebius.com/builders) (which also unlocks
 Tavily credits).
 
-## Docs
-
-- [`docs/PRINCIPLES.md`](docs/PRINCIPLES.md) — the handful of non-negotiables (honest
-  disclosure, no medical claims, fail loud never fake) that every other doc defers to.
-- [`docs/PRD.md`](docs/PRD.md) — product requirements: personas, explicit non-goals, and the
-  demo script as the acceptance bar.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — what we're working on, in what order, and why — the
-  single place to check "what's next." Also tracks the hackathon's actual judging requirements
-  against our current status.
-- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — build status per component,
-  open design decisions, and the known-issues backlog. We code from the PRD + roadmap + this
-  plan, not from memory of a conversation.
-- [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — the exact beat-by-beat script.
-- [`docs/SAFETY_AND_PRIVACY.md`](docs/SAFETY_AND_PRIVACY.md) — no silent surveillance, no
-  medical claims, what's stored and why.
-
 ## Status / what's not here yet
 
 This is a thin vertical slice, intentionally. Out of scope for this build: weather/news, a
-weekly digest, physical hardware, medical certification — see `docs/PRD.md`'s non-goals. See
-open GitHub Issues and `docs/IMPLEMENTATION_PLAN.md` for the current remaining-work list, and
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for how we work on this together.
+weekly digest, physical hardware, medical certification. See open GitHub Issues for the current
+remaining-work list, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for how we work on this together.
