@@ -66,6 +66,14 @@ returning a mocked reply. `beat3`'s immediate safety reassurance is offline (fas
 but the turn then tries to continue into a real model call like beat2 does; without a key it
 degrades gracefully to just the immediate reassurance instead of crashing.
 
+## Demo video
+
+[`video/output/foreveryours_poc_demo.mp4`](video/output/foreveryours_poc_demo.mp4) (1920x1080,
+2:57) -- auto-generated, not personally recorded. The three terminal beats are real recordings
+of this CLI running live with zero API key; see [`video/README.md`](video/README.md) for how
+it's built and why. This is a working proof-of-concept video, not the final hackathon
+submission video (that one will show the browser demo with real audio).
+
 ## Web demo (judge-facing, same pipeline)
 
 [`webapp.py`](webapp.py) wraps the exact same pipeline in a one-page browser UI (mic in, reply

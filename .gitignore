@@ -4,3 +4,10 @@ data/
 out/
 __pycache__/
 *.pyc
+
+# Demo-video build output — regenerable via video/run_pipeline.py (see
+# video/README.md). The final MP4 is force-added despite living in this
+# ignored dir; everything else here (narration mp3s, slide pngs, per-beat
+# terminal mp4s and frame dumps) rebuilds deterministically from the
+# committed video/casts/*.cast files.
+video/output/
