@@ -1,8 +1,10 @@
 # Implementation plan
 
 Architecture, current build status per component, and the open backlog. `PRD.md` says what
-we're building and why; this says how, and what's actually done versus still open. Keep this
-page current rather than writing a new doc when something changes — see `CONTRIBUTING.md`.
+we're building and why, `PRINCIPLES.md` says the non-negotiables, `ROADMAP.md` says what order
+we're working in and why — this doc says how, and what's actually done versus still open. Keep
+this page current rather than writing a new doc when something changes — see
+`CONTRIBUTING.md`.
 
 ## Architecture
 
@@ -31,15 +33,33 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
 
 ## Open design decisions
 
-- **ASR backend** (tracked as [Issue #2](../../issues/2)): NVIDIA-hosted ASR via Nebius Token
-  Factory vs. local `faster-whisper`. Tradeoff is latency/cost (hosted, consistent with THINK's
-  provider) vs. offline-capability (local, consistent with the fast-path's "works with no key"
-  property). Not yet decided — block on this before wiring real voice I/O, since it changes
-  `hear.py`'s shape.
-- **`NEBIUS_BASE_URL` domain**: changed to `https://api.studio.nebius.com/v1` based on a
-  secondary source during a code review; **unverified against a live key** (see
-  `pipeline/nebius_client.py`'s comment). Confirm once someone has a real `NEBIUS_API_KEY` —
-  tracked in [Issue #1](../../issues/1).
+- **ASR backend — DECIDED.** NVIDIA-hosted ASR via Nebius Token Factory, not local
+  `faster-whisper`. Rationale and the offline-capability tradeoff are in `ROADMAP.md`'s
+  "Decided: ASR backend" section. This unblocks [Issue #9](../../issues/9) (real voice I/O).
+  `faster-whisper` stays in `hear.py` as a fallback/dev convenience, not the primary path.
+- **Judge-accessible hosting — DECIDED: host it ourselves, not a test build.** A test build
+  (our README's existing setup steps) is near-free but assumes a judge will sign up for their
+  own `NEBIUS_API_KEY` mid-review — unrealistic at hackathon judging speed/volume, and the
+  downside (a judge just skips it) silently loses us the whole "functioning demo" credit.
+  Hosting on Nebius AI Cloud compute with our own key already configured costs some of our $50
+  credit + deploy effort, but removes that friction *and* doubles as the required proof of
+  deployment on sponsor infrastructure. README setup steps stay documented as a convenience for
+  the other collaborator and anyone who wants to run it locally, not as the primary judging
+  path. See `ROADMAP.md`'s "Judging requirements" table and [Issue #11](../../issues/11).
+- **THINK model ID — switched, casing still unverified.** Default is now
+  `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (`pipeline/think.py`), replacing the older dense
+  `Llama-3_1-Nemotron-70B-Instruct-HF` default from before Nebius's Token Factory relaunch
+  exposed the newer Nemotron 3 lineup (Nano 30B, Nano Omni, Super 120B, Ultra 550B — see
+  nebius.com/services/token-factory/nemotron). Nemotron 3 Nano is a compact MoE model, a better
+  fit for the <2s-to-first-audio budget than a dense 70B model, without giving up the
+  "open-weight NVIDIA model" sponsor-tech requirement. The exact string's **casing** comes from
+  third-party aggregators, not Nebius's own docs — confirm against the live Token Factory model
+  list once someone has a real key, tracked in [Issue #1](../../issues/1).
+- **`NEBIUS_BASE_URL` domain — RESOLVED.** `https://api.tokenfactory.nebius.com/v1`, confirmed
+  directly against Nebius's own first-party docs
+  (docs.tokenfactory.nebius.com/api-reference/introduction, 2026-10-01) — not a live-key test,
+  but a first-party source, replacing two earlier unverified guesses. Still worth a live sanity
+  check once a key exists (bundled into [Issue #1](../../issues/1)), but no longer blocking.
 - **Conversation history across turns**: each beat today is a single, independent turn (no
   memory of what was said earlier *in the same conversation*, only durable facts saved across
   sessions). Explicitly deferred — not needed for the three-beat demo script, but a real
@@ -55,17 +75,22 @@ positives, non-atomic writes, and doc/code drift in `SAFETY_AND_PRIVACY.md`/`DEM
 
 Still open, tracked as GitHub Issues:
 
-- **Real voice I/O** — the single biggest remaining hackathon-readiness risk: the demo today
-  takes typed text and prints to a terminal, so nothing in the recorded video can show the
-  product's own premise (a *voice* companion). See the issue for exact scope.
+- [Issue #9](../../issues/9) — real voice I/O, the single biggest remaining
+  hackathon-readiness risk: the demo today takes typed text and prints to a terminal, so
+  nothing in the recorded video can show the product's own premise (a *voice* companion). Now
+  unblocked (ASR backend decided above).
+- **Judge-accessible hosting** — new, see "Open design decisions" above. Tracking issue to be
+  filed.
 - [Issue #1](../../issues/1) — wire a real `NEBIUS_API_KEY` and verify beat2/beat3's
   continuation path end to end (currently only verified in the no-key degraded path).
   Also confirms the `NEBIUS_BASE_URL` domain decision above.
-- [Issue #2](../../issues/2) — decide the ASR backend (blocks real voice I/O).
 - [Issue #3](../../issues/3) — Day-2 recall demo (a memory saved in one process run surfacing
   correctly in a later run, proving persistence isn't just in-memory-per-run).
-- [Issue #5](../../issues/5) — record the submission video.
+- [Issue #5](../../issues/5) — record the submission video (needs voice I/O + hosting done
+  first — see `ROADMAP.md`).
 - [Issue #6](../../issues/6) — decide the Devpost submission representative.
+
+Closed: [Issue #2](../../issues/2) (ASR backend) — decided, see above.
 
 Not filed as an issue (lower priority, explicitly deferred per `README.md`'s Status section):
 a caregiver-facing dashboard beyond the terminal panel. The old Issue #4 covered this; see its

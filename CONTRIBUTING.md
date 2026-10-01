@@ -42,13 +42,21 @@ one, so treat it like a normal open-source project, not a scratch space.
   safety-relevant decision changes (new flag type, new audit behavior,
   anything touching `safety/` or `pipeline/audit.py`) — don't let the code
   and the stated design diverge.
+- **`docs/PRINCIPLES.md`** is the half-page of non-negotiables that every
+  other doc defers to instead of restating. Change it only when we're
+  actually changing what we stand for, not for a one-off feature call.
 - **`docs/PRD.md`** is the product requirements doc — personas, explicit
   non-goals, and the demo script as the acceptance bar. Update it when the
   pitch or scope actually changes, not for implementation detail.
+- **`docs/ROADMAP.md`** is the single place for "what are we working on, in
+  what order, and why" — including the hackathon's actual judging
+  requirements mapped against our status. Update its status column in the
+  same PR that changes it; don't let it and the GitHub Issues disagree.
 - **`docs/IMPLEMENTATION_PLAN.md`** is the single place for build status per
   component, open design decisions, and the known-issues backlog. We code
-  from these two docs plus the PRD, not from memory of a conversation — if a
-  design decision changes, update the doc in the same PR.
+  from `PRINCIPLES.md` + `PRD.md` + `ROADMAP.md` + this plan, not from memory
+  of a conversation — if a design decision changes, update the doc in the
+  same PR.
 - **Still no separate architecture doc beyond that.** The pipeline diagram
   and latency rationale live in README's "Pipeline" section and in each
   module's module-level docstring (`pipeline/*.py`) — `IMPLEMENTATION_PLAN.md`
@@ -60,6 +68,24 @@ one, so treat it like a normal open-source project, not a scratch space.
 - **This repo is self-contained.** No references to non-GitHub tooling,
   internal ticket IDs, or infrastructure outside this project — if a doc
   needs that context to make sense, it belongs in our private notes, not here.
+
+## AI coding tools / credits
+
+We're using different AI coding assistants day to day — that's fine, it doesn't affect the
+code itself, just flagging it so neither of us is surprised by the other's commit style or
+pace. Neither of us can run models locally (no GPU hardware for it), so both rely on hosted
+inference. Options if you need another one (e.g., your current tool's credits run low):
+
+- **Nebius Token Factory** — same `NEBIUS_API_KEY` we're already using for the product itself
+  (OpenAI-compatible, so most coding-assistant tools can point straight at it). First choice:
+  no new signup, and it's the sponsor stack we're building on anyway.
+- **Google AI Studio's free Gemini tier** — generous free quota, no student program required.
+- **Groq's free API tier** — fast hosted inference on open-weight models.
+- Check whether you already have the **GitHub Student Developer Pack** — it bundles credits
+  across several providers, worth five minutes to check what's in it.
+- For occasional heavier experiments (not a coding-assistant backend, but useful if you need
+  to test something like `faster-whisper` without your own GPU): **Google Colab**'s free GPU
+  tier, or **Kaggle Notebooks**' free ~30h/week GPU quota.
 
 ## Secrets
 
