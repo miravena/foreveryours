@@ -14,8 +14,12 @@ python main.py beat1
 
 ## Beat 1 — Caregiver memo
 
-Caregiver submits a 60-second voice memo (text input for now — the mic/dashboard
-widget is UI polish, not pipeline work):
+Caregiver submits a 60-second voice memo (supports real speech via `--audio` or default text):
+
+```bash
+python main.py beat1 --audio samples/caregiver_memo.wav   # real voice memo
+# or: python main.py beat1                               # default text
+```
 
 > "Dad loves jazz. His grandson is named Leo. Avoid talking about driving.
 > I'm dropping off groceries at 4 PM today."
@@ -25,7 +29,8 @@ widget is UI polish, not pipeline work):
 ## Beat 2 — Senior conversation uses that context
 
 ```bash
-python main.py beat2  # default line mentions Miles Davis -- a durable fact, so the "newly saved" check below has something to show
+python main.py beat2 --audio samples/senior_jazz.wav     # real voice input
+# or: python main.py beat2                               # default text
 ```
 
 **Expect:**
@@ -36,10 +41,8 @@ python main.py beat2  # default line mentions Miles Davis -- a durable fact, so 
 - Time-to-first-audio printed and under 2 seconds.
 - Memory panel shows what was *recalled* for this turn (always includes the
   caregiver facts; conversation-derived memories are still overlap-searched).
-- Because the default line mentions a durable fact (listening to Miles
-  Davis), the panel should show a newly *saved* memory too — pick a line
-  with a `DURABLE_MARKERS` match (`pipeline/think.py`) if you want this to
-  fire; a plain "how's it going" won't save anything.
+- Because the audio mentions a durable fact (listening to Miles
+  Davis), the panel should show a newly *saved* memory too.
 
 This beat needs `NEBIUS_API_KEY` set — it's the only beat with no fast-path
 underneath it, so without a key it fails loudly rather than falling back to
@@ -48,7 +51,8 @@ anything mocked.
 ## Beat 3 — Worrying remark → honest caregiver flag, conversation continues
 
 ```bash
-python main.py beat3 "I fell down earlier"
+python main.py beat3 --audio samples/senior_distress.wav # real voice distress
+# or: python main.py beat3 "I fell down earlier"         # text input
 ```
 
 **Expect:**
@@ -75,7 +79,8 @@ in-memory-per-run; good footage for the video since it's a visible "fresh
 process, PID printed, still remembers" moment.
 
 ```bash
-python main.py beat4 "I forgot, what is my grandson's name?"
+python main.py beat4 --audio samples/senior_grandson.wav # real voice recall
+# or: python main.py beat4 "I forgot, what is my grandson's name?"
 ```
 
 **Expect:**

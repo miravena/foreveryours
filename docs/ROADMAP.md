@@ -24,10 +24,10 @@ ASR backend decision (DECIDED, see below)
 | M1 | Core pipeline fixes (fast-path continuation, disclosure honesty, audit fix, etc.) | **Open PR [#7](../../pull/7)** — awaiting review | — |
 | M2 | PRD + implementation plan + this roadmap | **Open PR [#8](../../pull/8)** — awaiting review | — |
 | M3 | ASR backend decided | **Done**, see below | — |
-| M4 | Real voice I/O wired ([#9](../../issues/9)) | Open | M3 |
+| M4 | Real voice I/O wired ([#9](../../issues/9)) | **Done** (PR ready, verified with bundled samples + webapp) | M3 |
 | M5 | Judge-accessible hosting (host it ourselves, decided) | Open — **new requirement**, see "Judging requirements" below | — |
 | M6 | Live `NEBIUS_API_KEY` verification ([#1](../../issues/1)) | Open | — |
-| M7 | Day-2 recall demo ([#3](../../issues/3)) | Open, lower priority | — |
+| M7 | Day-2 recall demo ([#3](../../issues/3)) | **Done** (PR #22 ready, persistence verified) | — |
 | M8 | Submission video recorded ([#5](../../issues/5)) | Open | M4, M5 |
 | M9 | Devpost Representative decided + submitted ([#6](../../issues/6)) | Open | everything above |
 

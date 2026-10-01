@@ -7,11 +7,14 @@ behavior is visibly provable before any UI exists.
 
 Usage:
     cp .env.example .env   # fill in NEBIUS_API_KEY
-    python main.py beat1   # caregiver memo
+    python main.py beat1   # caregiver memo (text default)
+    python main.py beat1 --audio samples/caregiver_memo.wav  # voice memo in
     python main.py beat2 "Hi, how's it going today?"
-    python main.py beat2 --audio senior_turn.wav   # real voice in, instead of typed text
+    python main.py beat2 --audio samples/senior_jazz.wav     # real voice in
     python main.py beat3 "I fell down earlier and I'm scared"
+    python main.py beat3 --audio samples/senior_distress.wav # safety fast-path with voice
     python main.py beat4 "I forgot, what is my grandson's name?"
+    python main.py beat4 --audio samples/senior_grandson.wav # day-2 recall with voice
     python main.py day2   # run AFTER beat1, in a separate invocation -- proves persistence
 
 Pass --no-play to skip audio playback (e.g. on a headless box with no speaker).
@@ -22,7 +25,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv():  # noqa: E731
+        pass
 
 from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, CaregiverFlags
 from memory.store import MemoryStore
@@ -34,6 +41,15 @@ AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
 
 
 def _play(audio_path: Path) -> None:
+    if sys.platform == "win32":
+        try:
+            import winsound
+
+            winsound.PlaySound(str(audio_path), winsound.SND_FILENAME)
+        except Exception as exc:
+            print(f"  (windows playback failed for {audio_path.name}: {exc})")
+        return
+
     player = "afplay" if sys.platform == "darwin" else "aplay"
     try:
         subprocess.run([player, str(audio_path)], check=True, capture_output=True)
@@ -55,15 +71,19 @@ def _print_memory_panel(store: MemoryStore, flags: CaregiverFlags) -> None:
     print("-------------------------\n")
 
 
-def beat1_caregiver_memo() -> None:
-    """Caregiver submits onboarding context -- the 60-second voice memo,
-    simplified to text input for the thin slice (ASR applies equally to a
-    caregiver memo or a senior turn; wiring the mic widget is UI polish)."""
+def beat1_caregiver_memo(audio_in: Path | None = None) -> None:
+    """Caregiver submits onboarding context -- the 60-second voice memo.
+    Accepts real voice audio via --audio or falls back to text context."""
+    if audio_in is not None:
+        memo = hear.transcribe(audio_in)
+        print(f'Transcribed caregiver voice memo from "{audio_in.name}":\n  "{memo}"')
+    else:
+        memo = (
+            "Dad loves jazz. His grandson is named Leo. Avoid talking about driving. "
+            "I'm dropping off groceries at 4 PM today."
+        )
+
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
-    memo = (
-        "Dad loves jazz. His grandson is named Leo. Avoid talking about driving. "
-        "I'm dropping off groceries at 4 PM today."
-    )
     saved = 0
     for line in memo.split(". "):
         line = line.strip().rstrip(".")
@@ -134,11 +154,11 @@ def day2_recall_check() -> None:
     print(f"\n{len(items)} fact(s) recalled from a prior run. Persistence confirmed.")
 
 
-def beat4_day2_recall(transcript: str) -> None:
+def beat4_day2_recall(transcript: str | None, audio_in: Path | None = None, play: bool = True) -> None:
     """Demonstrates persistence by surfacing a memory saved in a previous session
-    (e.g., beat2) across process boundaries."""
+    across process boundaries."""
     print("[Testing Day-2 Recall: Simulating a new session on a different day]")
-    beat2_senior_turn(transcript)
+    beat2_senior_turn(transcript, audio_in=audio_in, play=play)
 
 
 if __name__ == "__main__":
@@ -161,7 +181,7 @@ if __name__ == "__main__":
     text_in = rest[0] if rest else None
 
     if beat == "beat1":
-        beat1_caregiver_memo()
+        beat1_caregiver_memo(audio_in=audio_in)
     elif beat == "beat2":
         beat2_senior_turn(
             text_in or "Hi, how's it going today? I've been listening to a lot of Miles Davis lately, I love him.",
@@ -171,7 +191,7 @@ if __name__ == "__main__":
     elif beat == "beat3":
         beat3_worrying_remark(text_in or "I fell down earlier and I'm scared", audio_in=audio_in, play=play)
     elif beat == "beat4":
-        beat4_day2_recall(text_in or "I forgot, what is my grandson's name?")
+        beat4_day2_recall(text_in or "I forgot, what is my grandson's name?", audio_in=audio_in, play=play)
     elif beat == "day2":
         day2_recall_check()
     else:
