@@ -42,10 +42,18 @@ one, so treat it like a normal open-source project, not a scratch space.
   safety-relevant decision changes (new flag type, new audit behavior,
   anything touching `safety/` or `pipeline/audit.py`) — don't let the code
   and the stated design diverge.
-- **No separate architecture doc.** The pipeline is documented inline in
-  README's "Pipeline" section and in each module's module-level docstring
-  (`pipeline/*.py`). Keep it that way unless the project outgrows it — one
-  source of truth beats two docs that can disagree.
+- **`docs/PRD.md`** is the product requirements doc — personas, explicit
+  non-goals, and the demo script as the acceptance bar. Update it when the
+  pitch or scope actually changes, not for implementation detail.
+- **`docs/IMPLEMENTATION_PLAN.md`** is the single place for build status per
+  component, open design decisions, and the known-issues backlog. We code
+  from these two docs plus the PRD, not from memory of a conversation — if a
+  design decision changes, update the doc in the same PR.
+- **Still no separate architecture doc beyond that.** The pipeline diagram
+  and latency rationale live in README's "Pipeline" section and in each
+  module's module-level docstring (`pipeline/*.py`) — `IMPLEMENTATION_PLAN.md`
+  links to README rather than repeating the diagram. One source of truth
+  beats two docs that can disagree.
 - **Comments in code:** only for the *why* (a non-obvious constraint, a
   workaround, a latency tradeoff) — see the existing modules for the style.
   Not for the *what*; names should already say that.
