@@ -22,7 +22,13 @@ _whisper_model = None
 def _get_whisper_model():
     global _whisper_model
     if _whisper_model is None:
-        from faster_whisper import WhisperModel
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError as exc:
+            raise RuntimeError(
+                "faster-whisper is not installed. Run `pip install -r requirements.txt` "
+                "or configure NEBIUS_API_KEY and set ASR_BACKEND=nebius for hosted ASR."
+            ) from exc
 
         size = os.environ.get("ASR_MODEL", "base.en")
         _whisper_model = WhisperModel(size, device="cpu", compute_type="int8")
@@ -30,6 +36,9 @@ def _get_whisper_model():
 
 
 def transcribe(audio_path: Path) -> str:
+    if not audio_path.exists() or audio_path.stat().st_size == 0:
+        return ""
+
     backend = os.environ.get("ASR_BACKEND", "whisper_local")
     if backend == "whisper_local":
         model = _get_whisper_model()

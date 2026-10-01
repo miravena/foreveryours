@@ -75,3 +75,4 @@ def speak_sentences(sentences: Iterator[str], out_dir: Path) -> Iterator[tuple[s
         out_path = out_dir / f"reply_{turn_id}_{i:03d}.wav"
         _synthesize_file(sentence, out_path, engine)
         yield sentence, out_path
+

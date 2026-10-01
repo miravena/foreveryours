@@ -55,10 +55,11 @@ sudo apt-get install -y espeak-ng
 
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env   # fill in NEBIUS_API_KEY — see "Nebius access" below
-.venv/bin/python main.py beat1   # caregiver memo
-.venv/bin/python main.py beat2   # senior turn, uses memory + a real model call
-.venv/bin/python main.py beat3   # safety fast-path, then the conversation continues
-.venv/bin/python main.py beat4 "I forgot, what is my grandson's name?"        # day-2 recall (persistence)
+.venv/bin/python main.py beat1 --audio samples/caregiver_memo.wav  # caregiver voice memo
+.venv/bin/python main.py beat2 --audio samples/senior_jazz.wav     # senior turn with real voice
+.venv/bin/python main.py beat3 --audio samples/senior_distress.wav # safety fast-path with voice
+.venv/bin/python main.py beat4 --audio samples/senior_grandson.wav # day-2 recall with voice
+# (Pass typed text arguments instead of --audio if running without sound)
 ```
 
 `beat1` runs fully offline. `beat2` needs `NEBIUS_API_KEY` set — it calls a real open-weight

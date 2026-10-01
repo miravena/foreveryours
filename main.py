@@ -7,11 +7,14 @@ behavior is visibly provable before any UI exists.
 
 Usage:
     cp .env.example .env   # fill in NEBIUS_API_KEY
-    python main.py beat1   # caregiver memo
+    python main.py beat1   # caregiver memo (text default)
+    python main.py beat1 --audio samples/caregiver_memo.wav  # voice memo in
     python main.py beat2 "Hi, how's it going today?"
-    python main.py beat2 --audio senior_turn.wav   # real voice in, instead of typed text
+    python main.py beat2 --audio samples/senior_jazz.wav     # real voice in
     python main.py beat3 "I fell down earlier and I'm scared"
+    python main.py beat3 --audio samples/senior_distress.wav # safety fast-path with voice
     python main.py beat4 "I forgot, what is my grandson's name?"
+    python main.py beat4 --audio samples/senior_grandson.wav # day-2 recall with voice
     python main.py day2   # run AFTER beat1, in a separate invocation -- proves persistence
 
 Pass --no-play to skip audio playback (e.g. on a headless box with no speaker).
@@ -68,15 +71,19 @@ def _print_memory_panel(store: MemoryStore, flags: CaregiverFlags) -> None:
     print("-------------------------\n")
 
 
-def beat1_caregiver_memo() -> None:
-    """Caregiver submits onboarding context -- the 60-second voice memo,
-    simplified to text input for the thin slice (ASR applies equally to a
-    caregiver memo or a senior turn; wiring the mic widget is UI polish)."""
+def beat1_caregiver_memo(audio_in: Path | None = None) -> None:
+    """Caregiver submits onboarding context -- the 60-second voice memo.
+    Accepts real voice audio via --audio or falls back to text context."""
+    if audio_in is not None:
+        memo = hear.transcribe(audio_in)
+        print(f'Transcribed caregiver voice memo from "{audio_in.name}":\n  "{memo}"')
+    else:
+        memo = (
+            "Dad loves jazz. His grandson is named Leo. Avoid talking about driving. "
+            "I'm dropping off groceries at 4 PM today."
+        )
+
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
-    memo = (
-        "Dad loves jazz. His grandson is named Leo. Avoid talking about driving. "
-        "I'm dropping off groceries at 4 PM today."
-    )
     saved = 0
     for line in memo.split(". "):
         line = line.strip().rstrip(".")
@@ -190,7 +197,7 @@ if __name__ == "__main__":
     text_in = rest[0] if rest else None
 
     if beat == "beat1":
-        beat1_caregiver_memo()
+        beat1_caregiver_memo(audio_in=audio_in)
     elif beat == "beat2":
         beat2_senior_turn(
             text_in or "Hi, how's it going today? I've been listening to a lot of Miles Davis lately, I love him.",
