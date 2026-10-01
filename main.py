@@ -9,8 +9,9 @@ Usage:
     cd competitions/nebius-foreveryours/app
     cp .env.example .env   # fill in NEBIUS_API_KEY
     python -m main beat1   # caregiver memo
-    python -m main beat2 "Hi, how's it going today?"
+    python -m main beat2 "Hi, how's it going today? By the way, my daughter is visiting tomorrow."
     python -m main beat3 "I fell down earlier and I'm scared"
+    python -m main beat4 "Who is visiting me tomorrow?"
 """
 from __future__ import annotations
 
@@ -84,6 +85,13 @@ def beat3_worrying_remark(transcript: str) -> None:
     beat2_senior_turn(transcript)
 
 
+def beat4_day2_recall(transcript: str) -> None:
+    """Demonstrates persistence by surfacing a memory saved in a previous session
+    (e.g., beat2) across process boundaries."""
+    print("[Testing Day-2 Recall: Simulating a new session on a different day]")
+    beat2_senior_turn(transcript)
+
+
 if __name__ == "__main__":
     load_dotenv()
     args = sys.argv[1:]
@@ -98,6 +106,8 @@ if __name__ == "__main__":
         beat2_senior_turn(args[1] if len(args) > 1 else "Hi, how's it going today?")
     elif beat == "beat3":
         beat3_worrying_remark(args[1] if len(args) > 1 else "I fell down earlier and I'm scared")
+    elif beat == "beat4":
+        beat4_day2_recall(args[1] if len(args) > 1 else "Who is visiting me tomorrow?")
     else:
         print(f"unknown beat: {beat}")
         sys.exit(1)

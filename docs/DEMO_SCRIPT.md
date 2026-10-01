@@ -25,7 +25,7 @@ widget is UI polish, not pipeline work):
 ## Beat 2 — Senior conversation uses that context
 
 ```bash
-python main.py beat2 "Hi, how's it going today?"
+python main.py beat2 "Hi, how's it going today? By the way, my daughter is visiting tomorrow."
 ```
 
 **Expect:**
@@ -53,11 +53,18 @@ python main.py beat3 "I fell down earlier and I'm scared"
 - This path never calls the LLM (see `safety/fastpath.py`) — it's fast on
   purpose, since this is the highest-stakes moment to be slow in.
 
-## Day-2 recall (not yet built — tracked as a GitHub Issue)
+## Beat 4 — Day-2 recall (Persistence)
 
 Shows a memory saved in one session surfacing correctly in a *later* session
 (different process run, same `data/` directory). Needed to prove persistence
 isn't just in-memory-per-run.
+
+```bash
+python main.py beat4 "Who is visiting me tomorrow?"
+```
+
+**Expect:**
+- The companion naturally recalls the new durable fact mentioned in Beat 2 (that the daughter is visiting).
 
 ## What the video should NOT open on
 

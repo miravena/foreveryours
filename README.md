@@ -52,8 +52,9 @@ surveillance, no medical claims, what's stored and why.
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env   # fill in NEBIUS_API_KEY — see "Nebius access" below
 .venv/bin/python main.py beat1                               # caregiver memo
-.venv/bin/python main.py beat2 "Hi, how's it going today?"   # senior turn, uses memory
+.venv/bin/python main.py beat2 "Hi, how's it going today? By the way, my daughter is visiting tomorrow."   # senior turn, uses memory
 .venv/bin/python main.py beat3 "I fell down earlier and I'm scared"  # safety fast-path
+.venv/bin/python main.py beat4 "Who is visiting me tomorrow?"        # day-2 recall (persistence)
 ```
 
 `beat1` and `beat3` run fully offline (no API key needed — the fast-path and local TTS don't call
