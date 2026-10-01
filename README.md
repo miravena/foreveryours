@@ -58,6 +58,7 @@ cp .env.example .env   # fill in NEBIUS_API_KEY — see "Nebius access" below
 .venv/bin/python main.py beat1   # caregiver memo
 .venv/bin/python main.py beat2   # senior turn, uses memory + a real model call
 .venv/bin/python main.py beat3   # safety fast-path, then the conversation continues
+.venv/bin/python main.py beat4 "I forgot, what is my grandson's name?"        # day-2 recall (persistence)
 ```
 
 `beat1` runs fully offline. `beat2` needs `NEBIUS_API_KEY` set — it calls a real open-weight
