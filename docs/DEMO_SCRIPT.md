@@ -25,33 +25,46 @@ widget is UI polish, not pipeline work):
 ## Beat 2 — Senior conversation uses that context
 
 ```bash
-python main.py beat2 "Hi, how's it going today?"
+python main.py beat2  # default line mentions Miles Davis -- a durable fact, so the "newly saved" check below has something to show
 ```
 
 **Expect:**
-- Reply naturally references at least one caregiver fact (Leo, avoiding
-  driving, or the 4 PM groceries) without announcing "according to my notes."
+- Reply references the caregiver facts (Leo, the 4 PM groceries) and never
+  raises the guardrail ("avoid driving") on its own — caregiver memos/notes
+  are always injected into the prompt now, not dependent on word-overlap
+  with what the senior said (`memory/store.py`'s `caregiver_context()`).
 - Time-to-first-audio printed and under 2 seconds.
-- Memory panel shows what was *recalled* for this turn.
-- If the turn contained anything durable and new, the panel shows a newly
-  *saved* memory too.
+- Memory panel shows what was *recalled* for this turn (always includes the
+  caregiver facts; conversation-derived memories are still overlap-searched).
+- Because the default line mentions a durable fact (listening to Miles
+  Davis), the panel should show a newly *saved* memory too — pick a line
+  with a `DURABLE_MARKERS` match (`pipeline/think.py`) if you want this to
+  fire; a plain "how's it going" won't save anything.
 
-This beat is the one that needs `NEBIUS_API_KEY` set — it's the only beat that
-calls the real model.
+This beat needs `NEBIUS_API_KEY` set — it's the only beat with no fast-path
+underneath it, so without a key it fails loudly rather than falling back to
+anything mocked.
 
-## Beat 3 — Worrying remark → honest caregiver flag
+## Beat 3 — Worrying remark → honest caregiver flag, conversation continues
 
 ```bash
-python main.py beat3 "I fell down earlier and I'm scared"
+python main.py beat3 "I fell down earlier"
 ```
 
 **Expect:**
-- The companion's reply is honest and in-conversation, e.g. *"I hear you, and
-  I'm taking this seriously. I'm letting your family know right now so
-  someone can check on you."* — never a silent report.
-- A caregiver flag appears in the panel, severity `distress`.
-- This path never calls the LLM (see `safety/fastpath.py`) — it's fast on
-  purpose, since this is the highest-stakes moment to be slow in.
+- The companion speaks an immediate, honest reassurance first — *"I hear
+  you, and I'm taking this seriously. I'm letting your family know right now
+  so someone can check on you."* — never a silent report. That line itself
+  IS the disclosure (see `docs/SAFETY_AND_PRIVACY.md`).
+- A caregiver flag appears in the panel, severity `distress`, marked
+  "disclosed to senior."
+- The fast-path's regex check (`safety/fastpath.py`) never calls the LLM for
+  that immediate line, so it's fast on purpose. The conversation then tries
+  to continue into THINK with context about what just happened, rather than
+  ending the turn there — **with `NEBIUS_API_KEY` set**, expect a real
+  follow-up reply after the reassurance. **Without a key**, the turn still
+  completes (degrades gracefully — see the audit verdict line printed), it
+  just doesn't continue past the immediate reassurance.
 
 ## Day-2 recall (not yet built — tracked as a GitHub Issue)
 

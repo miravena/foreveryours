@@ -1,21 +1,19 @@
-"""CLI demo runner for the AC3 three-beat script.
+"""CLI demo runner for the three-beat demo script (see docs/DEMO_SCRIPT.md).
 
-Thin vertical slice: no dashboard UI yet (that's caregiver-dashboard polish,
-explicitly lower priority than the end-to-end pipeline per the ticket). This
+Thin vertical slice: no dashboard UI yet -- that's tracked as an open
+GitHub Issue, deliberately lower priority than the end-to-end pipeline. This
 prints the live "memory panel" to the terminal so the pipeline's recall/save
 behavior is visibly provable before any UI exists.
 
 Usage:
-    cd competitions/nebius-foreveryours/app
     cp .env.example .env   # fill in NEBIUS_API_KEY
-    python -m main beat1   # caregiver memo
-    python -m main beat2 "Hi, how's it going today?"
-    python -m main beat3 "I fell down earlier and I'm scared"
+    python main.py beat1   # caregiver memo
+    python main.py beat2 "Hi, how's it going today?"
+    python main.py beat3 "I fell down earlier and I'm scared"
 """
 from __future__ import annotations
 
 import sys
-import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -35,7 +33,8 @@ def _print_memory_panel(store: MemoryStore, flags: CaregiverFlags) -> None:
     if flags.all():
         print("--- CAREGIVER FLAGS ---")
         for flag in flags.all():
-            print(f"  ({flag.severity}) {flag.text}")
+            disclosed = "disclosed to senior" if flag.disclosed_to_senior else "NOT disclosed"
+            print(f"  ({flag.severity}, {disclosed}) {flag.text}")
     print("-------------------------\n")
 
 
@@ -48,18 +47,19 @@ def beat1_caregiver_memo() -> None:
         "Dad loves jazz. His grandson is named Leo. Avoid talking about driving. "
         "I'm dropping off groceries at 4 PM today."
     )
+    saved = 0
     for line in memo.split(". "):
         line = line.strip().rstrip(".")
-        if line:
-            store.add(line, source="caregiver_memo")
-    print(f"Caregiver memo saved ({len(memo.split('. '))} facts).")
+        if line and store.add(line, source="caregiver_memo"):
+            saved += 1
+    print(f"Caregiver memo saved ({saved} new facts; re-running this beat won't duplicate them).")
     _print_memory_panel(store, CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR))
 
 
 def beat2_senior_turn(transcript: str) -> None:
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR)
-    result = run_turn(DEFAULT_PROFILE_ID, transcript, store, flags, AUDIO_DIR)
+    result = run_turn(transcript, store, flags, AUDIO_DIR, caregiver_name=DEFAULT_CAREGIVER_NAME)
 
     print(f'Senior said: "{transcript}"')
     print(f"Companion replied: \"{result.reply_text}\"")
@@ -69,7 +69,8 @@ def beat2_senior_turn(transcript: str) -> None:
     print(f"Memories recalled: {result.memories_used}")
     print(f"Audio chunks: {[str(p) for p in result.audio_paths]}")
 
-    time.sleep(0.5)  # let the background audit/extraction thread finish for the demo print
+    if result.background_thread is not None:
+        result.background_thread.join(timeout=10)  # the audit/memory-save LLM call can be slower than a fixed sleep
     if result.memory_saved:
         print(f"New memory saved: {result.memory_saved}")
     if result.audit_verdict:
@@ -79,8 +80,8 @@ def beat2_senior_turn(transcript: str) -> None:
 
 def beat3_worrying_remark(transcript: str) -> None:
     """Same code path as beat2 -- the fast-path in safety/fastpath.py is what
-    makes this beat different (caregiver flag + honest in-conversation line)."""
-    print(f"[{DEFAULT_CAREGIVER_NAME} will be told honestly, in-conversation, if this trips the fast-path]")
+    makes this beat different (immediate disclosure + caregiver flag, then
+    the turn continues naturally instead of ending)."""
     beat2_senior_turn(transcript)
 
 
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     if beat == "beat1":
         beat1_caregiver_memo()
     elif beat == "beat2":
-        beat2_senior_turn(args[1] if len(args) > 1 else "Hi, how's it going today?")
+        beat2_senior_turn(args[1] if len(args) > 1 else "Hi, how's it going today? I've been listening to a lot of Miles Davis lately, I love him.")
     elif beat == "beat3":
         beat3_worrying_remark(args[1] if len(args) > 1 else "I fell down earlier and I'm scared")
     else:

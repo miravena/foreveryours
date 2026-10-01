@@ -3,7 +3,8 @@
 ASR_BACKEND=whisper_local (default, no key needed) uses faster-whisper on CPU.
 ASR_BACKEND=nebius tries an NVIDIA ASR model (Parakeet/Canary) hosted on Nebius
 Token Factory if/when the account has one provisioned -- preferred per the
-hackathon's sponsor-stack judging criterion, see STATUS.md.
+hackathon's sponsor-stack judging criterion (see README.md). Not yet wired
+into main.py's demo beats, which take text input -- see open GitHub Issues.
 """
 from __future__ import annotations
 
