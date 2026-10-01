@@ -77,7 +77,6 @@ Shows a memory saved in one session surfacing correctly in a *later* session
 genuinely separate process invocation. Proves persistence isn't just
 in-memory-per-run; good footage for the video since it's a visible "fresh
 process, PID printed, still remembers" moment. Runs completely offline without an API key.
-
 ```bash
 python main.py day2
 ```
