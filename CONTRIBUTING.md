@@ -69,6 +69,24 @@ one, so treat it like a normal open-source project, not a scratch space.
   internal ticket IDs, or infrastructure outside this project — if a doc
   needs that context to make sense, it belongs in our private notes, not here.
 
+## AI coding tools / credits
+
+We're using different AI coding assistants day to day — that's fine, it doesn't affect the
+code itself, just flagging it so neither of us is surprised by the other's commit style or
+pace. Neither of us can run models locally (no GPU hardware for it), so both rely on hosted
+inference. Options if you need another one (e.g., your current tool's credits run low):
+
+- **Nebius Token Factory** — same `NEBIUS_API_KEY` we're already using for the product itself
+  (OpenAI-compatible, so most coding-assistant tools can point straight at it). First choice:
+  no new signup, and it's the sponsor stack we're building on anyway.
+- **Google AI Studio's free Gemini tier** — generous free quota, no student program required.
+- **Groq's free API tier** — fast hosted inference on open-weight models.
+- Check whether you already have the **GitHub Student Developer Pack** — it bundles credits
+  across several providers, worth five minutes to check what's in it.
+- For occasional heavier experiments (not a coding-assistant backend, but useful if you need
+  to test something like `faster-whisper` without your own GPU): **Google Colab**'s free GPU
+  tier, or **Kaggle Notebooks**' free ~30h/week GPU quota.
+
 ## Secrets
 
 Nebius Token Factory key setup is in `README.md` → Setup. If you get your own
