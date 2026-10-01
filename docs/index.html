@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ForeverYours</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    line-height: 1.55;
+  }
+  h1 { font-size: 1.9rem; margin-bottom: 0.25rem; }
+  .tagline { font-size: 1.05rem; opacity: 0.8; margin-top: 0; margin-bottom: 1.5rem; }
+  .badges { margin-bottom: 1.5rem; }
+  .badges a { margin-right: 0.5rem; text-decoration: none; }
+  .badge {
+    display: inline-block;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: #eee;
+    color: #333;
+  }
+  .badge.pending { background: #fff3cd; color: #7a5c00; }
+  .badge.live { background: #d4f4dd; color: #166534; }
+  pre {
+    background: #1e1e1e;
+    color: #e6e6e6;
+    padding: 1rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+  }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .pipeline {
+    background: #f6f6f6;
+    border-left: 3px solid #999;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+  }
+  a { color: #2563eb; }
+  footer { margin-top: 3rem; font-size: 0.85rem; opacity: 0.7; }
+  @media (prefers-color-scheme: dark) {
+    .pipeline { background: #1a1a1a; border-left-color: #555; }
+    .badge { background: #333; color: #ddd; }
+  }
+</style>
+</head>
+<body>
+
+<h1>ForeverYours</h1>
+<p class="tagline">The companion the family briefs — your voice in Dad's day when you can't be there.</p>
+
+<div class="badges">
+  <span class="badge">Nebius x NVIDIA Global AI Hackathon</span>
+  <span class="badge pending">Live demo: coming soon</span>
+</div>
+
+<p>
+A voice-first AI companion for older adults. A caregiver briefs it once — names, preferences,
+daily updates — and the senior gets a warm, low-friction voice conversation that actually uses
+that context, while the caregiver gets honest safety flags, never silent surveillance.
+</p>
+
+<p>
+<a href="https://github.com/miravena/foreveryours">Source code</a> ·
+<a href="https://github.com/miravena/foreveryours/blob/main/docs/ROADMAP.md">Roadmap</a> ·
+<a href="https://github.com/miravena/foreveryours/blob/main/docs/DEMO_SCRIPT.md">Demo script</a> ·
+Demo video: <em>coming soon</em> · Live demo link: <em>coming soon</em>
+</p>
+
+<h2>How it works</h2>
+<div class="pipeline">HEAR (speech-to-text)
+  → fast-path safety check (rule-based, instant, no API key needed)
+  → RECALL (memory search, scoped by what the caregiver briefed)
+  → THINK (open-weight NVIDIA model via Nebius Token Factory, streamed)
+  → SPEAK (streamed text-to-speech)
+  → AUDIT (background safety re-check) + memory extraction</div>
+
+<h2>Run it yourself</h2>
+<p>Two ways to try it: the terminal demo (three scripted beats) or the browser demo (one page,
+record your voice, hear the reply). Full details in
+<a href="https://github.com/miravena/foreveryours/blob/main/README.md">README.md</a> and
+<a href="https://github.com/miravena/foreveryours/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
+
+<pre><code>git clone https://github.com/miravena/foreveryours.git
+cd foreveryours
+sudo apt-get install -y espeak-ng   # local text-to-speech needs this on Linux
+python3 -m venv .venv &amp;&amp; .venv/bin/pip install -r requirements.txt
+cp .env.example .env                # fill in NEBIUS_API_KEY -- see README "Nebius access"
+
+# terminal demo:
+.venv/bin/python main.py beat1
+.venv/bin/python main.py beat2
+.venv/bin/python main.py beat3
+.venv/bin/python main.py day2      # proves memory survives a separate process run
+
+# browser demo:
+.venv/bin/python webapp.py          # then open http://localhost:7860
+</code></pre>
+
+<p>
+Both work without a Nebius key too — a distress/confusion phrase still gets the immediate,
+rule-based safety reassurance; it just can't continue the fuller conversation past that point
+without a real model call.
+</p>
+
+<h2>Status</h2>
+<p>
+Thin vertical slice, intentionally. See
+<a href="https://github.com/miravena/foreveryours/blob/main/docs/ROADMAP.md">ROADMAP.md</a> for
+milestones and what's next, and
+<a href="https://github.com/miravena/foreveryours/blob/main/VENDOR_DECISIONS.md">VENDOR_DECISIONS.md</a>
+for what we picked and why.
+</p>
+
+<footer>
+Built for the <a href="https://nebiusglobalaihackathon.devpost.com/">Nebius x NVIDIA Global AI Hackathon</a>.
+This page is a static front door — the interactive demo runs elsewhere once hosted (see ROADMAP.md).
+</footer>
+
+</body>
+</html>

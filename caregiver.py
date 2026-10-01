@@ -6,6 +6,7 @@ Multi-profile support is a later concern -- the demo only needs one.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -35,10 +36,17 @@ class CaregiverFlags:
         return [CaregiverFlag(**item) for item in raw]
 
     def _flush(self) -> None:
-        self.path.write_text(json.dumps([f.__dict__ for f in self._flags], indent=2))
+        tmp_path = self.path.with_suffix(self.path.suffix + ".tmp")
+        tmp_path.write_text(json.dumps([f.__dict__ for f in self._flags], indent=2))
+        os.replace(tmp_path, self.path)
 
-    def add(self, text: str, severity: str) -> CaregiverFlag:
-        flag = CaregiverFlag(text=text, severity=severity, disclosed_to_senior=True)
+    def add(self, text: str, severity: str, disclosed_to_senior: bool) -> CaregiverFlag:
+        """`disclosed_to_senior` must reflect reality, not a default: only
+        True when the senior was actually told, in the conversation, that
+        this flag was raised. See safety/fastpath.py (always discloses, part
+        of the immediate reply) and pipeline/orchestrator.py's AUDIT path
+        (discloses via a follow-up spoken line; False only if that fails)."""
+        flag = CaregiverFlag(text=text, severity=severity, disclosed_to_senior=disclosed_to_senior)
         self._flags.append(flag)
         self._flush()
         return flag

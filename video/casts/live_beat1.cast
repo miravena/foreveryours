@@ -1,0 +1,6 @@
+{"version": 2, "width": 100, "height": 30, "timestamp": 1790838870, "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}}
+[0.005465, "o", "\u001b[H\u001b[2J\u001b[3J"]
+[0.006956, "o", "foreveryours$ python main.py beat1\r\n"]
+[1.766865, "o", "Caregiver memo saved (4 new facts; re-running this beat won't duplicate them).\r\n"]
+[1.768509, "o", "\r\n--- LIVE MEMORY PANEL ---\r\n  [caregiver_memo] Dad loves jazz\r\n  [caregiver_memo] His grandson is named Leo\r\n  [caregiver_memo] Avoid talking about driving\r\n  [caregiver_memo] I'm dropping off groceries at 4 PM today\r\n-------------------------\r\n\r\n"]
+[1.890738, "o", "\r\nforeveryours$ \r\n"]
