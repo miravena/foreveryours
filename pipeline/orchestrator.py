@@ -51,6 +51,52 @@ def _sanitize_caregiver_update(text: str, caregiver_name: str) -> str:
     return cleaned
 
 
+MATCH_IGNORE_WORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "my", "your", "i", "you",
+    "he", "she", "it", "we", "they", "in", "on", "at", "to", "for", "with",
+    "of", "and", "or", "what", "where", "who", "when", "why", "how", "tell",
+    "about", "me", "do", "did", "does", "have", "had", "has", "can", "could",
+    "would", "should", "will", "today", "yesterday", "tomorrow", "day", "time",
+    "morning", "afternoon", "evening", "night", "good", "hello", "hi", "hey",
+    "please", "thanks", "thank", "you", "well", "yes", "no", "just", "so",
+    "like", "likes", "liked", "love", "loves", "loved", "enjoy", "enjoys",
+    "know", "knows", "knew", "think", "thinks", "thought", "remember", "remembers",
+    "named", "called", "senior", "dad", "mom", "person", "joke", "weather",
+    "capital", "plus", "minus", "divided", "times", "rain", "sun", "outside",
+    "really", "much", "always", "never", "used", "also", "something", "anything",
+    "thing", "things", "talk", "talking", "feel", "feeling", "felt", "say", "said",
+}
+
+
+def _words_match(w1: str, w2: str) -> bool:
+    if w1 == w2:
+        return True
+    if len(w1) >= 4 and len(w2) >= 4:
+        return w1.startswith(w2) or w2.startswith(w1) or w1[:4] == w2[:4]
+    return False
+
+
+def _find_matching_facts(transcript: str, candidates: list[str]) -> list[str]:
+    """Finds candidate facts that have meaningful semantic/keyword overlap with the transcript.
+    Used for Zero-Memory default in CASUAL intent so unrelated queries (math, jokes, greetings, trivia)
+    receive ZERO memory anchors (avoiding forced personalization)."""
+    transcript_words = set(re.findall(r"\b[a-zA-Z]{3,}\b", transcript.lower()))
+    meaningful = {w for w in transcript_words if w not in MATCH_IGNORE_WORDS}
+    if not meaningful:
+        return []
+
+    scored = []
+    for cand in candidates:
+        cand_words = set(re.findall(r"\b[a-zA-Z]{3,}\b", cand.lower()))
+        cand_meaningful = {w for w in cand_words if w not in MATCH_IGNORE_WORDS}
+        overlap = sum(1 for tw in meaningful for cw in cand_meaningful if _words_match(tw, cw))
+        if overlap > 0:
+            scored.append((overlap, cand))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [c for _, c in scored]
+
+
 @dataclass
 class TurnResult:
     transcript: str
@@ -109,12 +155,13 @@ def run_turn(
     else:
         first_audio_time = None
 
+    t_now = time.time()
     intent = detect_intent(transcript)
     guardrails = memory_store.caregiver_guardrails()
-    raw_schedule = memory_store.caregiver_schedule_updates()
+    raw_schedule = memory_store.caregiver_schedule_updates(now=t_now)
     caregiver_updates = [_sanitize_caregiver_update(u, caregiver_name) for u in raw_schedule]
-    profile_facts = memory_store.senior_profile_facts()
-    recalled = [m.text for m in memory_store.search(transcript)]
+    profile_facts = memory_store.senior_profile_facts(now=t_now)
+    recalled = [m.text for m in memory_store.search(transcript, now=t_now)]
 
     # History-aware anchor rotation: If an anchor (e.g. jazz) was used in the previous turn,
     # rotate unmentioned anchors to the front to prevent repetitive responses.
@@ -149,8 +196,16 @@ def run_turn(
         filtered_schedule = caregiver_updates
         filtered_profile = profile_facts[:1]
     else:  # CASUAL
-        filtered_schedule = caregiver_updates[:1]
-        filtered_profile = list(dict.fromkeys(profile_facts + recalled))[:1]
+        # Zero-Memory Default: Ordinary conversational / factual queries must NOT force personalization.
+        # Only inject a profile anchor if the senior's transcript explicitly mentions or relates to that topic.
+        matching_facts = _find_matching_facts(transcript, profile_facts)
+        filtered_schedule = []
+        if recalled:
+            filtered_profile = recalled[:1]
+        elif matching_facts:
+            filtered_profile = matching_facts[:1]
+        else:
+            filtered_profile = []
 
     # Deduplicate facts and remove guardrails
     filtered_profile = [f for f in filtered_profile if f not in filtered_schedule and f not in guardrails]

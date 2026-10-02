@@ -177,6 +177,48 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(res.reply_text, FALLBACK_REPLY_1)
         self.assertGreaterEqual(len(res.audio_paths), 1)
 
+    @patch("pipeline.think.stream_reply")
+    def test_zero_memory_default_on_factual_and_greetings(self, mock_stream):
+        mock_stream.return_value = iter(["Hello, hope you have a great day!"])
+        self.store.add("Dad loves jazz", source="caregiver_memo")
+        self.store.add("His grandson is named Leo", source="caregiver_memo")
+        self.store.add("Senior used to teach children", source="caregiver_memo")
+        self.store.add("Sarah is dropping off groceries at 4 PM today", source="caregiver_memo")
+
+        factual_queries = [
+            "Good morning.",
+            "What's 25 plus 17?",
+            "Tell me a joke.",
+            "What is the capital of France?",
+            "How does rain form?",
+        ]
+        for query in factual_queries:
+            with self.subTest(query=query):
+                res = run_turn(
+                    transcript=query,
+                    memory_store=self.store,
+                    flags=self.flags,
+                    audio_out_dir=self.audio_dir,
+                    caregiver_name="Sarah",
+                )
+                self.assertEqual(res.memories_used, [], f"Expected zero memories on factual query '{query}', got {res.memories_used}")
+
+    @patch("pipeline.think.stream_reply")
+    def test_zero_memory_allows_relevant_anchor(self, mock_stream):
+        mock_stream.return_value = iter(["Jazz has such a comforting rhythm."])
+        self.store.add("Dad loves jazz", source="caregiver_memo")
+        self.store.add("His grandson is named Leo", source="caregiver_memo")
+
+        res = run_turn(
+            transcript="I was listening to some jazz earlier today.",
+            memory_store=self.store,
+            flags=self.flags,
+            audio_out_dir=self.audio_dir,
+            caregiver_name="Sarah",
+        )
+        self.assertEqual(len(res.memories_used), 1)
+        self.assertIn("jazz", res.memories_used[0].lower())
+
 
 if __name__ == "__main__":
     unittest.main()

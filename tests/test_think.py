@@ -114,6 +114,16 @@ class TestThink(unittest.TestCase):
             _, kwargs = mock_client.chat.completions.create.call_args
             self.assertEqual(kwargs.get("max_tokens"), 1024)
 
+    def test_system_prompt_rules_zero_memory_uncertainty_and_privacy(self):
+        prompt = think.SYSTEM_PROMPT
+        self.assertIn("ZERO-MEMORY DEFAULT", prompt)
+        self.assertIn("UNCERTAINTY & HONEST LIMITS", prompt)
+        self.assertIn("CAREGIVER PRIVACY FIREWALL", prompt)
+        self.assertIn("RESPECT SENIOR AGENCY & AUTONOMY", prompt)
+        self.assertIn("prefer using ZERO memories", prompt)
+        self.assertIn("I don't have a confirmed time for that", prompt)
+
+
 
 if __name__ == "__main__":
     unittest.main()

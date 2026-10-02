@@ -97,6 +97,78 @@ class TestMemoryStore(unittest.TestCase):
         self.assertEqual(len(results_carpenter), 1)
         self.assertIn("carpenter in Chicago", results_carpenter[0].text)
 
+    def test_temporal_expiration_and_active_filtering(self):
+        from memory.store import MemoryScope
+        store = MemoryStore(self.profile_id, self.data_dir)
+        now = 1000.0
+        # Temporary 4 PM grocery delivery expiring at 1100
+        store.add(
+            "Sarah dropping groceries at 4 PM",
+            source="caregiver_memo",
+            scope=MemoryScope.TEMPORARY.value,
+            expires_at=1100.0,
+        )
+        # Permanent biographical fact
+        store.add("Dad loves jazz", source="caregiver_memo")
+
+        # Before expiration: schedule updates include groceries
+        active_schedule = store.caregiver_schedule_updates(now=1050.0)
+        self.assertTrue(any("groceries" in s for s in active_schedule))
+
+        # After expiration (t = 1200.0): groceries must be excluded!
+        expired_schedule = store.caregiver_schedule_updates(now=1200.0)
+        self.assertFalse(any("groceries" in s for s in expired_schedule))
+
+        # Search should also exclude expired items
+        store.add("Watched a baseball game yesterday", source="conversation_extract", expires_at=1100.0)
+        hits_before = store.search("baseball", now=1050.0)
+        self.assertEqual(len(hits_before), 1)
+        hits_after = store.search("baseball", now=1200.0)
+        self.assertEqual(len(hits_after), 0)
+
+    def test_caregiver_privacy_firewall(self):
+        from memory.store import PrivacyLevel
+        store = MemoryStore(self.profile_id, self.data_dir)
+        store.add(
+            "Planning surprise 80th birthday party next Saturday",
+            source="caregiver_note",
+            privacy=PrivacyLevel.CAREGIVER_ONLY.value,
+        )
+        store.add("Dad loves gardening", source="caregiver_memo")
+
+        # Must NOT appear in senior profile facts
+        facts = store.senior_profile_facts()
+        self.assertFalse(any("surprise" in f.lower() for f in facts))
+        self.assertTrue(any("gardening" in f.lower() for f in facts))
+
+        # Must NOT appear in senior-facing schedule updates
+        updates = store.caregiver_schedule_updates()
+        self.assertFalse(any("surprise" in u.lower() for u in updates))
+
+        # Must NOT appear in senior search
+        search_hits = store.search("surprise party")
+        self.assertEqual(len(search_hits), 0)
+
+        # Must be preserved for caregiver coordination dashboard
+        cg_all = store.caregiver_context(include_private=True)
+        self.assertTrue(any("surprise" in c.text.lower() for c in cg_all))
+
+    def test_contradictory_memory_supersede(self):
+        store = MemoryStore(self.profile_id, self.data_dir)
+        old_item = store.add("Dad loves jazz", source="caregiver_memo")
+        new_item = store.supersede(
+            "Dad loves jazz",
+            "Senior no longer listens to jazz; prefers classical music",
+            source="conversation_extract",
+        )
+        self.assertIsNotNone(new_item)
+        self.assertEqual(old_item.status, "superseded")
+        self.assertFalse(old_item.is_active())
+
+        facts = store.senior_profile_facts()
+        self.assertTrue(any("classical" in f.lower() for f in facts))
+        self.assertFalse(any("Dad loves jazz" == f for f in facts))
+
 
 if __name__ == "__main__":
     unittest.main()

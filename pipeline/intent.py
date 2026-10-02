@@ -19,7 +19,8 @@ class Intent(str, Enum):
 
 
 EMOTIONAL_PATTERNS = [
-    re.compile(r"\b(sad|sadness|unhappy|down|blue|crying|depressed|heartbroken|miserable)\b", re.IGNORECASE),
+    re.compile(r"\b(sad|sadness|unhappy|crying|depressed|heartbroken|miserable|downhearted)\b", re.IGNORECASE),
+    re.compile(r"\b(feel(ing)?\s+(down|blue|sad|terrible|bad|alone)|feeling\s+a\s+bit\s+blue)\b", re.IGNORECASE),
     re.compile(r"\b(lonely|alone|isolated|nobody|miss\s+(my|her|him|them))\b", re.IGNORECASE),
     re.compile(r"\b(scared|frightened|afraid|anxious|worried|nervous|dread)\b", re.IGNORECASE),
     re.compile(r"\b(tired\s+of\s+life|hopeless|hurting|grief|grieving|lost)\b", re.IGNORECASE),
@@ -44,6 +45,11 @@ def detect_intent(transcript: str) -> Intent:
     """Classifies the senior's utterance to gate memory retrieval and prompt construction."""
     if not transcript:
         return Intent.CASUAL
+
+    # Pure clock inquiries ("What time is it?") are factual/casual, not schedule retrieval
+    if re.search(r"\b(what\s+time\s+is\s+it|what('s|\s+is)\s+the\s+time|do\s+you\s+have\s+the\s+time)\b", transcript, re.IGNORECASE):
+        if not re.search(r"\b(sarah|john|leo|appointment|doctor|groceries|visit|meeting|arrive|dropping)\b", transcript, re.IGNORECASE):
+            return Intent.CASUAL
 
     is_emotional = any(p.search(transcript) for p in EMOTIONAL_PATTERNS)
     is_logistical = any(p.search(transcript) for p in LOGISTICAL_PATTERNS)

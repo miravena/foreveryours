@@ -19,8 +19,10 @@ import unicodedata
 from dataclasses import dataclass
 
 DISTRESS_PATTERNS = [
-    r"\bfall(en|ing)?\b",
-    r"\bfell\b",
+    r"\b(i('ve| have)?\s+had\s+a\s+fall|had\s+a\s+fall|took\s+a\s+fall)\b",
+    r"\b(i('ve| have)?\s+fallen|fall(en|ing)?\s+(down|over|off))\b",
+    r"\bi('m| am)\s+falling\b",
+    r"\bfell(?!\s+asleep)\b",
     r"\bcan'?t get up\b",
     r"\bhelp me\b",
     r"\bi('m| am)?\s*(hurt|bleeding|dizzy|can'?t breathe)\b",

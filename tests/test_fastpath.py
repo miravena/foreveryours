@@ -51,6 +51,11 @@ class TestFastPath(unittest.TestCase):
             "It is sunny outside today",
             "Let's talk about Miles Davis",
             "I had a nice breakfast this morning",
+            "I fell asleep in my chair earlier",
+            "I'm exhausted after gardening",
+            "I love the fall weather",
+            "Today was an awful day",
+            "I'm tired after a long walk",
         ]
         for phrase in cases:
             with self.subTest(phrase=phrase):

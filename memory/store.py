@@ -7,6 +7,7 @@ latency budget.
 """
 from __future__ import annotations
 
+from enum import Enum
 import json
 import os
 import re
@@ -17,11 +18,37 @@ from pathlib import Path
 CAREGIVER_SOURCES = ("caregiver_memo", "caregiver_note")
 
 
+class MemoryScope(str, Enum):
+    PERMANENT = "permanent"     # Lifelong identity, family relations, enduring passions
+    TEMPORARY = "temporary"     # Daily visits, schedule updates, errands
+    HISTORICAL = "historical"   # Superseded preferences, past events
+
+
+class PrivacyLevel(str, Enum):
+    PUBLIC_TO_SENIOR = "public"        # Spoken in dialogue
+    CAREGIVER_ONLY = "caregiver_only"  # Private caregiver coordination; NEVER spoken to senior
+    SAFETY_RELEVANT = "safety"         # Safety fast-path / alerts
+
+
 @dataclass
 class MemoryItem:
     text: str
     source: str  # "caregiver_memo" | "caregiver_note" | "conversation_extract"
     created_at: float = field(default_factory=time.time)
+    scope: str = MemoryScope.PERMANENT.value
+    privacy: str = PrivacyLevel.PUBLIC_TO_SENIOR.value
+    expires_at: float | None = None
+    status: str = "active"  # "active" | "superseded" | "expired"
+    superseded_by: str | None = None
+
+    def is_active(self, now: float | None = None) -> bool:
+        if self.status != "active":
+            return False
+        if self.expires_at is not None:
+            t = now if now is not None else time.time()
+            if t >= self.expires_at:
+                return False
+        return True
 
 
 STOPWORDS = {
@@ -67,7 +94,15 @@ class MemoryStore:
         if not self.path.exists():
             return []
         raw = json.loads(self.path.read_text())
-        return [MemoryItem(**item) for item in raw]
+        items = []
+        for d in raw:
+            d.setdefault("scope", MemoryScope.PERMANENT.value)
+            d.setdefault("privacy", PrivacyLevel.PUBLIC_TO_SENIOR.value)
+            d.setdefault("expires_at", None)
+            d.setdefault("status", "active")
+            d.setdefault("superseded_by", None)
+            items.append(MemoryItem(**d))
+        return items
 
     def _flush(self) -> None:
         """Write-then-rename so a crash/Ctrl-C mid-write can't leave invalid
@@ -78,30 +113,56 @@ class MemoryStore:
         )
         os.replace(tmp_path, self.path)
 
-    def add(self, text: str, source: str) -> MemoryItem | None:
-        """No-op (returns None) if this exact (text, source) is already
-        stored -- re-running beat1 or re-saying the same fact shouldn't pile
-        up duplicates."""
-        if any(i.text == text and i.source == source for i in self._items):
+    def add(
+        self,
+        text: str,
+        source: str,
+        scope: str = MemoryScope.PERMANENT.value,
+        privacy: str = PrivacyLevel.PUBLIC_TO_SENIOR.value,
+        expires_at: float | None = None,
+    ) -> MemoryItem | None:
+        """No-op (returns None) if this exact (text, source) is already active.
+        Auto-infers TEMPORARY scope for schedule/time notes."""
+        if any(i.text == text and i.source == source and i.status == "active" for i in self._items):
             return None
-        item = MemoryItem(text=text, source=source)
+        if scope == MemoryScope.PERMANENT.value and any(m in text.lower() for m in ("today", "tomorrow", "tonight", "pm", "am")):
+            scope = MemoryScope.TEMPORARY.value
+        item = MemoryItem(
+            text=text,
+            source=source,
+            scope=scope,
+            privacy=privacy,
+            expires_at=expires_at,
+        )
         self._items.append(item)
         self._flush()
         return item
 
-    def caregiver_context(self) -> list[MemoryItem]:
-        """Every caregiver-supplied memo/note -- always injected into THINK's
-        prompt, never subject to keyword-overlap search. There are only ever
-        a handful of these per profile, and a caregiver's guardrail ("avoid
-        talking about driving") must be present every turn, not just when
-        its exact words happen to overlap with what the senior said."""
-        return [i for i in self._items if i.source in CAREGIVER_SOURCES]
+    def supersede(self, old_text: str, new_text: str, source: str = "conversation_extract") -> MemoryItem:
+        """Evolves a memory: marks the old fact as superseded and introduces the new active fact."""
+        for item in self._items:
+            if item.text.lower() == old_text.lower() and item.status == "active":
+                item.status = "superseded"
+                item.superseded_by = new_text
+        new_item = MemoryItem(text=new_text, source=source, status="active")
+        self._items.append(new_item)
+        self._flush()
+        return new_item
 
-    def search(self, query: str, k: int = 5) -> list[MemoryItem]:
+    def caregiver_context(self, now: float | None = None, include_private: bool = True) -> list[MemoryItem]:
+        """Every caregiver-supplied memo/note that is active and non-expired.
+        Set include_private=False to enforce the senior-facing privacy firewall."""
+        items = []
+        for i in self._items:
+            if i.source in CAREGIVER_SOURCES and i.is_active(now):
+                if not include_private and i.privacy == PrivacyLevel.CAREGIVER_ONLY.value:
+                    continue
+                items.append(i)
+        return items
+
+    def search(self, query: str, k: int = 5, now: float | None = None) -> list[MemoryItem]:
         """Scored memory retrieval with stopword pruning and semantic synonym
-        expansion over conversation-derived memories. Caregiver context is
-        returned separately, unconditionally, by caregiver_context().
-        Direct matches are weighted higher than synonym matches."""
+        expansion over active, public conversation-derived memories."""
         raw_query = set(re.findall(r"[a-z0-9]+", query.lower()))
         meaningful_query = {t for t in raw_query if t not in STOPWORDS and len(t) > 1}
         if not meaningful_query:
@@ -116,7 +177,9 @@ class MemoryStore:
 
         scored = []
         for item in self._items:
-            if item.source in CAREGIVER_SOURCES:
+            if item.source in CAREGIVER_SOURCES or not item.is_active(now):
+                continue
+            if item.privacy == PrivacyLevel.CAREGIVER_ONLY.value:
                 continue
             item_terms = set(re.findall(r"[a-z0-9]+", item.text.lower()))
             meaningful_item_terms = {t for t in item_terms if t not in STOPWORDS and len(t) > 1} or item_terms
@@ -131,35 +194,40 @@ class MemoryStore:
     def caregiver_guardrails(self) -> list[str]:
         """Extracts topics the caregiver explicitly requested the companion avoid."""
         guardrails = []
-        for item in self.caregiver_context():
+        for item in self.caregiver_context(include_private=True):
             text_lower = item.text.lower()
             if any(marker in text_lower for marker in ("avoid", "don't", "do not", "never")):
                 guardrails.append(item.text)
         return guardrails
 
-    def caregiver_schedule_updates(self) -> list[str]:
-        """Extracts time-bound updates or caregiver visit/errand notes."""
+    def caregiver_schedule_updates(self, now: float | None = None) -> list[str]:
+        """Extracts active time-bound updates or caregiver visit/errand notes.
+        Excludes expired events and private caregiver coordination."""
         schedule_patterns = (
             re.compile(r"\b(pm|am|a\.m\.|p\.m\.)\b", re.IGNORECASE),
             re.compile(r"\b(today|tomorrow|tonight|afternoon|morning|evening|o'clock)\b", re.IGNORECASE),
             re.compile(r"\b(groceries|appointment|doctor|dropping\s+off|visiting|visit)\b", re.IGNORECASE),
         )
         updates = []
-        for item in self.caregiver_context():
+        for item in self.caregiver_context(now=now, include_private=False):
             text_lower = item.text.lower()
-            # Guardrails are handled separately
             if any(marker in text_lower for marker in ("avoid", "don't", "do not", "never")):
                 continue
             if any(pattern.search(text_lower) for pattern in schedule_patterns):
                 updates.append(item.text)
         return updates
 
-    def senior_profile_facts(self) -> list[str]:
-        """Extracts enduring biographical anchors, preferences, and relationships."""
+    def senior_profile_facts(self, now: float | None = None) -> list[str]:
+        """Extracts enduring biographical anchors, preferences, and relationships.
+        Strictly excludes private caregiver-only items, expired items, and superseded facts."""
         facts = []
-        schedule_items = set(self.caregiver_schedule_updates())
+        schedule_items = set(self.caregiver_schedule_updates(now=now))
         guardrail_items = set(self.caregiver_guardrails())
         for item in self._items:
+            if not item.is_active(now):
+                continue
+            if item.privacy == PrivacyLevel.CAREGIVER_ONLY.value:
+                continue
             if item.text in schedule_items or item.text in guardrail_items:
                 continue
             facts.append(item.text)
