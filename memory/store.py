@@ -128,5 +128,42 @@ class MemoryStore:
         scored.sort(key=lambda pair: pair[0], reverse=True)
         return [item for _, item in scored[:k]]
 
+    def caregiver_guardrails(self) -> list[str]:
+        """Extracts topics the caregiver explicitly requested the companion avoid."""
+        guardrails = []
+        for item in self.caregiver_context():
+            text_lower = item.text.lower()
+            if any(marker in text_lower for marker in ("avoid", "don't", "do not", "never")):
+                guardrails.append(item.text)
+        return guardrails
+
+    def caregiver_schedule_updates(self) -> list[str]:
+        """Extracts time-bound updates or caregiver visit/errand notes."""
+        schedule_patterns = (
+            re.compile(r"\b(pm|am|a\.m\.|p\.m\.)\b", re.IGNORECASE),
+            re.compile(r"\b(today|tomorrow|tonight|afternoon|morning|evening|o'clock)\b", re.IGNORECASE),
+            re.compile(r"\b(groceries|appointment|doctor|dropping\s+off|visiting|visit)\b", re.IGNORECASE),
+        )
+        updates = []
+        for item in self.caregiver_context():
+            text_lower = item.text.lower()
+            # Guardrails are handled separately
+            if any(marker in text_lower for marker in ("avoid", "don't", "do not", "never")):
+                continue
+            if any(pattern.search(text_lower) for pattern in schedule_patterns):
+                updates.append(item.text)
+        return updates
+
+    def senior_profile_facts(self) -> list[str]:
+        """Extracts enduring biographical anchors, preferences, and relationships."""
+        facts = []
+        schedule_items = set(self.caregiver_schedule_updates())
+        guardrail_items = set(self.caregiver_guardrails())
+        for item in self._items:
+            if item.text in schedule_items or item.text in guardrail_items:
+                continue
+            facts.append(item.text)
+        return facts
+
     def all(self) -> list[MemoryItem]:
         return list(self._items)

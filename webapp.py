@@ -65,7 +65,7 @@ AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
 SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
 SAMPLE_CLIPS = ("senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav")
 MAX_DAILY_REQUESTS = int(os.environ.get("MAX_DAILY_REQUESTS", "50"))
-MAX_HISTORY_TURNS = 6  # (user, assistant) pairs kept -- bounds prompt growth, not a product limit
+MAX_HISTORY_TURNS = 4  # (user, assistant) pairs kept -- bounds prompt growth, not a product limit
 SESSIONS_DIR = Path(os.environ.get("FY_SESSIONS_DIR", Path(tempfile.gettempdir()) / "foreveryours-sessions"))
 SHARED_PROFILE = os.environ.get("FY_SHARED_PROFILE") == "1"
 SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
@@ -244,11 +244,14 @@ def _run_demo_turn(
     if result.background_thread is not None:
         result.background_thread.join(timeout=10)
 
-    new_history = history + [
-        {"role": "user", "content": transcript},
-        {"role": "assistant", "content": result.reply_text},
-    ]
-    new_history = new_history[-(MAX_HISTORY_TURNS * 2) :]
+    if not result.is_fallback:
+        new_history = history + [
+            {"role": "user", "content": transcript},
+            {"role": "assistant", "content": result.reply_text},
+        ]
+        new_history = new_history[-(MAX_HISTORY_TURNS * 2) :]
+    else:
+        new_history = history
 
     combined_audio = _combine_audio_chunks(result.audio_paths, audio_dir)
     reply_audio = str(combined_audio) if combined_audio else None
