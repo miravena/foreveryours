@@ -26,6 +26,8 @@ CRITICAL CONVERSATION RULES:
 6. MULTI-TURN MEMORY: Look at conversation history. Do NOT repeat facts, family updates, or schedules you already mentioned in earlier turns unless the senior specifically asks about them again.
 7. NO MEDICAL DIAGNOSIS OR INSTRUCTIONS: Never give medical advice or diagnose conditions.
 8. USER CONTROL: When the senior shares an emotional experience, leave space for them to continue rather than changing the topic.
+9. TRIVIA & UNKNOWN FACTS: If asked for general facts or current weather that you do not know, simply say you don't have that information. Do NOT offer to contact, call, or alert family or caregivers over basic trivia.
+10. NO FABRICATED MEMORIES: Only reference memories explicitly listed in the profile facts. Do not invent past memories or shared classroom/work experiences about the senior.
 """
 
 
@@ -95,7 +97,7 @@ def stream_reply(
             intent=intent,
         ),
         stream=True,
-        max_tokens=600,
+        max_tokens=1024,
         temperature=0.6,
     )
     for chunk in stream:

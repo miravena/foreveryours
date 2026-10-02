@@ -190,7 +190,8 @@ def chat_loop(play: bool = True) -> None:
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR)
     history: list[dict] = []
-    max_history_turns = 6
+    max_history_turns = 4
+    consecutive_errors = 0
 
     print("\n=======================================================")
     print(" ForeverYours Interactive Conversational Companion")
@@ -220,7 +221,9 @@ def chat_loop(play: bool = True) -> None:
                 AUDIO_DIR,
                 caregiver_name=DEFAULT_CAREGIVER_NAME,
                 history=history,
+                consecutive_errors=consecutive_errors,
             )
+            consecutive_errors = result.consecutive_errors
         except NebiusNotConfigured:
             print("\n  [NOTE] Conversational turns require NEBIUS_API_KEY in .env.")
             print("  [FASTPATH] Distress triggers (e.g. 'I fell down and need help', 'Where am I?')")
@@ -249,9 +252,10 @@ def chat_loop(play: bool = True) -> None:
         if result.audit_verdict and not result.caregiver_flag:
             print(f"Audit: {result.audit_verdict}")
 
-        history.append({"role": "user", "content": senior_input})
-        history.append({"role": "assistant", "content": result.reply_text})
-        history = history[-(max_history_turns * 2):]
+        if not result.is_fallback:
+            history.append({"role": "user", "content": senior_input})
+            history.append({"role": "assistant", "content": result.reply_text})
+            history = history[-(max_history_turns * 2):]
         print("")
 
 

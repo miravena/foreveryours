@@ -90,6 +90,22 @@ class TestThink(unittest.TestCase):
         self.assertIsNone(think.extract_new_memory("I likely will go to bed soon", "", use_llm=False))
         self.assertIsNone(think.extract_new_memory("How are you today?", "", use_llm=False))
 
+    def test_system_prompt_rules_trivia_and_hallucination(self):
+        prompt = think.SYSTEM_PROMPT
+        self.assertIn("TRIVIA & UNKNOWN FACTS", prompt)
+        self.assertIn("NO FABRICATED MEMORIES", prompt)
+        self.assertIn("Do NOT offer to contact, call, or alert family or caregivers over basic trivia", prompt)
+        self.assertIn("Only reference memories explicitly listed in the profile facts", prompt)
+
+    def test_stream_reply_token_budget_headroom(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_client = MagicMock()
+        with patch("pipeline.think.get_client", return_value=mock_client):
+            list(think.stream_reply("Hello", []))
+            _, kwargs = mock_client.chat.completions.create.call_args
+            self.assertEqual(kwargs.get("max_tokens"), 1024)
+
 
 if __name__ == "__main__":
     unittest.main()

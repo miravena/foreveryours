@@ -39,6 +39,9 @@ from .nebius_client import NebiusNotConfigured  # noqa: E402
 
 DISCLOSURE_LINE = "I want to let {caregiver} know about something I just said."
 
+FALLBACK_REPLY_1 = "I'm right here with you, dear. My thoughts drifted for a second—could you say that one more time?"
+FALLBACK_REPLY_2 = "I'm having a little trouble with my connection right now, dear, but I'm still right here beside you. Take your time."
+
 
 def _sanitize_caregiver_update(text: str, caregiver_name: str) -> str:
     """Rewrites first-person caregiver memos to third-person family updates so
@@ -59,6 +62,8 @@ class TurnResult:
     time_to_first_audio_s: float | None = None
     audit_verdict: str | None = None  # filled in async, may arrive after return
     background_thread: threading.Thread | None = None  # join() this before reading audit_verdict/memory_saved
+    is_fallback: bool = False
+    consecutive_errors: int = 0
 
 
 def _speak_turn(sentences, audio_out_dir: Path) -> tuple[str, list[Path], float | None]:
@@ -84,6 +89,7 @@ def run_turn(
     audio_out_dir: Path,
     caregiver_name: str = "your family",
     history: list[dict] | None = None,
+    consecutive_errors: int = 0,
 ) -> TurnResult:
     """`history` is session-scoped prior-turn context (see think.build_prompt's
     docstring for why this is kept separate from memory_store) -- pass None
@@ -137,6 +143,7 @@ def run_turn(
     reply_text = ""
     think_audio_paths: list[Path] = []
     think_unavailable = False
+    is_fallback = False
     try:
         token_stream = think.stream_reply(
             think_input,
@@ -167,6 +174,28 @@ def run_turn(
         if not fast.triggered:
             raise
         think_unavailable = True
+    except Exception as exc:
+        # Unexpected network / provider error during conversation stream
+        if not fast.triggered:
+            is_fallback = True
+            consecutive_errors += 1
+            reply_text = FALLBACK_REPLY_2 if consecutive_errors >= 2 else FALLBACK_REPLY_1
+            _, fallback_paths, fallback_first_time = _speak_turn(iter([reply_text]), audio_out_dir)
+            think_audio_paths.extend(fallback_paths)
+            if first_audio_time is None:
+                first_audio_time = fallback_first_time
+
+    # Zero-Silence Guarantee: If model returned an empty string or whitespace (token exhaustion)
+    if not fast.triggered and not think_unavailable and not reply_text.strip() and not is_fallback:
+        is_fallback = True
+        consecutive_errors += 1
+        reply_text = FALLBACK_REPLY_2 if consecutive_errors >= 2 else FALLBACK_REPLY_1
+        _, fallback_paths, fallback_first_time = _speak_turn(iter([reply_text]), audio_out_dir)
+        think_audio_paths.extend(fallback_paths)
+        if first_audio_time is None:
+            first_audio_time = fallback_first_time
+    elif not is_fallback:
+        consecutive_errors = 0
 
     result = TurnResult(
         transcript=transcript,
@@ -178,11 +207,15 @@ def run_turn(
         audit_verdict=(
             "skipped (fast-path disclosed directly; continuation needs NEBIUS_API_KEY)"
             if think_unavailable
-            else "skipped (fast-path disclosed directly)" if fast.triggered else None
+            else "skipped (fast-path disclosed directly)" if fast.triggered
+            else "skipped (fallback turn)" if is_fallback
+            else None
         ),
+        is_fallback=is_fallback,
+        consecutive_errors=consecutive_errors,
     )
 
-    if not fast.triggered:
+    if not fast.triggered and not is_fallback:
         def background() -> None:
             try:
                 is_safe, verdict = audit.audit_reply(transcript, reply_text)

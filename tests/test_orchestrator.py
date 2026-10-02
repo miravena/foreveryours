@@ -3,10 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from unittest.mock import patch
+
 from caregiver import CaregiverFlags
 from memory.store import MemoryStore
 from pipeline.nebius_client import NebiusNotConfigured
-from pipeline.orchestrator import run_turn
+from pipeline.orchestrator import FALLBACK_REPLY_1, FALLBACK_REPLY_2, run_turn
 
 
 class TestOrchestrator(unittest.TestCase):
@@ -97,6 +99,60 @@ class TestOrchestrator(unittest.TestCase):
         for mem in res.memories_used:
             self.assertNotIn("groceries", mem.lower())
             self.assertNotIn("4 pm", mem.lower())
+
+    @patch("pipeline.think.stream_reply")
+    def test_empty_reply_triggers_graceful_fallback(self, mock_stream):
+        # When model returns empty tokens (e.g. token exhaustion during CoT),
+        # orchestrator must trigger FALLBACK_REPLY_1 and synthesize audio (Zero-Silence Guarantee).
+        mock_stream.return_value = iter([])  # empty completion
+        transcript = "What do I have planned today?"
+        res = run_turn(
+            transcript=transcript,
+            memory_store=self.store,
+            flags=self.flags,
+            audio_out_dir=self.audio_dir,
+            caregiver_name="Sarah",
+        )
+        self.assertTrue(res.is_fallback)
+        self.assertEqual(res.reply_text, FALLBACK_REPLY_1)
+        self.assertGreaterEqual(len(res.audio_paths), 1)
+        self.assertEqual(res.audit_verdict, "skipped (fallback turn)")
+        self.assertEqual(res.consecutive_errors, 1)
+
+    @patch("pipeline.think.stream_reply")
+    def test_progressive_circuit_breaker_on_consecutive_errors(self, mock_stream):
+        # On 2nd consecutive error, circuit breaker trips: does NOT ask Dad to repeat!
+        mock_stream.return_value = iter([])
+        transcript = "What do I have planned today?"
+        res = run_turn(
+            transcript=transcript,
+            memory_store=self.store,
+            flags=self.flags,
+            audio_out_dir=self.audio_dir,
+            caregiver_name="Sarah",
+            consecutive_errors=1,
+        )
+        self.assertTrue(res.is_fallback)
+        self.assertEqual(res.reply_text, FALLBACK_REPLY_2)
+        self.assertNotIn("say that one more time", res.reply_text)
+        self.assertIn("trouble with my connection", res.reply_text)
+        self.assertEqual(res.consecutive_errors, 2)
+
+    @patch("pipeline.think.stream_reply")
+    def test_network_exception_triggers_graceful_fallback(self, mock_stream):
+        # When a network connection drops mid-turn, graceful fallback speaks to Dad
+        mock_stream.side_effect = RuntimeError("Connection dropped")
+        transcript = "How are you doing today?"
+        res = run_turn(
+            transcript=transcript,
+            memory_store=self.store,
+            flags=self.flags,
+            audio_out_dir=self.audio_dir,
+            caregiver_name="Sarah",
+        )
+        self.assertTrue(res.is_fallback)
+        self.assertEqual(res.reply_text, FALLBACK_REPLY_1)
+        self.assertGreaterEqual(len(res.audio_paths), 1)
 
 
 if __name__ == "__main__":
