@@ -17,12 +17,36 @@ class TestThink(unittest.TestCase):
         messages = think.build_prompt(transcript, facts, guardrails, history)
         self.assertEqual(messages[0]["role"], "system")
         system_content = messages[0]["content"]
-        self.assertIn("FACTS:\n- Loves Miles Davis\n- Grandson is Leo", system_content)
-        self.assertIn("DO NOT RAISE:\n- Avoid talking about driving", system_content)
+        self.assertIn("SENIOR PROFILE & BELOVED ANCHORS", system_content)
+        self.assertIn("- Loves Miles Davis", system_content)
+        self.assertIn("- Grandson is Leo", system_content)
+        self.assertIn("DO NOT RAISE (Safety Guardrails)", system_content)
+        self.assertIn("- Avoid talking about driving", system_content)
         self.assertEqual(messages[1], history[0])
         self.assertEqual(messages[2], history[1])
         self.assertEqual(messages[3]["role"], "user")
         self.assertEqual(messages[3]["content"], transcript)
+
+    def test_build_prompt_with_intent_and_caregiver_updates(self):
+        transcript = "hello i feel so sad recently"
+        facts = ["Dad loves jazz"]
+        updates = ["Family member (Leo) is dropping off groceries at 4 PM today"]
+        guardrails = ["Avoid talking about driving"]
+
+        messages = think.build_prompt(
+            transcript,
+            facts,
+            guardrails=guardrails,
+            caregiver_updates=updates,
+            intent="EMOTIONAL_SUPPORT",
+        )
+        system_content = messages[0]["content"]
+        self.assertIn("CURRENT CONVERSATIONAL INTENT: EMOTIONAL_SUPPORT", system_content)
+        self.assertIn("Validate their feelings first with warmth", system_content)
+        self.assertIn("TODAY'S FAMILY / CAREGIVER UPDATES", system_content)
+        self.assertIn("Family member (Leo) is dropping off groceries", system_content)
+        self.assertIn("RELEVANCE DOES NOT IMPLY INSERTION", system_content)
+        self.assertIn("DO NOT PRETEND TO HAVE A PHYSICAL BODY", system_content)
 
     def test_sentence_chunks_standard_punctuation(self):
         tokens = ["Hello ", "there! ", "How ", "are ", "you ", "doing ", "today? ", "I am well."]

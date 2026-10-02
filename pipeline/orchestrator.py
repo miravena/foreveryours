@@ -20,6 +20,7 @@ marked as if it succeeded.
 """
 from __future__ import annotations
 
+import re
 import sys
 import threading
 import time
@@ -33,9 +34,18 @@ from memory.store import MemoryStore  # noqa: E402
 from safety import fastpath  # noqa: E402
 
 from . import audit, speak, think  # noqa: E402
+from .intent import Intent, detect_intent  # noqa: E402
 from .nebius_client import NebiusNotConfigured  # noqa: E402
 
 DISCLOSURE_LINE = "I want to let {caregiver} know about something I just said."
+
+
+def _sanitize_caregiver_update(text: str, caregiver_name: str) -> str:
+    """Rewrites first-person caregiver memos to third-person family updates so
+    the AI never hallucinates that it is the one physically visiting or delivering."""
+    cleaned = re.sub(r"^(i'm|i am)\s+", f"{caregiver_name} is ", text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"^(i will|i'll)\s+", f"{caregiver_name} will ", cleaned, flags=re.IGNORECASE)
+    return cleaned
 
 
 @dataclass
@@ -93,27 +103,62 @@ def run_turn(
     else:
         first_audio_time = None
 
-    caregiver_facts = []
-    caregiver_guardrails = []
-    for item in memory_store.caregiver_context():
-        text_lower = item.text.lower()
-        if "avoid" in text_lower or "don't" in text_lower or "do not" in text_lower:
-            caregiver_guardrails.append(item.text)
-        else:
-            caregiver_facts.append(item.text)
-    recalled = memory_store.search(transcript)
-    caregiver_facts.extend(m.text for m in recalled)
+    intent = detect_intent(transcript)
+    guardrails = memory_store.caregiver_guardrails()
+    raw_schedule = memory_store.caregiver_schedule_updates()
+    caregiver_updates = [_sanitize_caregiver_update(u, caregiver_name) for u in raw_schedule]
+    profile_facts = memory_store.senior_profile_facts()
+    recalled = [m.text for m in memory_store.search(transcript)]
+
+    # Intent-aware context gating
+    if intent == Intent.EMOTIONAL_SUPPORT:
+        # Suppress logistical schedule updates completely on emotional disclosures
+        filtered_schedule = []
+        filtered_profile = profile_facts[:1]  # At most 1 gentle anchor
+    elif intent == Intent.LOGISTICAL:
+        # Prioritize caregiver schedule updates; suppress unrelated profile facts/hobbies
+        filtered_schedule = caregiver_updates
+        filtered_profile = []
+    elif intent == Intent.MEMORY_REQUEST:
+        # Explicit user request for memories: permit multiple
+        filtered_schedule = []
+        filtered_profile = list(dict.fromkeys(profile_facts + recalled))
+    elif intent == Intent.MIXED:
+        filtered_schedule = caregiver_updates
+        filtered_profile = profile_facts[:1]
+    else:  # CASUAL
+        filtered_schedule = caregiver_updates[:1]
+        filtered_profile = list(dict.fromkeys(profile_facts + recalled))[:2]
+
+    # Deduplicate facts
+    filtered_profile = [f for f in filtered_profile if f not in filtered_schedule and f not in guardrails]
 
     think_input = transcript if not continuation_note else f"{transcript}\n\n[{continuation_note}]"
     reply_text = ""
     think_audio_paths: list[Path] = []
     think_unavailable = False
     try:
-        token_stream = think.stream_reply(think_input, caregiver_facts, caregiver_guardrails, history)
+        token_stream = think.stream_reply(
+            think_input,
+            filtered_profile,
+            guardrails=guardrails,
+            history=history,
+            caregiver_updates=filtered_schedule,
+            intent=intent.value,
+        )
         sentences = think.sentence_chunks(token_stream)
         reply_text, think_audio_paths, think_first_audio_time = _speak_turn(sentences, audio_out_dir)
         if first_audio_time is None:
             first_audio_time = think_first_audio_time
+
+        # Post-generation deterministic physical embodiment guardrail
+        # Prevent any AI physical claims e.g. "I'll bring your groceries" -> "Your family will bring your groceries"
+        physical_claim_pattern = re.compile(
+            r"\b(i will|i'll|i am going to|i'm going to)\s+(bring|drop off|come over|visit|drive|pick up)\b",
+            re.IGNORECASE,
+        )
+        if physical_claim_pattern.search(reply_text):
+            reply_text = physical_claim_pattern.sub(f"{caregiver_name} will \\2", reply_text)
     except NebiusNotConfigured:
         # Fast-path's immediate reply already completed the turn's safety-
         # critical part (spoken + disclosed + flagged). Without a key we
@@ -127,7 +172,7 @@ def run_turn(
         transcript=transcript,
         reply_text=(fast.immediate_reply + " " + reply_text).strip() if fast.triggered else reply_text,
         audio_paths=immediate_audio_paths + think_audio_paths,
-        memories_used=caregiver_facts,
+        memories_used=filtered_profile + filtered_schedule,
         caregiver_flag=fast.caregiver_flag if fast.triggered else None,
         time_to_first_audio_s=first_audio_time,
         audit_verdict=(

@@ -14,14 +14,18 @@ from collections.abc import Iterator
 from .nebius_client import get_client
 
 SYSTEM_PROMPT = """\
-You are a warm, patient voice companion for an older adult. Speak in short,
-simple sentences. Use the FACTS below -- names, preferences, events -- \
-naturally, without announcing that you're "using notes." Never bring up
-anything listed under DO NOT RAISE, even if it seems relevant -- those are
-topics the caregiver asked you to avoid, not things to explain or justify.
-Never give medical advice or diagnoses. If the person says something that
-sounds distressing, respond honestly and warmly; do not pretend nothing
-happened.
+You are ForeverYours, a warm, patient, and emotionally grounded voice companion for an older adult.
+Speak in short, clear, natural sentences.
+
+CRITICAL CONVERSATION RULES:
+1. RELEVANCE DOES NOT IMPLY INSERTION: Retrieved memories are optional context. Do not mention a memory simply because it was provided. If no memory is relevant, use no memory.
+2. ONE UNSOLICITED MEMORY ANCHOR: By default, introduce no more than ONE unsolicited memory fact in a response. Allow multiple only when the senior explicitly asks for them.
+3. EMOTIONAL VALIDATION FIRST: If the senior expresses sadness, loneliness, fear, or confusion, acknowledge and sit with the feeling first. Never immediately cheerlead, distract with hobbies, or jump to schedule updates.
+4. DO NOT PRETEND TO HAVE A PHYSICAL BODY: You are an AI voice speaking through a speaker. You cannot physically visit, deliver groceries, or drive. Never say "I will visit" or "I'll bring your groceries."
+5. CAREGIVER ATTRIBUTION: Any errands, visits, or grocery deliveries are done by FAMILY or CAREGIVERS. Always say "Your family mentioned..." or "[Caregiver] is dropping off...", NEVER "I will drop off...".
+6. MULTI-TURN MEMORY: Look at conversation history. Do NOT repeat facts, family updates, or schedules you already mentioned in earlier turns unless the senior specifically asks about them again.
+7. NO MEDICAL DIAGNOSIS OR INSTRUCTIONS: Never give medical advice or diagnose conditions.
+8. USER CONTROL: When the senior shares an emotional experience, leave space for them to continue rather than changing the topic.
 """
 
 
@@ -30,21 +34,35 @@ def build_prompt(
     facts: list[str],
     guardrails: list[str] | None = None,
     history: list[dict] | None = None,
+    caregiver_updates: list[str] | None = None,
+    intent: str | None = None,
 ) -> list[dict]:
-    """`history` is prior (user, assistant) turns from THIS session only --
-    never persisted to disk, never loaded from memory_store. Deliberately
-    separate from RECALL: history is "what we just said," memory is "what
-    the caregiver told us was durably true." Conflating them would mean a
-    throwaway remark ("I'm a bit tired") outliving the conversation it was
-    said in. See issue #16 -- without this, a judge talking to the hosted
-    demo for 3+ turns meets a companion that forgets the last sentence."""
-    facts_block = "\n".join(f"- {f}" for f in facts) or "(none yet)"
+    """Builds a structured eldercare prompt partitioned into semantic categories:
+    senior profile anchors, family schedule updates, safety guardrails, and detected intent."""
+    blocks = [SYSTEM_PROMPT]
+    if intent:
+        blocks.append(f"CURRENT CONVERSATIONAL INTENT: {intent}")
+        if intent == "EMOTIONAL_SUPPORT":
+            blocks.append("GUIDANCE: The senior is expressing emotional vulnerability or distress. Validate their feelings first with warmth. Do NOT bring up schedules, errands, or unrelated activities.")
+        elif intent == "LOGISTICAL":
+            blocks.append("GUIDANCE: The senior is asking about their schedule or plans. Provide relevant family updates concisely and clearly.")
+
+    if facts:
+        facts_lines = "\n".join(f"- {f}" for f in facts)
+        blocks.append(f"--- SENIOR PROFILE & BELOVED ANCHORS (Use at most ONE when fitting) ---\n{facts_lines}")
+
+    if caregiver_updates:
+        updates_lines = "\n".join(f"- {u}" for u in caregiver_updates)
+        blocks.append(f"--- TODAY'S FAMILY / CAREGIVER UPDATES (Actions planned by family; NOT by you) ---\n{updates_lines}")
+
     guardrails = guardrails or []
-    guardrails_block = "\n".join(f"- {g}" for g in guardrails) or "(none)"
+    guardrails_lines = "\n".join(f"- {g}" for g in guardrails) or "(none)"
+    blocks.append(f"--- DO NOT RAISE (Safety Guardrails) ---\n{guardrails_lines}")
+
     messages = [
         {
             "role": "system",
-            "content": SYSTEM_PROMPT + f"\nFACTS:\n{facts_block}\n\nDO NOT RAISE:\n{guardrails_block}",
+            "content": "\n\n".join(blocks),
         },
     ]
     messages.extend(history or [])
@@ -57,6 +75,8 @@ def stream_reply(
     facts: list[str],
     guardrails: list[str] | None = None,
     history: list[dict] | None = None,
+    caregiver_updates: list[str] | None = None,
+    intent: str | None = None,
 ) -> Iterator[str]:
     client = get_client()
     # nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B: compact MoE, better latency fit for our
@@ -66,7 +86,14 @@ def stream_reply(
     model = os.environ.get("THINK_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
     stream = client.chat.completions.create(
         model=model,
-        messages=build_prompt(transcript, facts, guardrails, history),
+        messages=build_prompt(
+            transcript,
+            facts,
+            guardrails=guardrails,
+            history=history,
+            caregiver_updates=caregiver_updates,
+            intent=intent,
+        ),
         stream=True,
         max_tokens=600,
         temperature=0.6,
