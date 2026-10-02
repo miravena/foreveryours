@@ -68,6 +68,37 @@ class TestOrchestrator(unittest.TestCase):
             if "NEBIUS_API_KEY" not in str(exc):
                 self.fail(f"Unexpected exception: {exc}")
 
+    def test_caregiver_sanitizer_rewrites_first_person(self):
+        from pipeline.orchestrator import _sanitize_caregiver_update
+
+        self.assertEqual(
+            _sanitize_caregiver_update("I'm dropping off groceries at 4 PM today", "Sarah"),
+            "Sarah is dropping off groceries at 4 PM today",
+        )
+        self.assertEqual(
+            _sanitize_caregiver_update("I will visit around noon", "Leo"),
+            "Leo will visit around noon",
+        )
+
+    def test_emotional_intent_gates_out_schedule_updates(self):
+        self.store.add("Dad loves jazz", source="caregiver_memo")
+        self.store.add("I'm dropping off groceries at 4 PM today", source="caregiver_memo")
+        self.store.add("Avoid talking about driving", source="caregiver_memo")
+
+        # Distress/sadness turn: should not throw schedule updates into memory
+        transcript = "I fell down earlier and I'm scared"
+        res = run_turn(
+            transcript=transcript,
+            memory_store=self.store,
+            flags=self.flags,
+            audio_out_dir=self.audio_dir,
+            caregiver_name="Sarah",
+        )
+        for mem in res.memories_used:
+            self.assertNotIn("groceries", mem.lower())
+            self.assertNotIn("4 pm", mem.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
+
