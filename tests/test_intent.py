@@ -19,6 +19,8 @@ class TestIntentDetection(unittest.TestCase):
         phrases = [
             "what things do i have to do today",
             "what am i doing today",
+            "what do i have planned today",
+            "what is on my agenda today",
             "what time are my groceries arriving",
             "when is my daughter coming today",
             "what is on my schedule for today",

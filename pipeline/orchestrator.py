@@ -116,6 +116,22 @@ def run_turn(
     profile_facts = memory_store.senior_profile_facts()
     recalled = [m.text for m in memory_store.search(transcript)]
 
+    # History-aware anchor rotation: If an anchor (e.g. jazz) was used in the previous turn,
+    # rotate unmentioned anchors to the front to prevent repetitive responses.
+    if history and intent != Intent.MEMORY_REQUEST and profile_facts:
+        recent_assistant_text = ""
+        for msg in reversed(history):
+            if msg.get("role") == "assistant":
+                recent_assistant_text = msg.get("content", "").lower()
+                break
+        if recent_assistant_text:
+            unmentioned = [
+                f for f in profile_facts
+                if not any(w in recent_assistant_text for w in re.findall(r"\b[a-zA-Z]{4,}\b", f.lower()) if w not in ("loves", "named", "with", "from"))
+            ]
+            if unmentioned:
+                profile_facts = unmentioned + [f for f in profile_facts if f not in unmentioned]
+
     # Intent-aware context gating
     if intent == Intent.EMOTIONAL_SUPPORT:
         # Suppress logistical schedule updates completely on emotional disclosures
@@ -134,9 +150,9 @@ def run_turn(
         filtered_profile = profile_facts[:1]
     else:  # CASUAL
         filtered_schedule = caregiver_updates[:1]
-        filtered_profile = list(dict.fromkeys(profile_facts + recalled))[:2]
+        filtered_profile = list(dict.fromkeys(profile_facts + recalled))[:1]
 
-    # Deduplicate facts
+    # Deduplicate facts and remove guardrails
     filtered_profile = [f for f in filtered_profile if f not in filtered_schedule and f not in guardrails]
 
     think_input = transcript if not continuation_note else f"{transcript}\n\n[{continuation_note}]"

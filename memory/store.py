@@ -139,14 +139,18 @@ class MemoryStore:
 
     def caregiver_schedule_updates(self) -> list[str]:
         """Extracts time-bound updates or caregiver visit/errand notes."""
-        schedule_markers = ("pm", "am", "today", "tomorrow", "o'clock", "groceries", "appointment", "dropping off", "visiting", "visit")
+        schedule_patterns = (
+            re.compile(r"\b(pm|am|a\.m\.|p\.m\.)\b", re.IGNORECASE),
+            re.compile(r"\b(today|tomorrow|tonight|afternoon|morning|evening|o'clock)\b", re.IGNORECASE),
+            re.compile(r"\b(groceries|appointment|doctor|dropping\s+off|visiting|visit)\b", re.IGNORECASE),
+        )
         updates = []
         for item in self.caregiver_context():
             text_lower = item.text.lower()
             # Guardrails are handled separately
             if any(marker in text_lower for marker in ("avoid", "don't", "do not", "never")):
                 continue
-            if any(marker in text_lower for marker in schedule_markers):
+            if any(pattern.search(text_lower) for pattern in schedule_patterns):
                 updates.append(item.text)
         return updates
 

@@ -101,6 +101,29 @@ class TestOrchestrator(unittest.TestCase):
             self.assertNotIn("4 pm", mem.lower())
 
     @patch("pipeline.think.stream_reply")
+    def test_history_aware_anchor_rotation_suppresses_recent_anchor(self, mock_stream):
+        mock_stream.return_value = iter(["Hello there."])
+        self.store.add("Dad loves jazz", source="caregiver_memo")
+        self.store.add("His grandson is named Leo", source="caregiver_memo")
+
+        # Prior turn already talked about jazz
+        history = [
+            {"role": "user", "content": "I feel a bit down"},
+            {"role": "assistant", "content": "I'm right here with you. Sometimes listening to jazz helps."},
+        ]
+        res = run_turn(
+            transcript="I am still a bit lonely",
+            memory_store=self.store,
+            flags=self.flags,
+            audio_out_dir=self.audio_dir,
+            caregiver_name="Sarah",
+            history=history,
+        )
+        # Should rotate away from jazz to Leo or another unmentioned anchor
+        for mem in res.memories_used:
+            self.assertNotIn("jazz", mem.lower())
+
+    @patch("pipeline.think.stream_reply")
     def test_empty_reply_triggers_graceful_fallback(self, mock_stream):
         # When model returns empty tokens (e.g. token exhaustion during CoT),
         # orchestrator must trigger FALLBACK_REPLY_1 and synthesize audio (Zero-Silence Guarantee).

@@ -97,6 +97,14 @@ class TestThink(unittest.TestCase):
         self.assertIn("Do NOT offer to contact, call, or alert family or caregivers over basic trivia", prompt)
         self.assertIn("Only reference memories explicitly listed in the profile facts", prompt)
 
+    def test_system_prompt_rules_family_perspective_and_redirection(self):
+        prompt = think.SYSTEM_PROMPT
+        self.assertIn("FAMILY PERSPECTIVE & IDENTITY", prompt)
+        self.assertIn("GRACEFUL GUARDRAIL REDIRECTION", prompt)
+        self.assertIn("NEVER say \"the music your dad loved\"", prompt)
+        self.assertIn("Never address the senior by their child's name", prompt)
+        self.assertIn("Do NOT invert family relationships", think.EXTRACTION_SYSTEM_PROMPT)
+
     def test_stream_reply_token_budget_headroom(self):
         from unittest.mock import MagicMock, patch
 

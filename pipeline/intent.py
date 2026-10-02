@@ -26,7 +26,9 @@ EMOTIONAL_PATTERNS = [
 ]
 
 LOGISTICAL_PATTERNS = [
-    re.compile(r"\b(what\s+(things\s+)?do\s+i\s+have\s+to\s+do|what\s+am\s+i\s+doing|my\s+schedule|plans\s+today|my\s+day)\b", re.IGNORECASE),
+    re.compile(r"\b(what('s|\s+is|\s+do\s+i\s+have)\s+.*(today|tomorrow|planned|scheduled|coming|happening))\b", re.IGNORECASE),
+    re.compile(r"\b(what\s+(things\s+)?do\s+i\s+have\s+to\s+do|what\s+am\s+i\s+doing|my\s+schedule|plans?\s+today|planned\s+today|my\s+day)\b", re.IGNORECASE),
+    re.compile(r"\b(plan|plans|planned|planning|agenda|itinerary|schedule|scheduled)\b", re.IGNORECASE),
     re.compile(r"\b(what\s+time|when\s+is|when\s+are|is\s+.*coming|coming\s+today|coming\s+at|arriving|dropping\s+off)\b", re.IGNORECASE),
     re.compile(r"\b(groceries|appointment|doctor|visit|visiting|calendar)\b", re.IGNORECASE),
 ]
