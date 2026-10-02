@@ -13,6 +13,12 @@ from pathlib import Path
 
 DEFAULT_PROFILE_ID = "dad"
 DEFAULT_CAREGIVER_NAME = "Sarah"
+# The canned onboarding memo: `main.py beat1`'s text fallback and the
+# pre-brief every webapp session starts with.
+DEMO_MEMO = (
+    "Dad loves jazz. His grandson is named Leo. Avoid talking about driving. "
+    "I'm dropping off groceries at 4 PM today."
+)
 
 
 @dataclass

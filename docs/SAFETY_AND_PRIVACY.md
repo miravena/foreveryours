@@ -73,9 +73,25 @@ stored verbatim, not just the extracted fact** — real extraction (pulling
 just "I love Miles Davis" out of a longer sentence) needs an LLM call we
 haven't budgeted into the latency path yet. Known imprecision, not a design
 goal: a future pass should extract the fact, not the sentence it arrived in.
-Nothing else is retained: no audio recordings past the synthesis step for
-this thin-slice build, no transcripts beyond what's needed for the current
-turn's processing.
+Nothing else is kept on purpose, but audio does touch disk, so here is
+exactly where and for how long (issue #18):
+
+- **Hosted web demo (`webapp.py`).** Each browser tab is its own throwaway
+  household under `FY_SESSIONS_DIR`. The reply WAVs from one turn are deleted
+  at the start of the next; the whole household (memory, flags, reply audio)
+  is deleted when the tab closes, or after `SESSION_TTL_S` (default 1 hour)
+  if the close event never arrives. Uploaded or recorded input clips and
+  served reply audio also pass through Gradio's own file cache, which the app
+  expires on the same 1-hour clock (`delete_cache`). No other visitor can see
+  another tab's household.
+- **Local CLI (`main.py`).** Reply audio stays in `out/audio/` and memory in
+  `data/` until you delete them. That's your own machine, and keeping them is
+  what lets `day2` prove persistence.
+- **Third parties.** Transcripts (text, not audio) of each turn go to Nebius
+  Token Factory for THINK/AUDIT. With the default `ASR_BACKEND=whisper_local`
+  (what the hosted demo runs; Token Factory has no transcription endpoint,
+  PR #25), speech recognition is local, so raw audio is never sent to a
+  model provider.
 
 ## What this is not
 

@@ -38,6 +38,9 @@ Latency is treated as a first-class judging risk: the fast-path skips the LLM en
 emergency/distress phrases, THINK streams tokens straight into sentence-sized TTS chunks, and the
 slower safety audit + memory-save step run in a background thread *after* the first sentence of
 audio is already on its way out. Target: under 2 seconds to first audio on the common path.
+**Measured so far:** 0.11s on the fast-path (no LLM), 4.22s on a live Nemotron turn (PR #25).
+That number is time-to-first-WAV-written; the web demo currently plays the whole reply once the
+turn finishes, so what a listener hears is later still (issue #17).
 
 ## Demo script
 
@@ -75,6 +78,9 @@ python -m unittest discover tests -v
 pytest tests/
 ```
 
+Before pushing, `scripts/smoke.sh` (~10s, no key needed) runs the tests plus `beat1`, `beat3`
+and `day2` in a throwaway copy of the repo and checks each beat's output.
+
 `beat1` runs fully offline. `beat2` needs `NEBIUS_API_KEY` set — it calls a real open-weight
 model with no fallback, so without a key it fails loudly with a clear message rather than
 returning a mocked reply. `beat3`'s immediate safety reassurance is offline (fast-path, no LLM),
@@ -106,7 +112,11 @@ cp .env.example .env   # fill in NEBIUS_API_KEY for the full pipeline; works wit
 ### Cloudflare & Cloud Hosting (Milestone M5)
 
 - **Cloudflare Pages**: Deploys the landing page and presentation directly from `docs/index.html` with zero build commands.
-- **Hugging Face Spaces**: Zero-Docker 1-click deploy using `app.py`, `requirements.txt`, and `packages.txt`.
+- **Hugging Face Spaces** (the judge-facing link, issue #11): `scripts/deploy_hf_space.py`
+  stages `app.py` + pipeline + `requirements.txt`/`packages.txt` with the Spaces config header
+  and uploads them. `HF_TOKEN=... NEBIUS_API_KEY=... python scripts/deploy_hf_space.py <user>/<space>`;
+  `--dry-run` builds the staging folder without uploading. The key goes in as a Space *secret*,
+  never a file. Each visitor gets an isolated, auto-deleted session (see `SAFETY_AND_PRIVACY.md`).
 - **Cloudflare Tunnel (`cloudflared`)**: Exposes a running `webapp.py` to a secure public HTTPS URL via `cloudflared tunnel --url http://localhost:7860`.
 
 Works the same with or without a key: without one, a distress/confusion phrase still gets the
