@@ -167,7 +167,7 @@ def beat4_day2_recall(transcript: str | None, audio_in: Path | None = None, play
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
     items = store.all()
     if not items:
-        print(f"No memory file found at {store.path} -- run `python main.py beat1` first.")
+        print(f"No memory file found at {store.path.name} -- run `python main.py beat1` first.")
         return
 
     print(f"[Testing Day-2 Recall: PID {os.getpid()} starting fresh with no in-memory state]")
