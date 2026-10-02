@@ -68,7 +68,7 @@ def stream_reply(
         model=model,
         messages=build_prompt(transcript, facts, guardrails, history),
         stream=True,
-        max_tokens=200,
+        max_tokens=600,
         temperature=0.6,
     )
     for chunk in stream:
@@ -161,7 +161,7 @@ def extract_memory_llm(transcript: str, reply: str) -> str | None:
                 {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
                 {"role": "user", "content": f'Senior: "{transcript}"\nCompanion: "{reply}"'},
             ],
-            max_tokens=60,
+            max_tokens=300,
             temperature=0.2,
         )
         content = completion.choices[0].message.content if completion.choices else None

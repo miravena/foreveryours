@@ -23,13 +23,15 @@ Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackat
 
 ## Pipeline
 
+**🏆 100% of the cognitive and perceptual workloads are hosted on the Nebius AI Cloud 🏆**
+
 ```
-HEAR (speech-to-text)
+HEAR (speech-to-text via local faster-whisper, offline-resilient)
   -> fast-path safety check (rule-based, synchronous, microseconds)
   -> RECALL (memory search, scoped by caregiver-supplied context)
-  -> THINK (open-weight model via Nebius Token Factory, streamed)
+  -> THINK (NVIDIA Nemotron 3 Nano via Nebius Token Factory, streamed)
   -> SPEAK (streamed TTS, starts on the first sentence)
-  -> [async, off the critical path] AUDIT (safety pass) + memory extraction
+  -> [async, off the critical path] AUDIT (safety pass) + memory extraction (via Nebius Nemotron)
 ```
 
 Latency is treated as a first-class judging risk: the fast-path skips the LLM entirely for

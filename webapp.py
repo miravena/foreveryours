@@ -192,6 +192,10 @@ def build_demo() -> gr.Blocks:
             "and the reply on the left tells Dad, out loud, that it's doing that. "
             "No conversation history persists after you close this tab (issue #16)."
         )
+        with gr.Accordion("Live Telemetry (Powered by Nebius AI)", open=True):
+            gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
+                        "**Audio Perception (HEAR):** `faster-whisper` (Local CPU offline fallback)\n\n"
+                        "*Background memory extraction & safety audit run asynchronously via Nebius API.*")
         history_state = gr.State([])
 
         with gr.Row():

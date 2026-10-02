@@ -23,6 +23,11 @@ _turn_counter = itertools.count()
 
 
 def _get_tts_engine():
+    if sys.platform == "win32":
+        # On Windows, pyttsx3 SAPI5 deadlocks when engine.runAndWait() is called
+        # repeatedly across multiple sentences in the same process. PowerShell's
+        # native System.Speech handles multi-sentence synthesis reliably.
+        return None
     try:
         import pyttsx3
 
@@ -48,6 +53,9 @@ def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
         import subprocess
 
         safe_sentence = sentence.replace("'", " ").replace('"', ' ')
+        # Also strip curly/smart quotes and apostrophes that LLMs love to produce
+        for ch in "\u2018\u2019\u201a\u201b\u201c\u201d\u201e\u201f":
+            safe_sentence = safe_sentence.replace(ch, " ")
         ps_cmd = (
             f"Add-Type -AssemblyName System.Speech; "
             f"$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
