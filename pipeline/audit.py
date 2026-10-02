@@ -23,14 +23,14 @@ exactly one word first, UNSAFE or SAFE, then if UNSAFE a one-sentence reason.
 
 def audit_reply(transcript: str, reply: str) -> tuple[bool, str]:
     client = get_client()
-    model = os.environ.get("AUDIT_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct")
+    model = os.environ.get("AUDIT_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
     response = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": AUDIT_SYSTEM_PROMPT},
             {"role": "user", "content": f"Person said: {transcript}\nCompanion replied: {reply}"},
         ],
-        max_tokens=60,
+        max_tokens=300,
         temperature=0.0,
     )
     text = (response.choices[0].message.content or "").strip()
