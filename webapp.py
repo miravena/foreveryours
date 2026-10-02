@@ -31,27 +31,45 @@ Deploy on Hugging Face Spaces: push this file as `app.py` at the Space root
 
 MAX_DAILY_REQUESTS caps usage on a public URL so one link can't burn through
 the whole Nebius credit balance (see VENDOR_DECISIONS.md).
+
+Public-URL isolation (issues #11, #18): every browser session gets its own
+throwaway household under FY_SESSIONS_DIR, pre-briefed with the same demo
+caregiver memo as `main.py beat1`. Two judges on the same link never see each
+other's flags, memories or voices. A session's directory is deleted when the
+tab closes (gr.State delete_callback) or after SESSION_TTL_S, and Gradio's own
+upload/output cache is expired by `delete_cache`. Set FY_SHARED_PROFILE=1 to
+get the old single shared `data/dad.*` profile back -- useful locally when
+recording a video alongside `main.py` beats, never for a public deployment.
 """
 from __future__ import annotations
 
 import datetime
 import os
+import shutil
+import tempfile
 import threading
 import time
+import uuid
 import wave
 from pathlib import Path
 
 import gradio as gr
 
-from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, CaregiverFlags
+from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags
 from memory.store import MemoryStore
 from pipeline import hear
 from pipeline.orchestrator import run_turn
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
+SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
+SAMPLE_CLIPS = ("senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav")
 MAX_DAILY_REQUESTS = int(os.environ.get("MAX_DAILY_REQUESTS", "50"))
 MAX_HISTORY_TURNS = 6  # (user, assistant) pairs kept -- bounds prompt growth, not a product limit
+SESSIONS_DIR = Path(os.environ.get("FY_SESSIONS_DIR", Path(tempfile.gettempdir()) / "foreveryours-sessions"))
+SHARED_PROFILE = os.environ.get("FY_SHARED_PROFILE") == "1"
+SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
+GRADIO_CACHE_SWEEP = (600, SESSION_TTL_S)  # (check every N s, delete files older than M s)
 
 _lock = threading.Lock()
 _request_log: dict[str, int] = {}  # date string -> count, in-memory, resets on restart
@@ -67,12 +85,71 @@ def _rate_limit_ok() -> bool:
         return True
 
 
-def _format_caregiver_panel() -> str:
+def _session_dirs(session_id: str) -> tuple[Path, Path]:
+    """(data_dir, audio_dir) for one browser session."""
+    if SHARED_PROFILE:
+        return DATA_DIR, AUDIO_DIR
+    root = SESSIONS_DIR / session_id
+    return root / "data", root / "audio"
+
+
+def _sweep_stale_sessions() -> None:
+    """Backstop for sessions whose delete_callback never ran (process
+    restart, crashed tab): anything untouched for SESSION_TTL_S goes."""
+    if SHARED_PROFILE or not SESSIONS_DIR.exists():
+        return
+    cutoff = time.time() - SESSION_TTL_S
+    for child in SESSIONS_DIR.iterdir():
+        try:
+            if child.is_dir() and child.stat().st_mtime < cutoff:
+                shutil.rmtree(child, ignore_errors=True)
+        except FileNotFoundError:
+            pass
+
+
+def _new_session() -> str:
+    """Fresh household, pre-briefed with the demo memo so a judge's very
+    first remark has caregiver context to recall (beat 2 works on click one)."""
+    _sweep_stale_sessions()
+    session_id = DEFAULT_PROFILE_ID if SHARED_PROFILE else uuid.uuid4().hex
+    data_dir, _ = _session_dirs(session_id)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
+    for line in DEMO_MEMO.split(". "):
+        line = line.strip().rstrip(".")
+        if line:
+            store.add(line, source="caregiver_memo")  # no-op on duplicates
+    return session_id
+
+
+def _end_session(session_id: str | None) -> None:
+    if session_id and not SHARED_PROFILE:
+        shutil.rmtree(SESSIONS_DIR / session_id, ignore_errors=True)
+
+
+def _clear_session_audio(audio_dir: Path) -> None:
+    """Previous turns' reply audio has already been handed to Gradio (which
+    copies outputs into its own cache), so nothing on our side needs it."""
+    if SHARED_PROFILE or not audio_dir.exists():
+        return
+    for wav in audio_dir.glob("*.wav"):
+        wav.unlink(missing_ok=True)
+
+
+def init_session() -> tuple[str, str]:
+    session_id = _new_session()
+    return session_id, _format_caregiver_panel(session_id)
+
+
+def _format_caregiver_panel(session_id: str | None) -> str:
     """Reads straight from disk every call -- this is what makes it a live
-    panel rather than a snapshot: whatever main.py or another browser tab
-    wrote is reflected here within one poll interval (see the Timer below)."""
-    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
-    flags = CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR)
+    panel rather than a snapshot: whatever this session's turns (or, with
+    FY_SHARED_PROFILE=1, main.py) wrote is reflected here within one poll
+    interval (see the Timer below)."""
+    if not session_id:
+        return "_Setting up your demo household..._"
+    data_dir, _ = _session_dirs(session_id)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
+    flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
 
     lines = ["### What ForeverYours has told you"]
     flag_items = flags.all()
@@ -115,10 +192,20 @@ def _combine_audio_chunks(audio_paths: list[Path], out_dir: Path) -> Path | None
 
 
 def run_demo_turn(
-    audio_in: str | None, history: list[dict]
+    audio_in: str | None, history: list[dict], session_id: str | None
+) -> tuple[str, str | None, list[dict], str, str]:
+    session_id = session_id or _new_session()
+    out = _run_demo_turn(audio_in, history, session_id)
+    return (*out, session_id)
+
+
+def _run_demo_turn(
+    audio_in: str | None, history: list[dict], session_id: str
 ) -> tuple[str, str | None, list[dict], str]:
-    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
-    flags = CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR)
+    data_dir, audio_dir = _session_dirs(session_id)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
+    flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
+    panel = lambda: _format_caregiver_panel(session_id)  # noqa: E731
 
     if not _rate_limit_ok():
         return (
@@ -126,19 +213,20 @@ def run_demo_turn(
             "(protects the shared Nebius API credits). See CONTRIBUTING.md.",
             None,
             history,
-            _format_caregiver_panel(),
+            panel(),
         )
 
     if not audio_in:
-        return "Record or upload something first.", None, history, _format_caregiver_panel()
+        return "Record or upload something first.", None, history, panel()
 
     transcript = hear.transcribe(Path(audio_in))
     if not transcript.strip():
-        return "Couldn't make out any speech in that clip -- try again.", None, history, _format_caregiver_panel()
+        return "Couldn't make out any speech in that clip -- try again.", None, history, panel()
 
+    _clear_session_audio(audio_dir)
     try:
         result = run_turn(
-            transcript, store, flags, AUDIO_DIR, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history
+            transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history
         )
     except Exception as exc:
         err = str(exc)
@@ -149,7 +237,7 @@ def run_demo_turn(
                 f"👉 **Try an emergency phrase:** Say *\"I fell down earlier and I'm scared\"* — the safety fast-path runs completely offline with real spoken voice!",
                 None,
                 history,
-                _format_caregiver_panel(),
+                panel(),
             )
         raise
 
@@ -162,73 +250,88 @@ def run_demo_turn(
     ]
     new_history = new_history[-(MAX_HISTORY_TURNS * 2) :]
 
-    combined_audio = _combine_audio_chunks(result.audio_paths, AUDIO_DIR)
+    combined_audio = _combine_audio_chunks(result.audio_paths, audio_dir)
     reply_audio = str(combined_audio) if combined_audio else None
     transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
-    return transcript_and_reply, reply_audio, new_history, _format_caregiver_panel()
+    return transcript_and_reply, reply_audio, new_history, panel()
 
 
 
-def save_caregiver_voice_memo(memo_audio: str | None) -> str:
+def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) -> tuple[str, str]:
     """Caregiver submits onboarding context via voice memo (Beat 1)."""
+    session_id = session_id or _new_session()
     if not memo_audio:
-        return _format_caregiver_panel()
+        return _format_caregiver_panel(session_id), session_id
     transcript = hear.transcribe(Path(memo_audio))
-    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
+    data_dir, _ = _session_dirs(session_id)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
     for line in transcript.split(". "):
         line = line.strip().rstrip(".")
         if line:
             store.add(line, source="caregiver_memo")
-    return _format_caregiver_panel()
+    return _format_caregiver_panel(session_id), session_id
 
 
 def build_demo() -> gr.Blocks:
-    with gr.Blocks(title="ForeverYours — judge demo") as demo:
+    with gr.Blocks(title="ForeverYours — judge demo", delete_cache=GRADIO_CACHE_SWEEP) as demo:
         gr.Markdown(
             "# ForeverYours\n"
             "Watch both sides at once: talk as the senior on the left, watch the caregiver side "
             "on the right update live. Try an ordinary remark first, then try something like "
             "\"I fell down earlier\" -- the right side updates within a couple seconds, "
-            "and the reply on the left tells Dad, out loud, that it's doing that. "
-            "No conversation history persists after you close this tab (issue #16)."
+            "and the reply on the left tells Dad, out loud, that it's doing that.\n\n"
+            "Your tab is its own private demo household, already briefed by Dad's daughter "
+            "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
+            "this link sees it, and its memory, flags and audio are deleted when you close "
+            "the tab or after an hour."
         )
         with gr.Accordion("Live Telemetry (Powered by Nebius AI)", open=True):
             gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
                         "**Audio Perception (HEAR):** `faster-whisper` (Local CPU offline fallback)\n\n"
                         "*Background memory extraction & safety audit run asynchronously via Nebius API.*")
         history_state = gr.State([])
+        session_state = gr.State(None, time_to_live=SESSION_TTL_S, delete_callback=_end_session)
 
         with gr.Row():
             with gr.Column():
                 gr.Markdown("## 🧑 Senior side")
                 audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Speak (as the senior)")
+                # Judges without a mic (or who'd rather not record their own voice)
+                # can still drive every beat with one click.
+                gr.Examples(
+                    examples=[[str(SAMPLES_DIR / name)] for name in SAMPLE_CLIPS],
+                    inputs=[audio_in],
+                    label="No mic? Try a sample clip",
+                    cache_examples=False,
+                )
                 run_btn = gr.Button("Send", variant="primary")
                 transcript_out = gr.Markdown(label="Conversation")
                 audio_out = gr.Audio(label="Companion's reply", autoplay=True)
             with gr.Column():
                 gr.Markdown("## 👩 Caregiver side (live)")
-                caregiver_panel = gr.Markdown(_format_caregiver_panel())
+                caregiver_panel = gr.Markdown(_format_caregiver_panel(None))
                 with gr.Accordion("🎙️ Submit Caregiver Voice Memo (Beat 1)", open=False):
                     memo_audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Record context memo")
                     save_memo_btn = gr.Button("Save Voice Memo", variant="secondary")
 
         run_btn.click(
             fn=run_demo_turn,
-            inputs=[audio_in, history_state],
-            outputs=[transcript_out, audio_out, history_state, caregiver_panel],
+            inputs=[audio_in, history_state, session_state],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, session_state],
         )
 
         save_memo_btn.click(
             fn=save_caregiver_voice_memo,
-            inputs=[memo_audio_in],
-            outputs=[caregiver_panel],
+            inputs=[memo_audio_in, session_state],
+            outputs=[caregiver_panel, session_state],
         )
 
         # Independent of the click above -- this is what makes the caregiver
         # side feel "live" rather than only updating when the senior side
         # does. See the module docstring for why polling, not push.
         timer = gr.Timer(2)
-        timer.tick(fn=_format_caregiver_panel, outputs=[caregiver_panel])
+        timer.tick(fn=_format_caregiver_panel, inputs=[session_state], outputs=[caregiver_panel])
+        demo.load(fn=init_session, outputs=[session_state, caregiver_panel])
     return demo
 
 

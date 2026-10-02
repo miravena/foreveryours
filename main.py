@@ -38,7 +38,7 @@ except ImportError:
     def load_dotenv():  # noqa: E731
         pass
 
-from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, CaregiverFlags
+from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags
 from memory.store import MemoryStore
 from pipeline import hear
 from pipeline.orchestrator import run_turn
@@ -85,10 +85,7 @@ def beat1_caregiver_memo(audio_in: Path | None = None) -> None:
         memo = hear.transcribe(audio_in)
         print(f'Transcribed caregiver voice memo from "{audio_in.name}":\n  "{memo}"')
     else:
-        memo = (
-            "Dad loves jazz. His grandson is named Leo. Avoid talking about driving. "
-            "I'm dropping off groceries at 4 PM today."
-        )
+        memo = DEMO_MEMO
 
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
     saved = 0
