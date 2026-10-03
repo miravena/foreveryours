@@ -247,3 +247,51 @@ if __name__ == "__main__":
         )
         flag_items = self.flags.all()
         self.assertTrue(any("Perseveration loop detected" in f.text for f in flag_items))
+
+    @patch("pipeline.orchestrator.fastpath.check")
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.orchestrator.think.stream_reply", return_value=["Reply"])
+    def test_perseveration_ignores_emotional_support(self, mock_stream, mock_speak, mock_fast):
+        from pipeline.fastpath import FastPathResult
+        mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        history = [
+            {"role": "user", "content": "I feel really lonely today."},
+            {"role": "assistant", "content": "I'm sorry you feel lonely."},
+            {"role": "user", "content": "I just feel so alone."},
+            {"role": "assistant", "content": "I'm here with you."},
+        ]
+        # The 3rd emotional expression
+        orchestrator.run_turn(
+            "I don't want to be alone.", 
+            self.store, 
+            self.flags, 
+            self.audio_dir, 
+            history=history
+        )
+        flag_items = self.flags.all()
+        # Emotional support should NOT trigger the logistical perseveration loop
+        self.assertFalse(any("Perseveration loop detected" in f.text for f in flag_items))
+
+    @patch("pipeline.orchestrator.fastpath.check")
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.orchestrator.think.stream_reply", return_value=["Reply"])
+    def test_perseveration_ignores_clarification(self, mock_stream, mock_speak, mock_fast):
+        from pipeline.fastpath import FastPathResult
+        mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        history = [
+            {"role": "user", "content": "What time is Sarah coming?"},
+            {"role": "assistant", "content": "Sarah is coming at 4 PM."},
+            {"role": "user", "content": "Sorry, what did you say?"},
+            {"role": "assistant", "content": "She's coming at 4 PM."},
+        ]
+        # 3rd turn is a clarification/casual, not a logistical intent
+        orchestrator.run_turn(
+            "Did you say four o'clock?", 
+            self.store, 
+            self.flags, 
+            self.audio_dir, 
+            history=history
+        )
+        flag_items = self.flags.all()
+        # Clarification should not trigger the loop
+        self.assertFalse(any("Perseveration loop detected" in f.text for f in flag_items))
