@@ -4,6 +4,12 @@ Auto-detected by Hugging Face Spaces (as app.py) and cloud hosts.
 import os
 
 try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+try:
     from webapp import build_demo
     app = build_demo()
 except ModuleNotFoundError as exc:

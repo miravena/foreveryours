@@ -45,6 +45,11 @@ from __future__ import annotations
 
 import datetime
 import os
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 import re
 import shutil
 import tempfile
@@ -495,10 +500,4 @@ def build_demo() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv()
-    except ImportError:
-        pass
     build_demo().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")))
