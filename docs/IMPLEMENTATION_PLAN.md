@@ -21,24 +21,23 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
 
 | Component | File | Status |
 |---|---|---|
-| Fast-path safety check | `safety/fastpath.py` | Done — regex-based, synchronous, continues into THINK after an immediate reassurance (not a dead end) |
+| Fast-path safety check | `safety/fastpath.py` | Done — regex-based, synchronous, continues into THINK after an immediate reassurance (not a dead end). **Open: bare "help me" / "I'm falling" still false-trigger ([#15](../../issues/15), decided 10-03: narrow them)** |
 | Memory store | `memory/store.py` | Done — caregiver facts always recalled, stopword pruning & semantic domain synonym expansion, dedupe on save, atomic writes |
 | Caregiver flags | `caregiver.py` | Done — `disclosed_to_senior` is a required, honest argument everywhere |
 | THINK (model call) | `pipeline/think.py` | Done — streamed, sentence-chunked (abbreviation-aware), facts/guardrails split in prompt, off-critical-path async memory extraction |
-| SPEAK (TTS) | `pipeline/speak.py` | Done — `pyttsx3`, local/offline, per-turn-unique filenames |
-| HEAR (ASR) | `pipeline/hear.py` | Done — wired with `--audio` into all CLI beats & `webapp.py`, backed by `faster-whisper` / Nebius Parakeet, bundled with `samples/` audio |
+| SPEAK (TTS) | `pipeline/speak.py` | Works, **but on Linux goes silent after ~19 sentences in one process — blocks hosting ([#28](../../issues/28))**. `pyttsx3`, local/offline, per-turn-unique filenames |
+| HEAR (ASR) | `pipeline/hear.py` | Done — wired with `--audio` into all CLI beats & `webapp.py`, backed by local `faster-whisper` (Token Factory has no ASR endpoint, PR #25), bundled with `samples/` audio |
 | AUDIT (async safety pass) | `pipeline/audit.py` | Done — runs off the critical path, considers both the senior's words and the reply, discloses via a spoken follow-up |
 | Orchestrator | `pipeline/orchestrator.py` | Done — ties the above together, graceful degradation without a live API key |
 | CLI demo runner | `main.py` | Done for the 4-beat demo script + interactive multi-turn session (`python main.py chat`), cross-platform audio playback (Windows/macOS/Linux) |
-| Automated test suite | `tests/` | Done — 22 automated tests covering fastpath, memory, speak, think, orchestrator, caregiver, and CLI (zero-dependency `unittest` & `pytest` compatible) |
-| Cloud hosting (M5) | Cloudflare Pages, `app.py`, `packages.txt` | Done — Zero-Docker hosting via Cloudflare Pages (presentation/landing site) + Hugging Face Spaces / Cloudflare Tunnel |
+| Automated test suite | `tests/` | Done — 53 tests across 10 modules (fastpath, intent, memory, speak, think, orchestrator, caregiver, CLI, webapp, benchmarks). Each module passes alone; `test_main` + `test_mature_benchmarks` in one process segfaults, same root cause as [#28](../../issues/28) |
+| Cloud hosting (M5) | Cloudflare Pages, `app.py`, `packages.txt`, `scripts/deploy_hf_space.py` | **Ready, not live** — landing page live on Cloudflare Pages; the app itself deploys to HF Spaces in one command but isn't running anywhere a judge can reach ([#11](../../issues/11)) |
 
 ## Open design decisions
 
-- **ASR backend — DECIDED.** NVIDIA-hosted ASR via Nebius Token Factory, not local
-  `faster-whisper`. Rationale and the offline-capability tradeoff are in `ROADMAP.md`'s
-  "Decided: ASR backend" section. This unblocks [Issue #9](../../issues/9) (real voice I/O).
-  `faster-whisper` stays in `hear.py` as a fallback/dev convenience, not the primary path.
+- **ASR backend — DECIDED: local `faster-whisper`.** Token Factory has no
+  `/audio/transcriptions` endpoint (verified live, PR #25), which superseded the earlier
+  NVIDIA-hosted plan. See `ROADMAP.md`'s "Decided: ASR backend".
 - **Judge-accessible hosting — DECIDED: host it ourselves, not a test build.** A test build
   (our README's existing setup steps) is near-free but assumes a judge will sign up for their
   own `NEBIUS_API_KEY` mid-review — unrealistic at hackathon judging speed/volume, and the
@@ -48,7 +47,7 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
   deployment on sponsor infrastructure. README setup steps stay documented as a convenience for
   the other collaborator and anyone who wants to run it locally, not as the primary judging
   path. See `ROADMAP.md`'s "Judging requirements" table and [Issue #11](../../issues/11).
-- **THINK model ID — switched, casing still unverified.** Default is now
+- **THINK model ID — verified live (PR #25).** Default is now
   `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (`pipeline/think.py`), replacing the older dense
   `Llama-3_1-Nemotron-70B-Instruct-HF` default from before Nebius's Token Factory relaunch
   exposed the newer Nemotron 3 lineup (Nano 30B, Nano Omni, Super 120B, Ultra 550B — see
