@@ -39,5 +39,6 @@ def audit_reply(transcript: str, reply: str) -> tuple[bool, str]:
     # starting with SAFE by coincidence -- it already does, since we check
     # the literal prefix, but checking UNSAFE first keeps that the
     # deciding word regardless of phrasing drift.
-    is_safe = not text.upper().startswith("UNSAFE")
+    clean_text = text.strip('*_ \n"')
+    is_safe = not clean_text.upper().startswith("UNSAFE")
     return is_safe, text

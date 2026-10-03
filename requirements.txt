@@ -3,3 +3,4 @@ python-dotenv>=1.0.1
 pyttsx3>=2.90            # offline local TTS fallback (real audio, no API key needed)
 faster-whisper>=1.0.0    # ASR fallback if no NVIDIA/Nebius-hosted ASR model is reachable
 gradio>=4.44.0           # judge-facing web demo (webapp.py); also the expected entrypoint shape for HF Spaces
+pytest>=8.0.0

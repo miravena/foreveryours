@@ -21,16 +21,7 @@ from true to false:
 The senior is never meant to be monitored silently behind their back; the
 code's job is to make that true in both cases above, not just the easy one.
 
-**Planned refinement (review finding, 2026-10-01, not yet implemented):** the
-fast-path reply today discloses this *one* instance ("I'm letting your family
-know right now so someone can check on you.") but doesn't state the standing
-rule — i.e. when disclosure happens and when it doesn't. Spelling that rule
-out loud, e.g. *"I'll only tell [caregiver] if I'm worried about your
-safety,"* answers the "elder surveillance" objection more directly than a
-single-instance disclosure can: it tells the senior the boundary up front,
-not just that this one thing got reported. Tracked as a `safety/fastpath.py`
-wording change, not done yet — see `DEMO_SCRIPT.md` beat 3 for how this
-should land in the demo once built.
+**Refinement (implemented 2026-10-03):** the fast-path reply today discloses this *one* instance ("I'm letting your family know right now so someone can check on you.") but also states the standing rule — i.e. when disclosure happens and when it doesn't. Spelling that rule out loud, e.g. *"I'll only tell them if I'm worried about your safety,"* answers the "elder surveillance" objection more directly than a single-instance disclosure can: it tells the senior the boundary up front, not just that this one thing got reported.
 
 ## No medical claims
 

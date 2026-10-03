@@ -13,7 +13,11 @@ from memory.store import MemoryStore
 
 class TestMain(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
+        import sys
+        if sys.version_info >= (3, 10):
+            self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        else:
+            self.temp_dir = tempfile.TemporaryDirectory()
         self.data_dir = Path(self.temp_dir.name) / "data"
         self.audio_dir = Path(self.temp_dir.name) / "audio"
         self.data_dir.mkdir(parents=True, exist_ok=True)

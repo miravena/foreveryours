@@ -76,6 +76,88 @@ class TestWebappSessions(unittest.TestCase):
         self.assertFalse((self.sessions_dir / stale).exists())
         self.assertTrue((self.sessions_dir / fresh).exists())
 
+    def test_caregiver_panel_renders_phase3_memory_badges(self):
+        from memory.store import MemoryScope, MemoryStore, PrivacyLevel
+        session_id, _ = webapp.init_session()
+        data_dir, _ = webapp._session_dirs(session_id)
+        store = MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
+
+        now = time.time()
+        # 1. Temporary item with future expiration
+        store.add(
+            "Sarah dropping groceries at 4 PM",
+            source="caregiver_memo",
+            scope=MemoryScope.TEMPORARY.value,
+            expires_at=now + 7200,
+        )
+        # 2. Private caregiver-only item
+        store.add(
+            "Planning surprise 80th birthday party",
+            source="caregiver_note",
+            privacy=PrivacyLevel.CAREGIVER_ONLY.value,
+        )
+        # 3. Superseded item
+        store.supersede("Dad loves jazz", "Senior no longer listens to jazz; prefers classical")
+
+        panel = webapp._format_caregiver_panel(session_id)
+        self.assertIn("🟢 **[Permanent]**", panel)
+        self.assertIn("🕒 **[Temporary — expires in", panel)
+        self.assertIn("🔒 **[Caregiver Only — Hidden from Dad]**", panel)
+        self.assertIn("🔄 _[Superseded]_", panel)
+
+    def test_senior_text_input_turn_without_mic(self):
+        """Dual-input mode: Senior types text directly without recording audio."""
+        session_id, _ = webapp.init_session()
+        # run_demo_turn(audio_in=None, text_in="I fell down earlier and I'm scared", history=[], session_id=session_id)
+        out = webapp.run_demo_turn(
+            audio_in=None,
+            text_in_or_history="I fell down earlier and I'm scared",
+            history_or_session=[],
+            session_id=session_id,
+        )
+        transcript_and_reply, reply_audio, new_history, panel, sess, cleared_text = out
+        self.assertIn("Dad said:** \"I fell down earlier and I'm scared\"", transcript_and_reply)
+        self.assertIn("Companion replied:", transcript_and_reply)
+        self.assertIn("Honest Safety Disclosure", transcript_and_reply)
+        self.assertIsNotNone(reply_audio)
+        self.assertEqual(cleared_text, "")
+        # Check that high priority alert banner appears in the caregiver panel
+        self.assertIn("🚨 **HIGH PRIORITY SAFETY ALERT DISPATCHED**", panel)
+        self.assertIn("Disclosed to Senior in conversation", panel)
+
+    def test_caregiver_text_memo_saves_and_updates_panel(self):
+        """Caregiver text memo adds context and updates live panel badges."""
+        session_id, _ = webapp.init_session()
+        memo = "Dad loves chicken soup. Doctor appointment tomorrow at 2 PM."
+        panel, sess, cleared = webapp.save_caregiver_text_memo(memo, session_id)
+        self.assertEqual(sess, session_id)
+        self.assertEqual(cleared, "")
+        self.assertIn("Dad loves chicken soup", panel)
+        self.assertIn("Doctor appointment tomorrow at 2 PM", panel)
+        self.assertIn("🟢 **[Permanent]**", panel)
+
+    def test_high_priority_alert_banner_renders_on_distress(self):
+        """High priority alert banner renders at the top of the caregiver panel on fall events."""
+        session_id, _ = webapp.init_session()
+        self._turn("I fell down earlier and I'm scared", session_id)
+        panel = webapp._format_caregiver_panel(session_id)
+        self.assertTrue(panel.startswith("> 🚨 **HIGH PRIORITY SAFETY ALERT DISPATCHED**"))
+        self.assertIn("Severity:** `DISTRESS`", panel)
+        self.assertIn("Disclosure:** ✅ **Disclosed to Senior in conversation**", panel)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_dual_input_prioritizes_text(self):
+        session_id, _ = webapp.init_session()
+        with patch.object(webapp.hear, "transcribe", return_value="Audio transcript"):
+            # When both text and audio are provided, text_in takes precedence
+            transcript_out, audio_out, history_state, panel, out_sess_id, out_text_in = webapp.run_demo_turn(
+                audio_in="fake.wav",
+                text_in_or_history="Text transcript",
+                history_or_session=[],
+                session_id=session_id
+            )
+            self.assertIn("Text transcript", transcript_out)
+            self.assertNotIn("Audio transcript", transcript_out)

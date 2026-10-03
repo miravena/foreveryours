@@ -435,7 +435,28 @@ Similarly, not every conversational detail should automatically become permanent
 
 The architecture distinguishes between current conversation context, temporary caregiver information, and persistent personal memory.
 
-The goal is to make the AI useful without treating every piece of personal information as something it should permanently retain.
+---
+
+# Why Not ChatGPT Voice Mode? (The Critical Difference)
+
+A common question is: *"Why can't an older adult simply use ChatGPT Advanced Voice Mode?"*
+
+General-purpose conversational voice bots are capable of engaging conversation, but they fail critically in eldercare for three structural reasons:
+
+### 1. The Isolation Failure Mode (ChatGPT Sympathizes, But Tells Nobody)
+When an older adult tells ChatGPT: *"I fell earlier today and I'm scared,"* ChatGPT responds with soothing empathy (*"I'm so sorry that happened, please sit down and rest"*)... and then the turn ends. **Nobody in the family is ever alerted.** In eldercare, empathy without caregiver coordination is dangerous.
+
+### 2. Clinical Disclosure Honesty (The Split-Screen Differentiator)
+ForeverYours operates with a **dual-column synchronized architecture**:
+* When Dad shares an emergency or confusion signal (*"I fell down earlier and I'm scared"*), ForeverYours **tells him honestly**: *"I hear you, and I'm taking this seriously. I'm letting your family know right now so someone can check on you."*
+* In that exact same second, the caregiver panel **lights up with an auditable alert tagged with disclosure proof**: `✅ Dad was told`.
+* There are no secret wiretaps and no fake physical promises. The companion never claims it will physically visit or pick up groceries.
+
+### 3. Deliberately Briefed, Person-Centered Memory vs. Scraping
+ChatGPT attempts to remember fragments from conversational history, resulting in context dumping (mentioning unrelated memories during simple greetings). ForeverYours has a **3-tier person-centered memory engine**:
+* **Permanent Anchors:** Enduring biographical truths (*"Margaret loves jazz"*).
+* **Temporal Events:** Auto-expiring logistics (*"Sarah dropping groceries at 4 PM"* expires after the event, leaving no stale ghosts tomorrow).
+* **Caregiver Privacy Firewall:** Private family notes (*"Planning surprise birthday party"*) are visible on the family dashboard but strictly partitioned away from Dad's ears.
 
 ---
 

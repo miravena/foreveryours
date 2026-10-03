@@ -49,7 +49,7 @@ def _get_tts_engine():
 def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
     # 1. On Windows: PowerShell System.Speech (avoids pyttsx3 SAPI5 deadlock)
     if sys.platform == "win32":
-        safe_sentence = sentence.replace("'", " ").replace('"', ' ')
+        safe_sentence = sentence.replace("'", "''").replace('"', ' ')
         # Also strip curly/smart quotes and apostrophes that LLMs love to produce
         for ch in "\u2018\u2019\u201a\u201b\u201c\u201d\u201e\u201f":
             safe_sentence = safe_sentence.replace(ch, " ")
@@ -68,8 +68,11 @@ def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
     # avoids the long-lived pyttsx3 C-buffer memory leak and 19-sentence silence bug #28)
     cli = _get_espeak_cli()
     if cli is not None:
+        # -s 150: comfortable eldercare speech rate (default is 175 wpm)
+        # -p 45: slightly lower pitch for warmer, less metallic timbre
+        # -w: output to WAV file
         subprocess.run(
-            [cli, "-s", "155", "-w", str(out_path), sentence],
+            [cli, "-s", "150", "-p", "45", "-w", str(out_path), sentence],
             check=True,
             capture_output=True,
         )

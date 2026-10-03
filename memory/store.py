@@ -127,6 +127,10 @@ class MemoryStore:
             return None
         if scope == MemoryScope.PERMANENT.value and any(m in text.lower() for m in ("today", "tomorrow", "tonight", "pm", "am")):
             scope = MemoryScope.TEMPORARY.value
+            
+        if scope == MemoryScope.TEMPORARY.value and expires_at is None:
+            expires_at = time.time() + 86400
+            
         item = MemoryItem(
             text=text,
             source=source,

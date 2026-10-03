@@ -81,7 +81,9 @@ def stage(dest: Path, gradio_version: str) -> list[str]:
     (dest / "samples").mkdir()
     for wav in sorted(ROOT.glob(SAMPLE_GLOB)):
         shutil.copy2(wav, dest / "samples" / wav.name)
-    (dest / "README.md").write_text(SPACE_README.format(gradio_version=gradio_version))
+    (dest / "README.md").write_text(
+        SPACE_README.format(gradio_version=gradio_version), encoding="utf-8"
+    )
     return sorted(str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file())
 
 
