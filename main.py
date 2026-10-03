@@ -114,11 +114,17 @@ def beat2_senior_turn(transcript: str | None, audio_in: Path | None = None, play
     print(f"Memories recalled: {result.memories_used}")
     print(f"Audio chunks: {[p.name for p in result.audio_paths]}")
     if play:
-        for audio_path in result.audio_paths:
+        played_paths = set(result.audio_paths)
+        for audio_path in list(result.audio_paths):
             _play(audio_path)
 
     if result.background_thread is not None:
         result.background_thread.join(timeout=10)  # the audit/memory-save LLM call can be slower than a fixed sleep
+        
+    if play and result.background_thread is not None:
+        for audio_path in result.audio_paths:
+            if audio_path not in played_paths:
+                _play(audio_path)
     if result.memory_saved:
         print(f"New memory saved: {result.memory_saved}")
     if result.audit_verdict:

@@ -148,3 +148,16 @@ class TestWebappSessions(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_dual_input_prioritizes_text(self):
+        session_id, _ = webapp.init_session()
+        with patch.object(webapp.hear, "transcribe", return_value="Audio transcript"):
+            # When both text and audio are provided, text_in takes precedence
+            transcript_out, audio_out, history_state, panel, out_sess_id, out_text_in = webapp.run_demo_turn(
+                audio_in="fake.wav",
+                text_in_or_history="Text transcript",
+                history_or_session=[],
+                session_id=session_id
+            )
+            self.assertIn("Text transcript", transcript_out)
+            self.assertNotIn("Audio transcript", transcript_out)

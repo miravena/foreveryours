@@ -64,7 +64,8 @@ def check(transcript: str) -> FastPathResult:
                 severity="distress",
                 immediate_reply=(
                     "I hear you, and I'm taking this seriously. "
-                    "I'm letting your family know right now so someone can check on you."
+                    "I'm letting your family know right now so someone can check on you. "
+                    "I'll only tell them if I'm worried about your safety."
                 ),
                 continuation_note=(
                     f'The person just said something that sounded like distress: "{transcript.strip()}". '

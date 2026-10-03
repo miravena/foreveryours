@@ -71,8 +71,10 @@ MATCH_IGNORE_WORDS = {
 def _words_match(w1: str, w2: str) -> bool:
     if w1 == w2:
         return True
-    if len(w1) >= 4 and len(w2) >= 4:
-        return w1.startswith(w2) or w2.startswith(w1) or w1[:4] == w2[:4]
+    if len(w1) >= 5 and len(w2) >= 5:
+        shorter, longer = (w1, w2) if len(w1) < len(w2) else (w2, w1)
+        if longer.startswith(shorter) and len(longer) - len(shorter) <= 4:
+            return True
     return False
 
 
@@ -225,18 +227,19 @@ def run_turn(
             intent=intent.value,
         )
         sentences = think.sentence_chunks(token_stream)
-        reply_text, think_audio_paths, think_first_audio_time = _speak_turn(sentences, audio_out_dir)
-        if first_audio_time is None:
-            first_audio_time = think_first_audio_time
-
-        # Post-generation deterministic physical embodiment guardrail
-        # Prevent any AI physical claims e.g. "I'll bring your groceries" -> "Your family will bring your groceries"
+        
         physical_claim_pattern = re.compile(
             r"\b(i will|i'll|i am going to|i'm going to)\s+(bring|drop off|come over|visit|drive|pick up)\b",
             re.IGNORECASE,
         )
-        if physical_claim_pattern.search(reply_text):
-            reply_text = physical_claim_pattern.sub(f"{caregiver_name} will \\2", reply_text)
+        
+        def filter_sentences(s_iter):
+            for s in s_iter:
+                yield physical_claim_pattern.sub(f"{caregiver_name} will \\2", s)
+                
+        reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir)
+        if first_audio_time is None:
+            first_audio_time = think_first_audio_time
     except NebiusNotConfigured:
         # Fast-path's immediate reply already completed the turn's safety-
         # critical part (spoken + disclosed + flagged). Without a key we

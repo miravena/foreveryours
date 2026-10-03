@@ -122,7 +122,7 @@ def stream_reply(
             yield delta
 
 
-SENTENCE_BOUNDARY = re.compile(r"([.!?])(\s+)")
+SENTENCE_BOUNDARY = re.compile(r"([.!?][\"')\]]*)(\s+)")
 # Words that commonly precede a "." without actually ending a sentence.
 # Not exhaustive -- covers the cases that would otherwise cut a TTS chunk
 # mid-title ("Dr. Smith") or mid-time ("4 P.M. today").
@@ -130,7 +130,8 @@ ABBREVIATIONS = {"dr", "mr", "mrs", "ms", "jr", "sr", "vs", "etc", "a.m", "p.m"}
 
 
 def _is_real_sentence_end(text_before_punct: str) -> bool:
-    word_match = re.search(r"([A-Za-z.]+)$", text_before_punct)
+    clean_text = text_before_punct.rstrip("\"')}]")
+    word_match = re.search(r"([A-Za-z.]+)$", clean_text)
     if not word_match:
         return True
     word = word_match.group(1).lower().rstrip(".")
@@ -151,7 +152,7 @@ def sentence_chunks(token_stream: Iterator[str]) -> Iterator[str]:
             match = SENTENCE_BOUNDARY.search(buf, search_from)
             if not match:
                 break
-            if _is_real_sentence_end(buf[: match.start() + 1]):
+            if _is_real_sentence_end(buf[: match.start() + len(match.group(1))]):
                 sentence = buf[emitted_up_to : match.end()].strip()
                 if sentence:
                     yield sentence
@@ -214,7 +215,7 @@ def extract_memory_llm(transcript: str, reply: str) -> str | None:
         if not content:
             return None
         text = content.strip().strip('"')
-        if text.upper() == "NONE" or len(text) < 4:
+        if text.strip('. \n"\'').upper() == "NONE" or len(text) < 4:
             return None
         return text
     except Exception:

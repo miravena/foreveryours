@@ -77,12 +77,30 @@ _request_log: dict[str, int] = {}  # date string -> count, in-memory, resets on 
 
 
 def _rate_limit_ok() -> bool:
+    global _request_log
     today = datetime.date.today().isoformat()
+    rate_file = DATA_DIR / "rate_limit.json"
     with _lock:
+        if rate_file.exists():
+            try:
+                import json
+                _request_log = json.loads(rate_file.read_text("utf-8"))
+            except Exception:
+                pass
+                
         count = _request_log.get(today, 0)
         if count >= MAX_DAILY_REQUESTS:
             return False
+            
+        _request_log.clear() # Keep it small, only need today
         _request_log[today] = count + 1
+        
+        try:
+            import json
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            rate_file.write_text(json.dumps(_request_log), "utf-8")
+        except Exception:
+            pass
         return True
 
 
@@ -275,10 +293,10 @@ def _run_demo_turn(
             panel(),
         )
 
-    if audio_in:
-        transcript = hear.transcribe(Path(audio_in))
-    elif text_in and text_in.strip():
+    if text_in and text_in.strip():
         transcript = text_in.strip()
+    elif audio_in:
+        transcript = hear.transcribe(Path(audio_in))
     else:
         return "Record audio or type what Dad says first.", None, history, panel()
 
@@ -330,8 +348,8 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
         return _format_caregiver_panel(session_id), session_id, ""
     data_dir, _ = _session_dirs(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
-    for raw_part in re.split(r"[.\n]+", memo_text):
-        line = raw_part.strip().rstrip(".")
+    for raw_part in re.split(r"[.!?\n]+", memo_text):
+        line = raw_part.strip()
         if line:
             store.add(line, source="caregiver_memo")
     return _format_caregiver_panel(session_id), session_id, ""

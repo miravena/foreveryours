@@ -49,7 +49,7 @@ def _get_tts_engine():
 def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
     # 1. On Windows: PowerShell System.Speech (avoids pyttsx3 SAPI5 deadlock)
     if sys.platform == "win32":
-        safe_sentence = sentence.replace("'", " ").replace('"', ' ')
+        safe_sentence = sentence.replace("'", "''").replace('"', ' ')
         # Also strip curly/smart quotes and apostrophes that LLMs love to produce
         for ch in "\u2018\u2019\u201a\u201b\u201c\u201d\u201e\u201f":
             safe_sentence = safe_sentence.replace(ch, " ")
