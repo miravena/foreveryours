@@ -46,8 +46,8 @@ it links out to the GitHub Issue for anything that needs more than a paragraph.
 | M8 | Submission video recorded ([#5](../../issues/5)) | Open. A proof-of-concept terminal video exists (`video/output/`); the final one is recorded on the hosted URL. | M5 (ideally M11) |
 | M9 | Devpost Representative + submission ([#6](../../issues/6)) | **Open — team decision pending.** Proposal: whoever is Representative submits an early, editable draft by ~10-20 (live URL + current video), then edits it up to the deadline. | M5 |
 | M10 | Team Nebius key on hand | **In progress (10-03)**: second free-credit account being set up, so deploying, testing and recording don't depend on one person's personal credits | — |
-| M11 | Perceived latency under ~2s ([#17](../../issues/17)) | Open. Step 1: `enable_thinking: false` on the THINK call, re-measure, and check reply quality against the #27 eldercare rules. Step 2 if needed: try `Nemotron-3_5-Lightning`. Step 3 only if still slow: stream sentence 1 to the browser. | M10 |
-| M12 | Devpost text ([#20](../../issues/20)) | Draft exists (`docs/Project_Description.md`). Still needs the agreed [#14](../../issues/14) "why not ChatGPT voice mode" answer and the final links. | M5, M8 |
+| M11 | Perceived latency under ~2s ([#17](../../issues/17)) | **Done** (10-03): `enable_thinking: false` bypasses hidden reasoning tokens, dropping TTFT to 0.91s without quality degradation | M10 |
+| M12 | Devpost text ([#20](../../issues/20)) | **Done** (`docs/Project_Description.md` updated with #14 ChatGPT differentiator; 180s video storyboard drafted in `docs/VIDEO_SCRIPT.md`). Awaits final demo & video links | M5, M8 |
 
 ## Decided: ASR backend
 
