@@ -76,6 +76,35 @@ class TestWebappSessions(unittest.TestCase):
         self.assertFalse((self.sessions_dir / stale).exists())
         self.assertTrue((self.sessions_dir / fresh).exists())
 
+    def test_caregiver_panel_renders_phase3_memory_badges(self):
+        from memory.store import MemoryScope, MemoryStore, PrivacyLevel
+        session_id, _ = webapp.init_session()
+        data_dir, _ = webapp._session_dirs(session_id)
+        store = MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
+
+        now = time.time()
+        # 1. Temporary item with future expiration
+        store.add(
+            "Sarah dropping groceries at 4 PM",
+            source="caregiver_memo",
+            scope=MemoryScope.TEMPORARY.value,
+            expires_at=now + 7200,
+        )
+        # 2. Private caregiver-only item
+        store.add(
+            "Planning surprise 80th birthday party",
+            source="caregiver_note",
+            privacy=PrivacyLevel.CAREGIVER_ONLY.value,
+        )
+        # 3. Superseded item
+        store.supersede("Dad loves jazz", "Senior no longer listens to jazz; prefers classical")
+
+        panel = webapp._format_caregiver_panel(session_id)
+        self.assertIn("🟢 **[Permanent]**", panel)
+        self.assertIn("🕒 **[Temporary — expires in", panel)
+        self.assertIn("🔒 **[Caregiver Only — Hidden from Dad]**", panel)
+        self.assertIn("🔄 _[Superseded]_", panel)
+
 
 if __name__ == "__main__":
     unittest.main()

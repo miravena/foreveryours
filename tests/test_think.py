@@ -114,6 +114,27 @@ class TestThink(unittest.TestCase):
             _, kwargs = mock_client.chat.completions.create.call_args
             self.assertEqual(kwargs.get("max_tokens"), 1024)
 
+    def test_stream_reply_disables_thinking_by_default(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_client = MagicMock()
+        with patch("pipeline.think.get_client", return_value=mock_client), \
+             patch("pipeline.think.THINK_ENABLE_REASONING", False):
+            list(think.stream_reply("Hello", []))
+            _, kwargs = mock_client.chat.completions.create.call_args
+            extra_body = kwargs.get("extra_body", {})
+            self.assertEqual(extra_body.get("chat_template_kwargs"), {"enable_thinking": False})
+
+    def test_stream_reply_enables_thinking_when_configured(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_client = MagicMock()
+        with patch("pipeline.think.get_client", return_value=mock_client), \
+             patch("pipeline.think.THINK_ENABLE_REASONING", True):
+            list(think.stream_reply("Hello", []))
+            _, kwargs = mock_client.chat.completions.create.call_args
+            self.assertNotIn("extra_body", kwargs)
+
     def test_system_prompt_rules_zero_memory_uncertainty_and_privacy(self):
         prompt = think.SYSTEM_PROMPT
         self.assertIn("ZERO-MEMORY DEFAULT", prompt)

@@ -78,6 +78,9 @@ def build_prompt(
     return messages
 
 
+THINK_ENABLE_REASONING = os.environ.get("THINK_ENABLE_REASONING", "false").lower() in ("true", "1", "yes")
+
+
 def stream_reply(
     transcript: str,
     facts: list[str],
@@ -92,9 +95,9 @@ def stream_reply(
     # from third-party aggregators, not Nebius's own docs -- verify against the
     # live Token Factory model list once a key is in hand (see IMPLEMENTATION_PLAN.md).
     model = os.environ.get("THINK_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
-    stream = client.chat.completions.create(
-        model=model,
-        messages=build_prompt(
+    kwargs = {
+        "model": model,
+        "messages": build_prompt(
             transcript,
             facts,
             guardrails=guardrails,
@@ -102,10 +105,16 @@ def stream_reply(
             caregiver_updates=caregiver_updates,
             intent=intent,
         ),
-        stream=True,
-        max_tokens=1024,
-        temperature=0.6,
-    )
+        "stream": True,
+        "max_tokens": 1024,
+        "temperature": 0.6,
+    }
+    # When reasoning is disabled (default for voice turns), tell Token Factory to bypass
+    # hidden chain-of-thought tokens, dropping time-to-first-token to <1.0s (Issue #17).
+    if not THINK_ENABLE_REASONING:
+        kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
+
+    stream = client.chat.completions.create(**kwargs)
     for chunk in stream:
         delta = chunk.choices[0].delta.content if chunk.choices else None
         if delta:

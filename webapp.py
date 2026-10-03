@@ -56,7 +56,7 @@ from pathlib import Path
 import gradio as gr
 
 from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags
-from memory.store import MemoryStore
+from memory.store import MemoryScope, MemoryStore, PrivacyLevel
 from pipeline import hear
 from pipeline.orchestrator import run_turn
 
@@ -163,8 +163,36 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     items = store.all()
     if not items:
         lines.append("_(nothing briefed yet)_")
+    now = time.time()
     for item in items:
-        lines.append(f"- [{item.source}] {item.text}")
+        # Privacy badge
+        is_private = (item.privacy == PrivacyLevel.CAREGIVER_ONLY.value)
+        priv_badge = "🔒 **[Caregiver Only — Hidden from Dad]** " if is_private else ""
+
+        # Scope & Status badge
+        if item.status == "superseded":
+            badge = "🔄 _[Superseded]_ "
+            desc = f"~~{item.text}~~"
+            if item.superseded_by:
+                desc += f" → *Replaced by: {item.superseded_by}*"
+        elif item.expires_at is not None:
+            remaining = item.expires_at - now
+            if remaining <= 0:
+                badge = "⌛ _[Expired]_ "
+                desc = f"~~{item.text}~~"
+            else:
+                mins = max(1, int(remaining // 60))
+                time_str = f"{mins}m" if mins < 60 else f"{mins // 60}h {mins % 60}m"
+                badge = f"🕒 **[Temporary — expires in {time_str}]** "
+                desc = item.text
+        elif item.scope == MemoryScope.HISTORICAL.value:
+            badge = "📜 _[Historical]_ "
+            desc = item.text
+        else:
+            badge = "🟢 **[Permanent]** "
+            desc = item.text
+
+        lines.append(f"- {badge}{priv_badge}{desc} `({item.source})`")
     return "\n".join(lines)
 
 

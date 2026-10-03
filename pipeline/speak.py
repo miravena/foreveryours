@@ -68,8 +68,11 @@ def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
     # avoids the long-lived pyttsx3 C-buffer memory leak and 19-sentence silence bug #28)
     cli = _get_espeak_cli()
     if cli is not None:
+        # -s 150: comfortable eldercare speech rate (default is 175 wpm)
+        # -p 45: slightly lower pitch for warmer, less metallic timbre
+        # -w: output to WAV file
         subprocess.run(
-            [cli, "-s", "155", "-w", str(out_path), sentence],
+            [cli, "-s", "150", "-p", "45", "-w", str(out_path), sentence],
             check=True,
             capture_output=True,
         )
