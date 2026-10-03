@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -151,8 +152,20 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
 
-    lines = ["### What ForeverYours has told you"]
+    lines = []
     flag_items = flags.all()
+    distress_flags = [f for f in flag_items if f.severity in ("distress", "confusion")]
+    if distress_flags:
+        latest = distress_flags[-1]
+        disclosed = "✅ **Disclosed to Senior in conversation**" if latest.disclosed_to_senior else "⚠️ **NOT yet disclosed**"
+        lines.append(
+            "> 🚨 **HIGH PRIORITY SAFETY ALERT DISPATCHED**\n"
+            f"> **Event:** {latest.text}\n"
+            f"> **Severity:** `{latest.severity.upper()}` | **Status:** Caregiver notified\n"
+            f"> **Disclosure:** {disclosed}\n"
+        )
+
+    lines.append("### What ForeverYours has told you")
     if not flag_items:
         lines.append("_No flags yet. You'll see something here the moment Dad says something worth knowing about._")
     for flag in reversed(flag_items):  # newest first -- this is the thing a caregiver glances at
@@ -220,15 +233,33 @@ def _combine_audio_chunks(audio_paths: list[Path], out_dir: Path) -> Path | None
 
 
 def run_demo_turn(
-    audio_in: str | None, history: list[dict], session_id: str | None
-) -> tuple[str, str | None, list[dict], str, str]:
+    audio_in: str | None = None,
+    text_in_or_history: str | list[dict] | None = None,
+    history_or_session: list[dict] | str | None = None,
+    session_id: str | None = None,
+    text_in: str | None = None,
+) -> tuple[str, str | None, list[dict], str, str, str]:
+    if isinstance(text_in_or_history, list):
+        # Called as: run_demo_turn(audio_in, history, session_id)
+        history = text_in_or_history
+        session_id = history_or_session if isinstance(history_or_session, str) else session_id
+        actual_text = text_in
+    else:
+        # Called as: run_demo_turn(audio_in, text_in, history, session_id)
+        actual_text = text_in_or_history
+        history = history_or_session if isinstance(history_or_session, list) else []
+        session_id = session_id
+
     session_id = session_id or _new_session()
-    out = _run_demo_turn(audio_in, history, session_id)
-    return (*out, session_id)
+    out = _run_demo_turn(audio_in, actual_text, history, session_id)
+    return (*out, session_id, "")
 
 
 def _run_demo_turn(
-    audio_in: str | None, history: list[dict], session_id: str
+    audio_in: str | None,
+    text_in: str | None,
+    history: list[dict],
+    session_id: str,
 ) -> tuple[str, str | None, list[dict], str]:
     data_dir, audio_dir = _session_dirs(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
@@ -244,12 +275,15 @@ def _run_demo_turn(
             panel(),
         )
 
-    if not audio_in:
-        return "Record or upload something first.", None, history, panel()
+    if audio_in:
+        transcript = hear.transcribe(Path(audio_in))
+    elif text_in and text_in.strip():
+        transcript = text_in.strip()
+    else:
+        return "Record audio or type what Dad says first.", None, history, panel()
 
-    transcript = hear.transcribe(Path(audio_in))
     if not transcript.strip():
-        return "Couldn't make out any speech in that clip -- try again.", None, history, panel()
+        return "Couldn't make out any speech or text -- try again.", None, history, panel()
 
     _clear_session_audio(audio_dir)
     try:
@@ -262,7 +296,7 @@ def _run_demo_turn(
             return (
                 f'**Dad said:** "{transcript}"\n\n'
                 f"⚠️ *Companion reply paused: NEBIUS_API_KEY is pending approval.*\n\n"
-                f"👉 **Try an emergency phrase:** Say *\"I fell down earlier and I'm scared\"* — the safety fast-path runs completely offline with real spoken voice!",
+                f"👉 **Try an emergency phrase:** Say or type *\"I fell down earlier and I'm scared\"* — the safety fast-path runs completely offline with real spoken voice!",
                 None,
                 history,
                 panel(),
@@ -284,8 +318,23 @@ def _run_demo_turn(
     combined_audio = _combine_audio_chunks(result.audio_paths, audio_dir)
     reply_audio = str(combined_audio) if combined_audio else None
     transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
+    if result.caregiver_flag:
+        transcript_and_reply += "\n\n*(📢 Honest Safety Disclosure: Caregiver notified with Dad's knowledge)*"
     return transcript_and_reply, reply_audio, new_history, panel()
 
+
+def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> tuple[str, str, str]:
+    """Caregiver submits context via text note (e.g. from work / phone)."""
+    session_id = session_id or _new_session()
+    if not memo_text or not memo_text.strip():
+        return _format_caregiver_panel(session_id), session_id, ""
+    data_dir, _ = _session_dirs(session_id)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
+    for raw_part in re.split(r"[.\n]+", memo_text):
+        line = raw_part.strip().rstrip(".")
+        if line:
+            store.add(line, source="caregiver_memo")
+    return _format_caregiver_panel(session_id), session_id, ""
 
 
 def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) -> tuple[str, str]:
@@ -307,7 +356,7 @@ def build_demo() -> gr.Blocks:
     with gr.Blocks(title="ForeverYours — judge demo", delete_cache=GRADIO_CACHE_SWEEP) as demo:
         gr.Markdown(
             "# ForeverYours\n"
-            "Watch both sides at once: talk as the senior on the left, watch the caregiver side "
+            "Watch both sides at once: talk or type as the senior on the left, watch the caregiver side "
             "on the right update live. Try an ordinary remark first, then try something like "
             "\"I fell down earlier\" -- the right side updates within a couple seconds, "
             "and the reply on the left tells Dad, out loud, that it's doing that.\n\n"
@@ -327,6 +376,11 @@ def build_demo() -> gr.Blocks:
             with gr.Column():
                 gr.Markdown("## 🧑 Senior side")
                 audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Speak (as the senior)")
+                text_in = gr.Textbox(
+                    placeholder="Or type what Dad says (e.g. 'I fell down earlier' or 'Who is Sarah?')...",
+                    label="Type (as the senior)",
+                    lines=1,
+                )
                 # Judges without a mic (or who'd rather not record their own voice)
                 # can still drive every beat with one click.
                 gr.Examples(
@@ -341,17 +395,44 @@ def build_demo() -> gr.Blocks:
             with gr.Column():
                 gr.Markdown("## 👩 Caregiver side (live)")
                 caregiver_panel = gr.Markdown(_format_caregiver_panel(None))
-                with gr.Accordion("🎙️ Submit Caregiver Voice Memo (Beat 1)", open=False):
-                    memo_audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Record context memo")
-                    save_memo_btn = gr.Button("Save Voice Memo", variant="secondary")
+                with gr.Accordion("📝 Submit Caregiver Memo (Beat 1 Onboarding)", open=False):
+                    with gr.Tabs():
+                        with gr.TabItem("Type Note"):
+                            memo_text_in = gr.Textbox(
+                                placeholder="e.g. Dad loves chicken soup. Sarah is dropping off groceries at 4 PM.",
+                                label="Write context memo",
+                                lines=2,
+                            )
+                            save_text_memo_btn = gr.Button("Save Text Memo", variant="secondary")
+                        with gr.TabItem("Record Voice Memo"):
+                            memo_audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Record context memo")
+                            save_audio_memo_btn = gr.Button("Save Voice Memo", variant="secondary")
 
         run_btn.click(
             fn=run_demo_turn,
-            inputs=[audio_in, history_state, session_state],
-            outputs=[transcript_out, audio_out, history_state, caregiver_panel, session_state],
+            inputs=[audio_in, text_in, history_state, session_state],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, session_state, text_in],
         )
 
-        save_memo_btn.click(
+        text_in.submit(
+            fn=run_demo_turn,
+            inputs=[audio_in, text_in, history_state, session_state],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, session_state, text_in],
+        )
+
+        save_text_memo_btn.click(
+            fn=save_caregiver_text_memo,
+            inputs=[memo_text_in, session_state],
+            outputs=[caregiver_panel, session_state, memo_text_in],
+        )
+
+        memo_text_in.submit(
+            fn=save_caregiver_text_memo,
+            inputs=[memo_text_in, session_state],
+            outputs=[caregiver_panel, session_state, memo_text_in],
+        )
+
+        save_audio_memo_btn.click(
             fn=save_caregiver_voice_memo,
             inputs=[memo_audio_in, session_state],
             outputs=[caregiver_panel, session_state],

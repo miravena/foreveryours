@@ -144,6 +144,13 @@ class TestThink(unittest.TestCase):
         self.assertIn("prefer using ZERO memories", prompt)
         self.assertIn("I don't have a confirmed time for that", prompt)
 
+    def test_system_prompt_rules_clinical_and_anti_parasocial(self):
+        prompt = think.SYSTEM_PROMPT
+        self.assertIn("NO MEDICAL DIAGNOSIS OR MEDICATION ADVICE", prompt)
+        self.assertIn("DO NOT PRETEND TO HAVE A PHYSICAL BODY OR PERFORM IN-PERSON ACTIONS", prompt)
+        self.assertIn("ANTI-PARASOCIAL CONNECTION & REAL-WORLD TIES", prompt)
+        self.assertIn("Never diagnose medical symptoms, recommend pill dosages", prompt)
+        self.assertIn("Never encourage exclusivity or claim to replace human relationships", prompt)
 
 
 if __name__ == "__main__":
