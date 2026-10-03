@@ -138,6 +138,7 @@ def run_turn(
     caregiver_name: str = "your family",
     history: list[dict] | None = None,
     consecutive_errors: int = 0,
+    simulated_hour: int | None = None,
 ) -> TurnResult:
     """`history` is session-scoped prior-turn context (see think.build_prompt's
     docstring for why this is kept separate from memory_store) -- pass None
@@ -159,11 +160,24 @@ def run_turn(
 
     t_now = time.time()
     intent = detect_intent(transcript)
+    
+    # Cognitive Drift: Perseveration Tracking
+    if history and intent in (Intent.LOGISTICAL, Intent.MEMORY_REQUEST):
+        user_msgs = [msg["content"] for msg in history if msg.get("role") == "user"]
+        if len(user_msgs) >= 2:
+            if detect_intent(user_msgs[-1]) == intent and detect_intent(user_msgs[-2]) == intent:
+                flags.add(
+                    text=f"Perseveration loop detected: Senior asked a {intent.value} question 3 times in a row.",
+                    severity="confusion",
+                    disclosed_to_senior=False,
+                )
+
     guardrails = memory_store.caregiver_guardrails()
     raw_schedule = memory_store.caregiver_schedule_updates(now=t_now)
     caregiver_updates = [_sanitize_caregiver_update(u, caregiver_name) for u in raw_schedule]
     profile_facts = memory_store.senior_profile_facts(now=t_now)
     recalled = [m.text for m in memory_store.search(transcript, now=t_now)]
+
 
     # History-aware anchor rotation: If an anchor (e.g. jazz) was used in the previous turn,
     # rotate unmentioned anchors to the front to prevent repetitive responses.
@@ -225,6 +239,7 @@ def run_turn(
             history=history,
             caregiver_updates=filtered_schedule,
             intent=intent.value,
+            current_hour=simulated_hour,
         )
         sentences = think.sentence_chunks(token_stream)
         

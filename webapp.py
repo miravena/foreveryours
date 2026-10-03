@@ -255,22 +255,29 @@ def run_demo_turn(
     text_in_or_history: str | list[dict] | None = None,
     history_or_session: list[dict] | str | None = None,
     session_id: str | None = None,
-    text_in: str | None = None,
-) -> tuple[str, str | None, list[dict], str, str, str]:
+    simulated_time_in: str | None = None,
+) -> tuple[str, str | None, list[dict], str, str, str, str]:
     if isinstance(text_in_or_history, list):
-        # Called as: run_demo_turn(audio_in, history, session_id)
         history = text_in_or_history
-        session_id = history_or_session if isinstance(history_or_session, str) else session_id
-        actual_text = text_in
+        session_id_val = history_or_session if isinstance(history_or_session, str) else session_id
+        actual_text = None # audio mode fallback
+        simulated_time_str = "Morning (Default)"
     else:
-        # Called as: run_demo_turn(audio_in, text_in, history, session_id)
         actual_text = text_in_or_history
         history = history_or_session if isinstance(history_or_session, list) else []
-        session_id = session_id
+        session_id_val = session_id
+        simulated_time_str = simulated_time_in or "Morning (Default)"
 
-    session_id = session_id or _new_session()
-    out = _run_demo_turn(audio_in, actual_text, history, session_id)
-    return (*out, session_id, "")
+    session_id_val = session_id_val or _new_session()
+    
+    simulated_hour = 10
+    if "Sundowning" in simulated_time_str:
+        simulated_hour = 18
+    elif "Night" in simulated_time_str:
+        simulated_hour = 23
+        
+    out = _run_demo_turn(audio_in, actual_text, history, session_id_val, simulated_hour)
+    return (*out, session_id_val, "")
 
 
 def _run_demo_turn(
@@ -278,11 +285,14 @@ def _run_demo_turn(
     text_in: str | None,
     history: list[dict],
     session_id: str,
-) -> tuple[str, str | None, list[dict], str]:
+    simulated_hour: int = 10,
+) -> tuple[str, str | None, list[dict], str, str]:
     data_dir, audio_dir = _session_dirs(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
     panel = lambda: _format_caregiver_panel(session_id)  # noqa: E731
+
+    biomarkers = {"wpm": 0.0, "avg_pause_s": 0.0}
 
     if not _rate_limit_ok():
         return (
@@ -291,14 +301,15 @@ def _run_demo_turn(
             None,
             history,
             panel(),
+            "### 📊 Acoustic Biomarkers\n_Rate limited_",
         )
 
     if text_in and text_in.strip():
         transcript = text_in.strip()
     elif audio_in:
-        transcript = hear.transcribe(Path(audio_in))
+        transcript, biomarkers = hear.transcribe(Path(audio_in), return_metrics=True)
     else:
-        return "Record audio or type what Dad says first.", None, history, panel()
+        return "Record audio or type what Dad says first.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_"
 
     if not transcript.strip():
         return "Couldn't make out any speech or text -- try again.", None, history, panel()
@@ -306,7 +317,7 @@ def _run_demo_turn(
     _clear_session_audio(audio_dir)
     try:
         result = run_turn(
-            transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history
+            transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour
         )
     except Exception as exc:
         err = str(exc)
@@ -318,6 +329,7 @@ def _run_demo_turn(
                 None,
                 history,
                 panel(),
+                "### 📊 Acoustic Biomarkers\n_Awaiting API Key_",
             )
         raise
 
@@ -338,7 +350,15 @@ def _run_demo_turn(
     transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
     if result.caregiver_flag:
         transcript_and_reply += "\n\n*(📢 Honest Safety Disclosure: Caregiver notified with Dad's knowledge)*"
-    return transcript_and_reply, reply_audio, new_history, panel()
+        
+    wpm = biomarkers.get("wpm", 0.0)
+    pause = biomarkers.get("avg_pause_s", 0.0)
+    if wpm > 0:
+        biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Longitudinal drift tracked over time._"
+    else:
+        biomarker_str = "### 📊 Acoustic Biomarkers\n_Calculated from live voice input only_"
+
+    return transcript_and_reply, reply_audio, new_history, panel(), biomarker_str
 
 
 def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> tuple[str, str, str]:
@@ -407,12 +427,21 @@ def build_demo() -> gr.Blocks:
                     label="No mic? Try a sample clip",
                     cache_examples=False,
                 )
+                
+                with gr.Accordion("Clinical Configuration", open=False):
+                    simulated_time_in = gr.Dropdown(
+                        choices=["Morning (Default)", "Evening (Sundowning)", "Night"], 
+                        value="Morning (Default)", 
+                        label="Simulated Time of Day"
+                    )
+
                 run_btn = gr.Button("Send", variant="primary")
                 transcript_out = gr.Markdown(label="Conversation")
                 audio_out = gr.Audio(label="Companion's reply", autoplay=True)
             with gr.Column():
                 gr.Markdown("## 👩 Caregiver side (live)")
                 caregiver_panel = gr.Markdown(_format_caregiver_panel(None))
+                biomarkers_panel = gr.Markdown("### 📊 Acoustic Biomarkers\n_Awaiting voice input..._")
                 with gr.Accordion("📝 Submit Caregiver Memo (Beat 1 Onboarding)", open=False):
                     with gr.Tabs():
                         with gr.TabItem("Type Note"):
@@ -428,14 +457,14 @@ def build_demo() -> gr.Blocks:
 
         run_btn.click(
             fn=run_demo_turn,
-            inputs=[audio_in, text_in, history_state, session_state],
-            outputs=[transcript_out, audio_out, history_state, caregiver_panel, session_state, text_in],
+            inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in],
         )
 
         text_in.submit(
             fn=run_demo_turn,
-            inputs=[audio_in, text_in, history_state, session_state],
-            outputs=[transcript_out, audio_out, history_state, caregiver_panel, session_state, text_in],
+            inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in],
         )
 
         save_text_memo_btn.click(

@@ -17,7 +17,7 @@ import webapp
 
 class TestWebappSessions(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.sessions_dir = Path(self.temp_dir.name) / "sessions"
         self.patches = [
             patch.object(webapp, "SESSIONS_DIR", self.sessions_dir),
@@ -34,7 +34,7 @@ class TestWebappSessions(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _turn(self, said: str, session_id: str):
-        with patch.object(webapp.hear, "transcribe", return_value=said):
+        with patch.object(webapp.hear, "transcribe", return_value=(said, {"wpm": 0.0, "avg_pause_s": 0.0})):
             return webapp.run_demo_turn("fake.wav", [], session_id)
 
     def test_new_session_is_prebriefed(self):
@@ -115,7 +115,7 @@ class TestWebappSessions(unittest.TestCase):
             history_or_session=[],
             session_id=session_id,
         )
-        transcript_and_reply, reply_audio, new_history, panel, sess, cleared_text = out
+        transcript_and_reply, reply_audio, new_history, panel, biomarkers, sess, cleared_text = out
         self.assertIn("Dad said:** \"I fell down earlier and I'm scared\"", transcript_and_reply)
         self.assertIn("Companion replied:", transcript_and_reply)
         self.assertIn("Honest Safety Disclosure", transcript_and_reply)
@@ -145,15 +145,11 @@ class TestWebappSessions(unittest.TestCase):
         self.assertIn("Severity:** `DISTRESS`", panel)
         self.assertIn("Disclosure:** ✅ **Disclosed to Senior in conversation**", panel)
 
-
-if __name__ == "__main__":
-    unittest.main()
-
     def test_dual_input_prioritizes_text(self):
         session_id, _ = webapp.init_session()
-        with patch.object(webapp.hear, "transcribe", return_value="Audio transcript"):
+        with patch.object(webapp.hear, "transcribe", return_value=("Audio transcript", {"wpm": 0.0, "avg_pause_s": 0.0})):
             # When both text and audio are provided, text_in takes precedence
-            transcript_out, audio_out, history_state, panel, out_sess_id, out_text_in = webapp.run_demo_turn(
+            transcript_out, audio_out, history_state, panel, biomarkers, out_sess_id, out_text_in = webapp.run_demo_turn(
                 audio_in="fake.wav",
                 text_in_or_history="Text transcript",
                 history_or_session=[],
@@ -161,3 +157,6 @@ if __name__ == "__main__":
             )
             self.assertIn("Text transcript", transcript_out)
             self.assertNotIn("Audio transcript", transcript_out)
+
+if __name__ == "__main__":
+    unittest.main()

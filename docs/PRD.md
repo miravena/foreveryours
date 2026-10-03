@@ -62,3 +62,10 @@ Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackat
 (Personal AI track) on Nebius AI Cloud / Token Factory with open-weight NVIDIA models — see
 `README.md`'s Pipeline section for exactly where that model call sits and why latency (under 2s
 to first audio) is treated as a judging risk, not an afterthought.
+
+## Clinical and Acoustic Resilience (Advanced Features)
+
+To elevate the app from a basic bot to a clinical-grade companion, the architecture supports several advanced layers:
+- **Acoustic Environment & Real-World Speech:** TV crosstalk is rejected using aggressive Voice Activity Detection (VAD). **Note:** Full-Duplex Barge-In (stopping audio mid-sentence) is an explicitly intended *hardware-layer* integration for production, not possible natively in the push-to-talk web demo.
+- **Circadian Dynamics:** The system modifies its behavior based on the time of day, natively adapting to Sundowning Syndrome (16:00 - 20:00) by keeping responses simple and soothing, and entering Night Mode for quiet rest.
+- **Longitudinal Cognitive Drift:** The system tracks acoustic biomarkers (Speaking Rate / Pauses) and conversational loops (Perseveration Tracking). If a senior asks a logistical question 3 times in a row, a confusion flag is immediately surfaced to caregivers.

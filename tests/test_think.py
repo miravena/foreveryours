@@ -155,3 +155,11 @@ class TestThink(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_circadian_prompts_sundowning(self):
+        prompt = think.build_prompt("Hello", [], intent="CASUAL", current_hour=18)
+        self.assertTrue(any("SUNDOWNING SYNDROME ACTIVE" in b for b in prompt))
+
+    def test_circadian_prompts_night(self):
+        prompt = think.build_prompt("Hello", [], intent="CASUAL", current_hour=23)
+        self.assertTrue(any("NIGHT MODE" in b for b in prompt))

@@ -45,10 +45,18 @@ def build_prompt(
     history: list[dict] | None = None,
     caregiver_updates: list[str] | None = None,
     intent: str | None = None,
+    current_hour: int | None = None,
 ) -> list[dict]:
     """Builds a structured eldercare prompt partitioned into semantic categories:
     senior profile anchors, family schedule updates, safety guardrails, and detected intent."""
     blocks = [SYSTEM_PROMPT]
+    
+    if current_hour is not None:
+        if 16 <= current_hour <= 20:
+            blocks.append("CIRCADIAN DYNAMICS (SUNDOWNING SYNDROME ACTIVE): It is late afternoon/evening. The senior may be experiencing sundowning anxiety, disorientation, or fatigue. Keep your sentences extremely short, highly soothing, and avoid asking complex questions, making them recall schedules, or introducing new information.")
+        elif 22 <= current_hour or current_hour <= 6:
+            blocks.append("CIRCADIAN DYNAMICS (NIGHT MODE): It is nighttime. The senior should be resting. Speak very softly, briefly, and gently encourage them to go back to sleep if they are awake.")
+
     if intent:
         blocks.append(f"CURRENT CONVERSATIONAL INTENT: {intent}")
         if intent == "EMOTIONAL_SUPPORT":
@@ -89,6 +97,7 @@ def stream_reply(
     history: list[dict] | None = None,
     caregiver_updates: list[str] | None = None,
     intent: str | None = None,
+    current_hour: int | None = None,
 ) -> Iterator[str]:
     client = get_client()
     # nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B: compact MoE, better latency fit for our
@@ -105,6 +114,7 @@ def stream_reply(
             history=history,
             caregiver_updates=caregiver_updates,
             intent=intent,
+            current_hour=current_hour,
         ),
         "stream": True,
         "max_tokens": 1024,
