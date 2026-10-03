@@ -19,10 +19,10 @@ it links out to the GitHub Issue for anything that needs more than a paragraph.
 ```
 1. Team Nebius key on hand                   <- 2nd key, so the deploy/tests/video don't
                                                 depend on one person's personal credits
-2. Fix silent TTS (#28) + narrow fast-path    <- small builds, no key needed;
-   "help me" false positives (#15)              both must land BEFORE a public URL exists
+2. Fix silent TTS (#28) + narrow fast-path    <- Done (10-03); code unblocked
+   "help me" false positives (#15)              for public Space deploy
 3. Go live on HF Spaces (#11)                <- one command (scripts/deploy_hf_space.py);
-                                                needs 1 + 2
+                                                needs 1 (key)
 4. Latency: reasoning off, re-measure (#17)  <- needs a live key; build browser streaming
                                                 only if still > ~2s after this
 5. Early Devpost draft submitted (#6, #20)    <- live URL + current video; editable until
@@ -39,7 +39,7 @@ it links out to the GitHub Issue for anything that needs more than a paragraph.
 | M2 | PRD + implementation plan + this roadmap | **Done** (PR #8, merged 10-01; kept current since) | — |
 | M3 | ASR backend decided | **Done**: local `faster-whisper` (see below) | — |
 | M4 | Real voice I/O wired ([#9](../../issues/9)) | **Done** (PRs #23, #26). Voice *quality* is still the Design risk: local espeak is robotic. A better local voice can ride along with the #28 fix if it's cheap; otherwise it's a stretch goal. | M3 |
-| M5 | Judge-accessible hosting ([#11](../../issues/11)) | **Ready to deploy, not live.** Nothing a judge can reach runs the app yet: Cloudflare Pages serves only the static `docs/index.html`. Deploy-ready for Spaces (per-visitor sessions, auto-deletion, sample clips, `scripts/deploy_hf_space.py`). **Blocked by [#28](../../issues/28)** (silent replies on a long-lived server) and [#15](../../issues/15) (a judge saying "help me remember…" triggers an URGENT flag). Closes when a public URL answers. Keep the Space awake through judging, because free Spaces sleep and a cold first click can hang. | M10, #28, #15 |
+| M5 | Judge-accessible hosting ([#11](../../issues/11)) | **Ready to deploy, not live.** Nothing a judge can reach runs the app yet: Cloudflare Pages serves only the static `docs/index.html`. Deploy-ready for Spaces (per-visitor sessions, auto-deletion, sample clips, `scripts/deploy_hf_space.py`). Code blockers **[#28](../../issues/28)** and **[#15](../../issues/15)** resolved (10-03). Closes when a public URL answers. Keep the Space awake through judging, because free Spaces sleep and a cold first click can hang. | M10 |
 | M6 | Live `NEBIUS_API_KEY` verification ([#1](../../issues/1)) | **Done** (PR #25: model inventory, beat2 live, 4.22s to first audio) | — |
 | M7 | Day-2 recall demo ([#3](../../issues/3)) | **Done** (PR #22) | — |
 | M7.5 | Sanity-check the name "ForeverYours" outside the team (can read as memorial/dating) | Open, low priority. Do it before the video is recorded, or keep the name by default. | — |

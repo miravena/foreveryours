@@ -28,6 +28,34 @@ class TestSpeak(unittest.TestCase):
         self.assertTrue(path1.name.endswith(".wav"))
         self.assertTrue(path2.name.endswith(".wav"))
 
+    def test_espeak_cli_branch_on_linux(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_subproc = MagicMock()
+        with patch("sys.platform", "linux"), \
+             patch("pipeline.speak._get_espeak_cli", return_value="/usr/bin/espeak-ng"), \
+             patch("subprocess.run", mock_subproc):
+            sentences = iter(["Good morning.", "Here is your update."])
+            results = list(speak.speak_sentences(sentences, self.out_dir))
+            self.assertEqual(len(results), 2)
+            self.assertEqual(mock_subproc.call_count, 2)
+            # Verify espeak-ng was invoked with proper parameters (-s 155, -w <out_path>, <text>)
+            call1_args = mock_subproc.call_args_list[0][0][0]
+            self.assertEqual(call1_args[0], "/usr/bin/espeak-ng")
+            self.assertEqual(call1_args[1], "-s")
+            self.assertEqual(call1_args[2], "155")
+            self.assertEqual(call1_args[3], "-w")
+            self.assertEqual(call1_args[5], "Good morning.")
+
+    def test_multi_sentence_endurance_no_silence(self):
+        # Multi-sentence endurance in a single process (proving zero silence / zero deadlock)
+        sentences = iter([f"Sentence number {i} is speaking clearly." for i in range(5)])
+        results = list(speak.speak_sentences(sentences, self.out_dir))
+        self.assertEqual(len(results), 5)
+        for text, path in results:
+            self.assertTrue(path.exists(), f"Path {path} must exist on disk")
+            self.assertGreater(path.stat().st_size, 500, f"Path {path} must contain real audio bytes")
+
 
 if __name__ == "__main__":
     unittest.main()

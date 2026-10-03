@@ -110,6 +110,11 @@ class TestMatureBenchmarks(unittest.TestCase):
             "I'm a little worn out today",
             "I'm feeling quite sleepy",
             "I rested on the sofa all afternoon",
+            "Help me remember my grandson's name",
+            "Can you help me understand today's schedule?",
+            "Help me find my reading glasses",
+            "Can you help me with this puzzle?",
+            "I think I'm falling asleep in front of the TV",
         ]
 
         false_alarms = 0

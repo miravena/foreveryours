@@ -21,13 +21,15 @@ from dataclasses import dataclass
 DISTRESS_PATTERNS = [
     r"\b(i('ve| have)?\s+had\s+a\s+fall|had\s+a\s+fall|took\s+a\s+fall)\b",
     r"\b(i('ve| have)?\s+fallen|fall(en|ing)?\s+(down|over|off))\b",
-    r"\bi('m| am)\s+falling\b",
+    r"\bi('m| am)\s+falling(?!\s+asleep)\b",
     r"\bfell(?!\s+asleep)\b",
     r"\bcan'?t get up\b",
-    r"\bhelp me\b",
+    r"\b(someone\s+help\s+me|please\s+help\s+me|help\s+me\s+please)\b",
+    r"\bhelp\s+me\s+(up|get\s+up|i\s+can'?t|i\s+fell|i('m| am)\s+(hurt|bleeding|stuck|trapped|in\s+pain))\b",
+    r"^(can\s+someone\s+)?help\s+me[!.?\s]*$",
     r"\bi('m| am)?\s*(hurt|bleeding|dizzy|can'?t breathe)\b",
     r"\bchest (pain|hurts?)\b",
-    r"\bcall (911|an ambulance|help)\b",
+    r"\bcall\s+(for\s+)?(911|an\s+ambulance|help)\b",
 ]
 
 CONFUSION_PATTERNS = [

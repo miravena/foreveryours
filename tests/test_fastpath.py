@@ -14,6 +14,11 @@ class TestFastPath(unittest.TestCase):
             "I'm dizzy and nauseous",
             "Call 911 right now",
             "I am bleeding from my hand",
+            "Help me!",
+            "Please help me",
+            "Someone help me!",
+            "Help me up",
+            "Call for help",
         ]
         for phrase in cases:
             with self.subTest(phrase=phrase):
@@ -23,6 +28,24 @@ class TestFastPath(unittest.TestCase):
                 self.assertIsNotNone(res.immediate_reply)
                 self.assertIn("notifying their family", res.continuation_note)
                 self.assertIn("URGENT: possible distress", res.caregiver_flag)
+
+    def test_conversational_help_requests_do_not_trigger(self):
+        # Issue #15: conversational help requests must NOT trigger emergency distress
+        cases = [
+            "Can you help me remember my grandson's name?",
+            "Help me understand what time Sarah is coming",
+            "Help me find my reading glasses",
+            "Help me choose what music to listen to",
+            "Can you help me with this puzzle?",
+            "Could you help me look for my coat?",
+            "I think I'm falling asleep in front of the TV",
+        ]
+        for phrase in cases:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertFalse(res.triggered, f"Conversational request '{phrase}' should not trigger emergency distress")
+                self.assertEqual(res.severity, "none")
+                self.assertIsNone(res.caregiver_flag)
 
     def test_unicode_curly_quotes_normalization(self):
         # Curly apostrophes from phone keyboard or ASR

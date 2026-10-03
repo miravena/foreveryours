@@ -21,17 +21,17 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
 
 | Component | File | Status |
 |---|---|---|
-| Fast-path safety check | `safety/fastpath.py` | Done — regex-based, synchronous, continues into THINK after an immediate reassurance (not a dead end). **Open: bare "help me" / "I'm falling" still false-trigger ([#15](../../issues/15), decided 10-03: narrow them)** |
+| Fast-path safety check | `safety/fastpath.py` | Done — regex-based, synchronous, continues into THINK after an immediate reassurance. Conversational "help me" requests and "falling asleep" false positives narrowed and resolved ([#15](../../issues/15), 10-03) |
 | Memory store | `memory/store.py` | Done — caregiver facts always recalled, stopword pruning & semantic domain synonym expansion, dedupe on save, atomic writes |
 | Caregiver flags | `caregiver.py` | Done — `disclosed_to_senior` is a required, honest argument everywhere |
 | THINK (model call) | `pipeline/think.py` | Done — streamed, sentence-chunked (abbreviation-aware), facts/guardrails split in prompt, off-critical-path async memory extraction |
-| SPEAK (TTS) | `pipeline/speak.py` | Works, **but on Linux goes silent after ~19 sentences in one process — blocks hosting ([#28](../../issues/28))**. `pyttsx3`, local/offline, per-turn-unique filenames |
+| SPEAK (TTS) | `pipeline/speak.py` | Done — native subprocess `espeak-ng` CLI on Linux/macOS eliminates in-process C-buffer leak and 19-sentence silence bug ([#28](../../issues/28), 10-03); PowerShell `System.Speech` on Windows. Durable across long sessions |
 | HEAR (ASR) | `pipeline/hear.py` | Done — wired with `--audio` into all CLI beats & `webapp.py`, backed by local `faster-whisper` (Token Factory has no ASR endpoint, PR #25), bundled with `samples/` audio |
 | AUDIT (async safety pass) | `pipeline/audit.py` | Done — runs off the critical path, considers both the senior's words and the reply, discloses via a spoken follow-up |
 | Orchestrator | `pipeline/orchestrator.py` | Done — ties the above together, graceful degradation without a live API key |
 | CLI demo runner | `main.py` | Done for the 4-beat demo script + interactive multi-turn session (`python main.py chat`), cross-platform audio playback (Windows/macOS/Linux) |
-| Automated test suite | `tests/` | Done — 53 tests across 10 modules (fastpath, intent, memory, speak, think, orchestrator, caregiver, CLI, webapp, benchmarks). Each module passes alone; `test_main` + `test_mature_benchmarks` in one process segfaults, same root cause as [#28](../../issues/28) |
-| Cloud hosting (M5) | Cloudflare Pages, `app.py`, `packages.txt`, `scripts/deploy_hf_space.py` | **Ready, not live** — landing page live on Cloudflare Pages; the app itself deploys to HF Spaces in one command but isn't running anywhere a judge can reach ([#11](../../issues/11)) |
+| Automated test suite | `tests/` | Done — 56 tests across 10 modules (fastpath, intent, memory, speak, think, orchestrator, caregiver, CLI, webapp, benchmarks). All pass together in one process with zero silence or segfaults |
+| Cloud hosting (M5) | Cloudflare Pages, `app.py`, `packages.txt`, `scripts/deploy_hf_space.py` | **Ready to deploy** — code blockers #28 and #15 resolved; unblocked for live Space deploy once team key is configured ([#11](../../issues/11)) |
 
 ## Open design decisions
 

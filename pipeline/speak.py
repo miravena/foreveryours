@@ -14,6 +14,8 @@ from __future__ import annotations
 import contextlib
 import io
 import itertools
+import shutil
+import subprocess
 import sys
 import time
 from collections.abc import Iterator
@@ -22,11 +24,19 @@ from pathlib import Path
 _turn_counter = itertools.count()
 
 
+def _get_espeak_cli() -> str | None:
+    """Finds native espeak-ng or espeak CLI binary if installed."""
+    for cmd in ("espeak-ng", "espeak"):
+        found = shutil.which(cmd)
+        if found:
+            return found
+    return None
+
+
 def _get_tts_engine():
-    if sys.platform == "win32":
-        # On Windows, pyttsx3 SAPI5 deadlocks when engine.runAndWait() is called
-        # repeatedly across multiple sentences in the same process. PowerShell's
-        # native System.Speech handles multi-sentence synthesis reliably.
+    # If on Windows or native espeak CLI is available, bypass pyttsx3 entirely
+    # to avoid C-buffer exhaustion and long-running process silence (Issue #28)
+    if sys.platform == "win32" or _get_espeak_cli() is not None:
         return None
     try:
         import pyttsx3
@@ -37,21 +47,8 @@ def _get_tts_engine():
 
 
 def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
-    if engine is not None:
-        engine.save_to_file(sentence, str(out_path))
-        # pyttsx3's espeak driver prints "Audio saved to <absolute path>" to
-        # stdout from its own _onSynth callback -- not something we call
-        # directly, so it can't be fixed by changing our own print calls.
-        # Suppressed here rather than left to leak the real filesystem path
-        # into anything that captures this process's stdout (e.g. a terminal
-        # recording meant for public release).
-        with contextlib.redirect_stdout(io.StringIO()):
-            engine.runAndWait()
-        return
-
+    # 1. On Windows: PowerShell System.Speech (avoids pyttsx3 SAPI5 deadlock)
     if sys.platform == "win32":
-        import subprocess
-
         safe_sentence = sentence.replace("'", " ").replace('"', ' ')
         # Also strip curly/smart quotes and apostrophes that LLMs love to produce
         for ch in "\u2018\u2019\u201a\u201b\u201c\u201d\u201e\u201f":
@@ -67,7 +64,25 @@ def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
         subprocess.run(["powershell", "-Command", ps_cmd], check=True, capture_output=True)
         return
 
-    raise RuntimeError("pyttsx3 is required for speech synthesis: pip install pyttsx3")
+    # 2. On Linux/macOS: Prefer espeak-ng / espeak CLI (spawns clean isolated process per sentence;
+    # avoids the long-lived pyttsx3 C-buffer memory leak and 19-sentence silence bug #28)
+    cli = _get_espeak_cli()
+    if cli is not None:
+        subprocess.run(
+            [cli, "-s", "155", "-w", str(out_path), sentence],
+            check=True,
+            capture_output=True,
+        )
+        return
+
+    # 3. Fallback to pyttsx3 in-process engine if CLI is not found
+    if engine is not None:
+        engine.save_to_file(sentence, str(out_path))
+        with contextlib.redirect_stdout(io.StringIO()):
+            engine.runAndWait()
+        return
+
+    raise RuntimeError("Speech synthesis unavailable: install espeak-ng or pyttsx3")
 
 
 def speak_sentences(sentences: Iterator[str], out_dir: Path) -> Iterator[tuple[str, Path]]:
