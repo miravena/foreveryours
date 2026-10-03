@@ -223,3 +223,27 @@ class TestOrchestrator(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+    @patch("pipeline.orchestrator.fastpath.check")
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.orchestrator.think.stream_reply", return_value=["Reply"])
+    def test_perseveration_tracking_flags_loop(self, mock_stream, mock_speak, mock_fast):
+        from pipeline.intent import Intent
+        from pipeline.fastpath import FastPathResult
+        mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        history = [
+            {"role": "user", "content": "What time is Sarah coming?"},
+            {"role": "assistant", "content": "Sarah is coming at 4 PM."},
+            {"role": "user", "content": "When is Sarah visiting?"},
+            {"role": "assistant", "content": "She's visiting at 4 PM today."},
+        ]
+        # The 3rd time
+        orchestrator.run_turn(
+            "What time did you say Sarah was coming?", 
+            self.store, 
+            self.flags, 
+            self.audio_dir, 
+            history=history
+        )
+        flag_items = self.flags.all()
+        self.assertTrue(any("Perseveration loop detected" in f.text for f in flag_items))

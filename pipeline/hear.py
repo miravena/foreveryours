@@ -35,15 +35,38 @@ def _get_whisper_model():
     return _whisper_model
 
 
-def transcribe(audio_path: Path) -> str:
+def transcribe(audio_path: Path, return_metrics: bool = False):
     if not audio_path.exists() or audio_path.stat().st_size == 0:
-        return ""
+        return ("", {}) if return_metrics else ""
 
     backend = os.environ.get("ASR_BACKEND", "whisper_local")
     if backend == "whisper_local":
         model = _get_whisper_model()
-        segments, _info = model.transcribe(str(audio_path))
-        return " ".join(seg.text.strip() for seg in segments)
+        segments, _info = model.transcribe(str(audio_path), vad_filter=True, word_timestamps=True)
+        
+        words = []
+        text = ""
+        for seg in segments:
+            text += seg.text.strip() + " "
+            if seg.words:
+                words.extend(seg.words)
+        text = text.strip()
+
+        metrics = {"wpm": 0.0, "avg_pause_s": 0.0}
+        if words and len(words) > 1:
+            duration_minutes = (words[-1].end - words[0].start) / 60.0
+            if duration_minutes > 0:
+                metrics["wpm"] = round(len(words) / duration_minutes, 1)
+            
+            pauses = []
+            for i in range(1, len(words)):
+                pause = words[i].start - words[i-1].end
+                if pause > 0:
+                    pauses.append(pause)
+            if pauses:
+                metrics["avg_pause_s"] = round(sum(pauses) / len(pauses), 2)
+
+        return (text, metrics) if return_metrics else text
     if backend == "nebius":
         from .nebius_client import get_client
 
@@ -51,5 +74,5 @@ def transcribe(audio_path: Path) -> str:
         model_name = os.environ.get("ASR_NEBIUS_MODEL", "nvidia/parakeet-tdt-1.1b")
         with open(audio_path, "rb") as f:
             result = client.audio.transcriptions.create(model=model_name, file=f)
-        return result.text
+        return (result.text, {"wpm": 0.0, "avg_pause_s": 0.0}) if return_metrics else result.text
     raise ValueError(f"unknown ASR_BACKEND: {backend}")
