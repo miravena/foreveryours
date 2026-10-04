@@ -28,8 +28,10 @@ reusing it for AUDIT adds no extra model cost.
 ## Consequences
 
 - **Gotcha:** hidden reasoning tokens dominated latency (4.22s to first audio). Sending
-  `enable_thinking: false` brought it to ~0.91s (M11, PR #29) without quality loss.
-- `Nemotron-3_5-Lightning` is the fallback if latency regresses.
+  `enable_thinking: false` (the default; `THINK_ENABLE_REASONING=true` turns reasoning back on)
+  brought it to ~0.9s (PR #29) without quality loss.
+- Both models are env-overridable (`THINK_MODEL`, `AUDIT_MODEL`), so a lighter Nemotron can be
+  swapped in if latency regresses.
 
 ## When to revisit
 

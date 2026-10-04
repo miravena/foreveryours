@@ -41,7 +41,7 @@ demo and the Gradio web demo).
 - Circadian awareness (sundowning and night-mode behaviour), acoustic
   biomarkers and perseveration tracking (#31).
 - PRD and implementation plan docs (#8); roadmap and principles.
-- Collaboration docs: `CHANGELOG.md`, PR and issue templates, `TEAM_STATUS.md`,
+- Collaboration docs: `CHANGELOG.md`, PR and issue templates, `TEAM_STATUS.md` (later removed, see Unreleased),
   `HOW_TO_WORK_HERE.md`, `docs/WORK_LOG.md` and the decision log `docs/decisions/`
   (ADR-001 to ADR-005) (#35).
 

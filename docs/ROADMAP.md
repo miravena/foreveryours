@@ -32,14 +32,14 @@ enforced version is each Issue's *blocked by* relationship.
 |---|---|---|
 | [M10 Team Nebius key](../../milestone/7) | A second Nebius key is on hand, so deploying, testing and recording don't depend on one person's credits | - |
 | [M4 Voice I/O + memory quality](../../milestone/1) | Real voice I/O wired; recall handles word inflections | - |
-| [M5 Judge-accessible hosting](../../milestone/2) **(MVP)** | A public HF Spaces URL answers, with the "help me" fast-path fixed ([ADR-003](decisions/ADR-003-hosting.md), [ADR-005](decisions/ADR-005-safety-fastpath.md)) | M10 |
+| [M5 Judge-accessible hosting](../../milestone/2) **(MVP)** | A public HF Spaces URL answers, with no false-positive distress alerts on the demo script ([ADR-003](decisions/ADR-003-hosting.md), [ADR-005](decisions/ADR-005-safety-fastpath.md)) | M10 |
 | [M11 Latency under 2s](../../milestone/5) | Under ~2s to first audio, measured on the hosted instance (if still above, build browser streaming) | M5 |
 | [M9 Representative + early draft](../../milestone/4) | Representative chosen; early editable Devpost draft with the live URL | M5 |
 | [M8 Final demo video](../../milestone/3) | Video of at most 3 minutes, recorded on the hosted URL | M5, ideally M11 |
 | [M12 Devpost text](../../milestone/6) | Final text with the video link | M8 |
 | [M13 Final review and submit](../../milestone/8) | Review freeze, end-to-end check, submitted | M8, M12 |
 
-Earlier milestones M1-M3, M6, M7 are done; see [`CHANGELOG.md`](../CHANGELOG.md).
+Work completed before these milestones is recorded in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Decided: ASR backend
 

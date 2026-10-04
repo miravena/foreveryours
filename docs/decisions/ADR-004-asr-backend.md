@@ -26,7 +26,8 @@ sponsor-tech requirement is met.
 
 ## Consequences
 
-Local compute and model download on the host; works offline.
+Local compute and model download on the host; works offline. The `ASR_BACKEND=nebius` path in
+`pipeline/hear.py` is retained but unused until Token Factory offers transcription.
 
 ## When to revisit
 

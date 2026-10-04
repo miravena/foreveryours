@@ -72,4 +72,4 @@ Things to watch for:
 - Use `[M##]` prefix (e.g., `[M5]`, `[M11]`) to link from ROADMAP milestones
 - Link related Issues and ADRs so context is always reachable
 - "Gotchas" are things you discovered; future workers can see them immediately
-- Anyone (Claude, Kimi, manual) can update this — it's just Markdown in GitHub
+- Either of us can update this — it's just Markdown in GitHub

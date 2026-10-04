@@ -42,12 +42,11 @@ Better voices are a nice-to-have after launch.
 - **Locked in to:** espeak voice quality; the `espeak-ng` system package on Linux.
 - **Amendment (2026-10-03, PR #29):** the #28 silence bug was fixed by invoking the
   `espeak-ng` CLI directly (one clean process per sentence) on Linux/macOS, bypassing
-  pyttsx3's C buffer. Windows uses `winsound`/pyttsx3. Issue #28 stays open until verified on
-  the hosted instance.
+  pyttsx3's C buffer. Windows uses PowerShell `System.Speech`.
 - **Gotcha:** `--no-play` suppresses playback (use it in tests and beat recording).
 
 ## When to revisit
 
 - A drop-in offline neural TTS with clearly better quality and small size appears.
-- #28 recurs on the hosted instance.
+- The silence bug ([#28](../../issues/28)) recurs on the hosted instance.
 - Design-score feedback names voice quality as the reason we lost points.

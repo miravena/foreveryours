@@ -140,7 +140,5 @@ key, it's config, not a merge conflict — `.env` is gitignored per-machine.
 
 ## Submission logistics
 
-Devpost requires one designated team "Representative" to hit submit. Decide
-who that is before the deadline and note it here once settled:
-
-- **Representative:** _TBD_
+Devpost requires one designated team "Representative" to hit submit. Who that is, and the
+deadline for deciding, is tracked in [#6](../../issues/6) (not in this file).

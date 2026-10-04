@@ -1,6 +1,6 @@
 # ADR-003: Host the judge demo on Hugging Face Spaces
 
-**Status:** Accepted (not yet live; tracked in [#11](../../issues/11))
+**Status:** Accepted
 **Date:** 2026-10-01
 **Decided by:** Team
 **Affects:** `app.py`, `webapp.py`, `scripts/deploy_hf_space.py`

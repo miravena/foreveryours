@@ -21,7 +21,7 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
 
 | Component | File | What it does |
 |---|---|---|
-| Fast-path safety check | `safety/fastpath.py` | regex-based, synchronous, continues into THINK after an immediate reassurance. "Falling asleep" false positives are excluded; the bare "help me" pattern is tracked in [#33](../../issues/33) |
+| Fast-path safety check | `safety/fastpath.py` | regex-based, synchronous, continues into THINK after an immediate reassurance. "Falling asleep" false positives are excluded; bare "help me" is narrowed to anchored/qualified forms (see [ADR-005](decisions/ADR-005-safety-fastpath.md)) |
 | Memory store | `memory/store.py` | caregiver facts always recalled, stopword pruning & semantic domain synonym expansion, dedupe on save, atomic writes |
 | Caregiver flags | `caregiver.py` | `disclosed_to_senior` is a required, honest argument everywhere |
 | THINK (model call) | `pipeline/think.py` | streamed, sentence-chunked (abbreviation-aware), facts/guardrails split in prompt, off-critical-path async memory extraction |
@@ -30,8 +30,8 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
 | AUDIT (async safety pass) | `pipeline/audit.py` | runs off the critical path, considers both the senior's words and the reply, discloses via a spoken follow-up |
 | Orchestrator | `pipeline/orchestrator.py` | ties the above together, graceful degradation without a live API key |
 | CLI demo runner | `main.py` | The 4-beat demo script + interactive multi-turn session (`python main.py chat`), cross-platform audio playback (Windows/macOS/Linux) |
-| Automated test suite | `tests/` | 56 tests across 10 modules (fastpath, intent, memory, speak, think, orchestrator, caregiver, CLI, webapp, benchmarks). Run in one process: `python -m unittest discover tests -v` |
-| Cloud hosting | Cloudflare Pages (landing page), `app.py`, `packages.txt`, `scripts/deploy_hf_space.py` | Landing page on Pages; the judge-facing demo on HF Spaces with per-visitor sessions. Progress: [M5](../../milestone/2) |
+| Automated test suite | `tests/` | Unit tests for every pipeline stage plus benchmarks. Run in one process: `python -m unittest discover tests -v` |
+| Cloud hosting | Cloudflare Pages (landing page), `app.py`, `packages.txt`, `scripts/deploy_hf_space.py` | Landing page on Pages; the judge-facing demo on HF Spaces with per-visitor sessions. Plan: [`ROADMAP.md`](ROADMAP.md) M5 |
 
 ## Design decisions
 
@@ -53,6 +53,4 @@ Facts that don't fit an ADR:
 
 ## Out of scope
 
-A caregiver-facing dashboard (explicitly deferred per `README.md`'s Status section) beyond the terminal panel. The old Issue #4 covered this; see its
-closing comment for why it was replaced with a narrower, higher-priority voice-I/O issue
-instead of being built as scoped.
+A caregiver-facing dashboard (explicitly deferred per `README.md`'s Status section) beyond the terminal panel.

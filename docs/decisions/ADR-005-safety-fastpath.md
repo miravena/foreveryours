@@ -20,8 +20,10 @@ Deterministic, under 50ms, no hallucination risk, and it can speak a reassurance
 
 ## Consequences
 
-- **Gotcha:** broad patterns false-positive. PR #29 tightened "I fell" vs "I fell asleep";
-  bare `\bhelp me\b` still false-triggers on "help me remember..." (open: #15 / #33).
+- **Gotcha:** broad patterns false-positive. The bare `help me` pattern was narrowed to anchored or
+  qualified forms (`help me`, `please help me`, `help me get up`, ...) so "help me remember..."
+  does not trigger, and `fell(?!\s+asleep)` excludes "I fell asleep". Near-misses are covered in
+  `tests/test_fastpath.py`. Remaining gaps are tracked on GitHub, not here.
 - Every pattern change needs a test in `tests/test_fastpath.py` for both the trigger and the
   near-miss.
 
