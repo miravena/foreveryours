@@ -1,77 +1,67 @@
 # Roadmap to submission
 
-Deadline: **2026-10-30, 10:00am PDT (17:00 UTC)**. This is the order we're actually working
-in, and why — not a wishlist. If you only read one doc to know "what's next," read this one;
-it links out to the GitHub Issue for anything that needs more than a paragraph.
+Deadline: **2026-10-30, 10:00am PDT (17:00 UTC)**.
 
-> **Re-planned 2026-10-03** (27 days out). Three things changed the order:
-> 1. **The hosted demo would go silent.** On Linux, espeak returns empty audio after about 19
->    sentences in one process ([#28](../../issues/28)). A hosted demo is one long-lived
->    process for every judge. This now blocks going live.
-> 2. **Latency is probably a config switch, not a build.** Most of the 4.22s is Nemotron's
->    hidden reasoning tokens (PR #25). Turning reasoning off is a documented one-line switch
->    to test first; browser streaming becomes the fallback ([#17](../../issues/17)).
-> 3. **Submit an early, editable Devpost draft.** A scored draft in hand beats a perfect entry
->    that misses the click. Proposed for ~10-20, not yet agreed ([#6](../../issues/6)).
+> **One source of truth.** This is one small repo with two workers, so work *state* lives in
+> exactly one place: **GitHub**. [Milestones](../../milestones) hold the order and due dates,
+> Issues hold scope, owner and acceptance criteria, and *blocked by* relationships hold the
+> dependencies. This page is the **plan and the reasoning** (what the milestones are, why in
+> this order, what the judges require). It deliberately has no status or date columns, because
+> a copy of GitHub's state is a second tracker that drifts. To see what is open, blocked or due:
+> [milestones, sorted by due date](../../milestones) · [open Issues](../../issues).
 
-## Critical path (in order)
+## Why this order
 
-```
-1. Team Nebius key on hand                   <- 2nd key, so the deploy/tests/video don't
-                                                depend on one person's personal credits
-2. Fix silent TTS (#28) + narrow fast-path    <- Done (10-03); code unblocked
-   "help me" false positives (#15)              for public Space deploy
-3. Go live on HF Spaces (#11)                <- one command (scripts/deploy_hf_space.py);
-                                                needs 1 (key)
-4. Latency: reasoning off, re-measure (#17)  <- needs a live key; build browser streaming
-                                                only if still > ~2s after this
-5. Early Devpost draft submitted (#6, #20)    <- live URL + current video; editable until
-                                                the deadline
-6. Final video on the hosted URL (#5)         <- after 3, ideally after 4
-7. Final Devpost text (#20, needs #14)        <- after 6; then re-submit the edit
-```
+1. **The hosted demo must not go silent.** On Linux, espeak returned empty audio after about 19
+   sentences in one process ([#28](../../issues/28)); a hosted demo is one long-lived process
+   for every judge, so this gates going live. Fix: [ADR-001](decisions/ADR-001-tts-backend.md).
+2. **Latency is mostly a config switch.** Most of the original 4.22s was Nemotron's hidden
+   reasoning tokens (PR #25); turning reasoning off was tested first, with browser streaming
+   as the fallback ([#17](../../issues/17), [ADR-002](decisions/ADR-002-think-audit-model.md)).
+3. **Submit an early, editable Devpost draft.** A scored draft in hand beats a perfect entry
+   that misses the click ([#6](../../issues/6)).
+4. **Leave review time.** The last milestone reserves days before the deadline for an
+   end-to-end check, so nothing is first seen on submission day.
 
-## Milestones
+## Milestones (plan; live dates and status are on GitHub)
 
-| # | Milestone | Status | Depends on |
-|---|---|---|---|
-| M1 | Core pipeline fixes (fast-path continuation, disclosure honesty, audit fix, etc.) | **Done** (PR #7, merged 10-01) | — |
-| M2 | PRD + implementation plan + this roadmap | **Done** (PR #8, merged 10-01; kept current since) | — |
-| M3 | ASR backend decided | **Done**: local `faster-whisper` (see below) | — |
-| M4 | Real voice I/O wired ([#9](../../issues/9)) | **Done** (PRs #23, #26). Voice *quality* is still the Design risk: local espeak is robotic. A better local voice can ride along with the #28 fix if it's cheap; otherwise it's a stretch goal. | M3 |
-| M5 | Judge-accessible hosting ([#11](../../issues/11)) | **Ready to deploy, not live.** Nothing a judge can reach runs the app yet: Cloudflare Pages serves only the static `docs/index.html`. Deploy-ready for Spaces (per-visitor sessions, auto-deletion, sample clips, `scripts/deploy_hf_space.py`). Code blockers **[#28](../../issues/28)** and **[#15](../../issues/15)** resolved (10-03). Closes when a public URL answers. Keep the Space awake through judging, because free Spaces sleep and a cold first click can hang. | M10 |
-| M6 | Live `NEBIUS_API_KEY` verification ([#1](../../issues/1)) | **Done** (PR #25: model inventory, beat2 live, 4.22s to first audio) | — |
-| M7 | Day-2 recall demo ([#3](../../issues/3)) | **Done** (PR #22) | — |
-| M7.5 | Sanity-check the name "ForeverYours" outside the team (can read as memorial/dating) | Open, low priority. Do it before the video is recorded, or keep the name by default. | — |
-| M8 | Submission video recorded ([#5](../../issues/5)) | Open. A proof-of-concept terminal video exists (`video/output/`); the final one is recorded on the hosted URL. | M5 (ideally M11) |
-| M9 | Devpost Representative + submission ([#6](../../issues/6)) | **Open — team decision pending.** Proposal: whoever is Representative submits an early, editable draft by ~10-20 (live URL + current video), then edits it up to the deadline. | M5 |
-| M10 | Team Nebius key on hand | **In progress (10-03)**: second free-credit account being set up, so deploying, testing and recording don't depend on one person's personal credits | — |
-| M11 | Perceived latency under ~2s ([#17](../../issues/17)) | **Done** (10-03): `enable_thinking: false` bypasses hidden reasoning tokens, dropping TTFT to 0.91s without quality degradation | M10 |
-| M12 | Devpost text ([#20](../../issues/20)) | **Done** (`docs/Project_Description.md` updated with #14 ChatGPT differentiator; 180s video storyboard drafted in `docs/VIDEO_SCRIPT.md`). Awaits final demo & video links | M5, M8 |
+Order is by due date on the [milestones page](../../milestones). "Depends on" is the plan; the
+enforced version is each Issue's *blocked by* relationship.
+
+| Milestone | Done means | Depends on |
+|---|---|---|
+| [M10 Team Nebius key](../../milestone/7) | A second Nebius key is on hand, so deploying, testing and recording don't depend on one person's credits | - |
+| [M4 Voice I/O + memory quality](../../milestone/1) | Real voice I/O wired; recall handles word inflections | - |
+| [M5 Judge-accessible hosting](../../milestone/2) **(MVP)** | A public HF Spaces URL answers, with the "help me" fast-path fixed ([ADR-003](decisions/ADR-003-hosting.md), [ADR-005](decisions/ADR-005-safety-fastpath.md)) | M10 |
+| [M11 Latency under 2s](../../milestone/5) | Under ~2s to first audio, measured on the hosted instance (if still above, build browser streaming) | M5 |
+| [M9 Representative + early draft](../../milestone/4) | Representative chosen; early editable Devpost draft with the live URL | M5 |
+| [M8 Final demo video](../../milestone/3) | Video of at most 3 minutes, recorded on the hosted URL | M5, ideally M11 |
+| [M12 Devpost text](../../milestone/6) | Final text with the video link | M8 |
+| [M13 Final review and submit](../../milestone/8) | Review freeze, end-to-end check, submitted | M8, M12 |
+
+Earlier milestones M1-M3, M6, M7 are done; see [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Decided: ASR backend
 
-**Local `faster-whisper`** (`ASR_BACKEND=whisper_local`). Token Factory returns 404 on
-`/audio/transcriptions` (verified live, PR #25), so hosted NVIDIA ASR isn't available there.
-Nebius + NVIDIA power THINK and AUDIT (both `NVIDIA-Nemotron-3-Nano-30B-A3B`), which meets the
-sponsor-tech requirement. Earlier plan (NVIDIA-hosted ASR) superseded 2026-10-02.
+Local `faster-whisper`, because Token Factory has no audio-transcription endpoint (verified
+live, PR #25). Full reasoning: [ADR-004](decisions/ADR-004-asr-backend.md).
 
 ## Judging requirements we're building against
 
-Pulled directly from the hackathon's own rules page
-([nebiusglobalaihackathon.devpost.com/rules](https://nebiusglobalaihackathon.devpost.com/rules)) —
-not a hidden scoring strategy, just what's actually required, so nothing gets missed:
+Pulled from the hackathon's own rules page
+([nebiusglobalaihackathon.devpost.com/rules](https://nebiusglobalaihackathon.devpost.com/rules)),
+so nothing gets missed. The right column says where each is tracked; it is not a status.
 
-| Requirement | Status |
+| Requirement | Tracked in |
 |---|---|
-| Public repo, OSS license visible in GitHub's About section | **Done** (MIT, confirmed visible) |
-| README with setup + running instructions | **Done** |
-| Documentation of NVIDIA model + Nebius tool usage | **Done** — `README.md`'s Pipeline section |
-| **A live/testable demo link, or a test build** — judges don't just watch the video | **Open — M5.** Decided: host it ourselves with our key configured, not rely on a judge getting their own key. See [#11](../../issues/11). |
-| Demo video, <=3 minutes, shows the project functioning, uploaded to YouTube public | Open — M8 (proof-of-concept exists; final needs M5) |
-| Runtime proof: a real call to Token Factory, or deployment on Nebius AI Cloud compute | **Done** — THINK + AUDIT call Token Factory at runtime (verified live, PR #25) |
-| Written text description of features/functionality/tech used | **Draft exists** (`docs/Project_Description.md`) — M12 |
-| One designated team Representative to submit | Open — M9, [#6](../../issues/6) |
+| Public repo, OSS license visible in GitHub's About section | Static fact: MIT, `LICENSE` |
+| README with setup + running instructions | `README.md` (reviewed in M13) |
+| Documentation of NVIDIA model + Nebius tool usage | `README.md` "Pipeline" section; [ADR-002](decisions/ADR-002-think-audit-model.md) |
+| **A live/testable demo link, or a test build.** Judges don't just watch the video. We host it ourselves with our key configured rather than rely on a judge getting their own | [M5](../../milestone/2), [#11](../../issues/11) |
+| Demo video, at most 3 minutes, showing the project functioning, public on YouTube | [M8](../../milestone/3), [#5](../../issues/5) |
+| Runtime proof: a real call to Token Factory, or deployment on Nebius AI Cloud compute | Satisfied by THINK + AUDIT calling Token Factory at runtime (verified live, PR #25); re-check in M13 |
+| Written text description of features/functionality/tech used | [M12](../../milestone/6), [#20](../../issues/20); draft in `docs/Project_Description.md` |
+| One designated team Representative to submit | [M9](../../milestone/4), [#6](../../issues/6) |
 
 ## Self-judging
 
@@ -96,11 +86,13 @@ deadline gets close:
 - The early-memory-loss framing angle (optional/secondary, not required either way)
 - Anything from `IMPLEMENTATION_PLAN.md`'s backlog not listed as a milestone above
 
-Already done and no longer stretch: conversation history across turns (`webapp.py`,
-`main.py chat`), an automated test suite (53 tests across 10 modules in `tests/`).
-
 ## How to follow this
 
-This file is the single place tracking order/status — if you're picking up work, check here
-first, then the linked GitHub Issue for detail. Update the status column in the same PR that
-changes it; don't let this page and the Issues disagree.
+- **What should I work on / what is blocked / when is it due?** GitHub: the
+  [milestones page](../../milestones), then the Issue and its *blocked by* section.
+- **Why this order, what do the judges need?** This page.
+- **Why did we choose X?** [`decisions/`](decisions/README.md).
+- **What happened last session?** [`WORK_LOG.md`](WORK_LOG.md).
+
+If the plan changes (a milestone is added or reordered), change the milestone on GitHub first,
+then update the table above in the same commit. Never write status or dates on this page.

@@ -10,7 +10,7 @@ This folder is the **decision log**: *why* we made each major choice. Use it whe
 
 1. **New decision?** Copy [`ADR-000-template.md`](ADR-000-template.md) to `ADR-NNN-topic.md` (next number), fill it in, add a row below, and add a one-liner to the Decisions table in [`../WORK_LOG.md`](../WORK_LOG.md).
 2. **Read one?** Find the topic below.
-3. **Reference it?** Link from `TEAM_STATUS.md`, `WORK_LOG.md`, `ROADMAP.md` or the GitHub Issue it relates to.
+3. **Reference it?** Link from `WORK_LOG.md`, `ROADMAP.md` or the GitHub Issue it relates to.
 4. **Revisit one?** Check its "When to revisit" section. If the condition changed, open an Issue labeled `question`. Don't edit an accepted ADR in place to reverse it: add a new ADR and mark the old one `Superseded by ADR-NNN`.
 
 ## Decisions

@@ -33,6 +33,14 @@ don't let an open PR sit unreviewed and block progress.
   or infrastructure unrelated to this project. This repo is judged on its own
   merits; keep it self-contained.
 
+## One source of truth
+
+This is one small repo with two workers, so work state lives in exactly one place:
+**GitHub**. [Milestones](../../milestones) = order and due dates; Issues = scope, owner and
+acceptance criteria; *blocked by* relationships = dependencies. Docs describe what, why and
+how, never state. Don't copy status into a doc, and don't track work in chat or in a second
+file; both drift. Details: `HOW_TO_WORK_HERE.md`.
+
 ## Documentation guidelines
 
 - **`CHANGELOG.md`** — add a line under `[Unreleased]` in the same PR as the change. Releases are tagged `vX.Y.Z` on `main` with GitHub Release notes.
@@ -53,12 +61,11 @@ don't let an open PR sit unreviewed and block progress.
 - **`docs/PRD.md`** is the product requirements doc — personas, explicit
   non-goals, and the demo script as the acceptance bar. Update it when the
   pitch or scope actually changes, not for implementation detail.
-- **`docs/ROADMAP.md`** is the single place for "what are we working on, in
-  what order, and why" — including the hackathon's actual judging
-  requirements mapped against our status. Update its status column in the
-  same PR that changes it; don't let it and the GitHub Issues disagree.
-- **`docs/IMPLEMENTATION_PLAN.md`** is the single place for build status per
-  component, open design decisions, and the known-issues backlog. We code
+- **`docs/ROADMAP.md`** is the plan and the reasoning: milestones, why this
+  order, and the hackathon's judging requirements. It holds **no status or
+  dates**; those live only on GitHub (see "One source of truth" above).
+- **`docs/IMPLEMENTATION_PLAN.md`** is the component map and design notes
+  (not a task list). We code
   from `PRINCIPLES.md` + `PRD.md` + `ROADMAP.md` + this plan, not from memory
   of a conversation — if a design decision changes, update the doc in the
   same PR.

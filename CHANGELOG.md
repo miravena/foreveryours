@@ -10,6 +10,12 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Changed
+- One source of truth: GitHub (milestones, Issues, blocked-by) records all work state; `docs/ROADMAP.md`, `IMPLEMENTATION_PLAN.md` and `WORK_LOG.md` no longer carry status or dates (#38).
+
+### Removed
+- `TEAM_STATUS.md` (its table duplicated GitHub) (#38).
+
 ## [0.1.0] - 2026-10-03
 
 First tagged state: the hackathon demo, runnable end to end (CLI three-beat

@@ -1,94 +1,58 @@
 # Implementation plan
 
-Architecture, current build status per component, and the open backlog. `PRD.md` says what
-we're building and why, `PRINCIPLES.md` says the non-negotiables, `ROADMAP.md` says what order
-we're working in and why — this doc says how, and what's actually done versus still open. Keep
-this page current rather than writing a new doc when something changes — see
-`CONTRIBUTING.md`.
+How it's built: architecture and the component map. `PRD.md` says what we're building and why,
+`PRINCIPLES.md` says the non-negotiables, `ROADMAP.md` says the plan and why in this order,
+`decisions/` says why each choice was made. **This page describes the system; it does not track
+work.** What's open, blocked or due lives only on GitHub ([milestones](../../milestones),
+[Issues](../../issues)). Keep this page current when the design changes — see `CONTRIBUTING.md`.
 
 ## Architecture
 
 See `README.md`'s "Pipeline" section for the HEAR → fast-path → RECALL → THINK → SPEAK →
 AUDIT/extraction diagram and the latency rationale — not repeated here, per
-`CONTRIBUTING.md`'s "no separate architecture doc" rule; this doc is status and backlog, not a
+`CONTRIBUTING.md`'s "no separate architecture doc" rule; this doc is the component map, not a
 second copy of the pipeline description.
 
 **Disclosure is a hard invariant, not a default.** Every caregiver flag states explicitly
 whether the senior was actually told, in the conversation — see `SAFETY_AND_PRIVACY.md` for
 the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it's enforced.
 
-## Component status
+## Components
 
-| Component | File | Status |
+| Component | File | What it does |
 |---|---|---|
-| Fast-path safety check | `safety/fastpath.py` | Done — regex-based, synchronous, continues into THINK after an immediate reassurance. Conversational "help me" requests and "falling asleep" false positives narrowed and resolved ([#15](../../issues/15), 10-03) |
-| Memory store | `memory/store.py` | Done — caregiver facts always recalled, stopword pruning & semantic domain synonym expansion, dedupe on save, atomic writes |
-| Caregiver flags | `caregiver.py` | Done — `disclosed_to_senior` is a required, honest argument everywhere |
-| THINK (model call) | `pipeline/think.py` | Done — streamed, sentence-chunked (abbreviation-aware), facts/guardrails split in prompt, off-critical-path async memory extraction |
-| SPEAK (TTS) | `pipeline/speak.py` | Done — native subprocess `espeak-ng` CLI on Linux/macOS eliminates in-process C-buffer leak and 19-sentence silence bug ([#28](../../issues/28), 10-03); PowerShell `System.Speech` on Windows. Durable across long sessions |
-| HEAR (ASR) | `pipeline/hear.py` | Done — wired with `--audio` into all CLI beats & `webapp.py`, backed by local `faster-whisper` (Token Factory has no ASR endpoint, PR #25), bundled with `samples/` audio |
-| AUDIT (async safety pass) | `pipeline/audit.py` | Done — runs off the critical path, considers both the senior's words and the reply, discloses via a spoken follow-up |
-| Orchestrator | `pipeline/orchestrator.py` | Done — ties the above together, graceful degradation without a live API key |
-| CLI demo runner | `main.py` | Done for the 4-beat demo script + interactive multi-turn session (`python main.py chat`), cross-platform audio playback (Windows/macOS/Linux) |
-| Automated test suite | `tests/` | Done — 56 tests across 10 modules (fastpath, intent, memory, speak, think, orchestrator, caregiver, CLI, webapp, benchmarks). All pass together in one process with zero silence or segfaults |
-| Cloud hosting (M5) | Cloudflare Pages, `app.py`, `packages.txt`, `scripts/deploy_hf_space.py` | **Ready to deploy** — code blockers #28 and #15 resolved; unblocked for live Space deploy once team key is configured ([#11](../../issues/11)) |
+| Fast-path safety check | `safety/fastpath.py` | regex-based, synchronous, continues into THINK after an immediate reassurance. "Falling asleep" false positives are excluded; the bare "help me" pattern is tracked in [#33](../../issues/33) |
+| Memory store | `memory/store.py` | caregiver facts always recalled, stopword pruning & semantic domain synonym expansion, dedupe on save, atomic writes |
+| Caregiver flags | `caregiver.py` | `disclosed_to_senior` is a required, honest argument everywhere |
+| THINK (model call) | `pipeline/think.py` | streamed, sentence-chunked (abbreviation-aware), facts/guardrails split in prompt, off-critical-path async memory extraction |
+| SPEAK (TTS) | `pipeline/speak.py` | native subprocess `espeak-ng` CLI on Linux/macOS eliminates in-process C-buffer leak and 19-sentence silence bug ([ADR-001](decisions/ADR-001-tts-backend.md)); PowerShell `System.Speech` on Windows. Built for long sessions |
+| HEAR (ASR) | `pipeline/hear.py` | wired with `--audio` into all CLI beats & `webapp.py`, backed by local `faster-whisper` (Token Factory has no ASR endpoint, PR #25), bundled with `samples/` audio |
+| AUDIT (async safety pass) | `pipeline/audit.py` | runs off the critical path, considers both the senior's words and the reply, discloses via a spoken follow-up |
+| Orchestrator | `pipeline/orchestrator.py` | ties the above together, graceful degradation without a live API key |
+| CLI demo runner | `main.py` | The 4-beat demo script + interactive multi-turn session (`python main.py chat`), cross-platform audio playback (Windows/macOS/Linux) |
+| Automated test suite | `tests/` | 56 tests across 10 modules (fastpath, intent, memory, speak, think, orchestrator, caregiver, CLI, webapp, benchmarks). Run in one process: `python -m unittest discover tests -v` |
+| Cloud hosting | Cloudflare Pages (landing page), `app.py`, `packages.txt`, `scripts/deploy_hf_space.py` | Landing page on Pages; the judge-facing demo on HF Spaces with per-visitor sessions. Progress: [M5](../../milestone/2) |
 
-## Open design decisions
+## Design decisions
 
-- **ASR backend — DECIDED: local `faster-whisper`.** Token Factory has no
-  `/audio/transcriptions` endpoint (verified live, PR #25), which superseded the earlier
-  NVIDIA-hosted plan. See `ROADMAP.md`'s "Decided: ASR backend".
-- **Judge-accessible hosting — DECIDED: host it ourselves, not a test build.** A test build
-  (our README's existing setup steps) is near-free but assumes a judge will sign up for their
-  own `NEBIUS_API_KEY` mid-review — unrealistic at hackathon judging speed/volume, and the
-  downside (a judge just skips it) silently loses us the whole "functioning demo" credit.
-  Hosting on Nebius AI Cloud compute with our own key already configured costs some of our $50
-  credit + deploy effort, but removes that friction *and* doubles as the required proof of
-  deployment on sponsor infrastructure. README setup steps stay documented as a convenience for
-  the other collaborator and anyone who wants to run it locally, not as the primary judging
-  path. See `ROADMAP.md`'s "Judging requirements" table and [Issue #11](../../issues/11).
-- **THINK model ID — verified live (PR #25).** Default is now
-  `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (`pipeline/think.py`), replacing the older dense
-  `Llama-3_1-Nemotron-70B-Instruct-HF` default from before Nebius's Token Factory relaunch
-  exposed the newer Nemotron 3 lineup (Nano 30B, Nano Omni, Super 120B, Ultra 550B — see
-  nebius.com/services/token-factory/nemotron). Nemotron 3 Nano is a compact MoE model, a better
-  fit for the <2s-to-first-audio budget than a dense 70B model, without giving up the
-  "open-weight NVIDIA model" sponsor-tech requirement. The exact string's **casing** comes from
-  third-party aggregators, not Nebius's own docs — confirm against the live Token Factory model
-  list once someone has a real key, tracked in [Issue #1](../../issues/1).
-- **`NEBIUS_BASE_URL` domain — RESOLVED.** `https://api.tokenfactory.nebius.com/v1`, confirmed
-  directly against Nebius's own first-party docs
-  (docs.tokenfactory.nebius.com/api-reference/introduction, 2026-10-01) — not a live-key test,
-  but a first-party source, replacing two earlier unverified guesses. Still worth a live sanity
-  check once a key exists (bundled into [Issue #1](../../issues/1)), but no longer blocking.
-- **Conversation history across turns — IMPLEMENTED.** `webapp.py` maintains
-  session history across browser turns, and `main.py chat` provides an interactive
-  terminal REPL maintaining session history (bounded to `MAX_HISTORY_TURNS = 6`
-  turns) while strictly isolating session history from durable cross-session `MemoryStore`.
+Each decision, with alternatives and reasoning, is an ADR in [`decisions/`](decisions/README.md):
+TTS ([ADR-001](decisions/ADR-001-tts-backend.md)), THINK/AUDIT model
+([ADR-002](decisions/ADR-002-think-audit-model.md)), hosting
+([ADR-003](decisions/ADR-003-hosting.md)), ASR ([ADR-004](decisions/ADR-004-asr-backend.md)),
+safety fast-path ([ADR-005](decisions/ADR-005-safety-fastpath.md)).
 
-## Known-issues backlog (seeded from the first adversarial review, 2026-10-01)
+Facts that don't fit an ADR:
 
-Fixed in [PR #7](../../pull/7) (merge once a live key confirms the continuation path): fast-path
-dead-ending, caregiver-recall reliability, disclosure-honesty gaps, inverted audit check,
-audio-overwrite bug, sentence-chunking on abbreviations, durable-memory substring false
-positives, non-atomic writes, and doc/code drift in `SAFETY_AND_PRIVACY.md`/`DEMO_SCRIPT.md`.
+- **`NEBIUS_BASE_URL`** is `https://api.tokenfactory.nebius.com/v1` (Nebius first-party docs,
+  docs.tokenfactory.nebius.com/api-reference/introduction; verified live in PR #25).
+- **Judge-accessible hosting:** a test build assumes a judge signs up for their own
+  `NEBIUS_API_KEY` mid-review, which is unrealistic at judging volume, so we host it ourselves
+  with our key configured. README setup steps remain for collaborators and local runs.
+- **Conversation history:** `webapp.py` and `main.py chat` keep per-session history
+  (`MAX_HISTORY_TURNS = 6`), isolated from the durable cross-session `MemoryStore`.
 
-Still open, tracked as GitHub Issues:
+## Out of scope
 
-- [Issue #9](../../issues/9) — real voice I/O: **Implemented** (wired with `--audio` on all beats, Windows playback via `winsound`, multi-sentence web audio concatenation, and bundled `samples/`).
-- **Judge-accessible hosting** — new, see "Open design decisions" above. Tracking issue to be
-  filed.
-- [Issue #1](../../issues/1) — wire a real `NEBIUS_API_KEY` and verify beat2/beat3's
-  continuation path end to end (currently only verified in the no-key degraded path).
-  Also confirms the `NEBIUS_BASE_URL` domain decision above.
-- [Issue #3](../../issues/3) — Day-2 recall demo: **Implemented** (`beat4_day2_recall` and `day2` check, verifying persistence).
-- [Issue #5](../../issues/5) — record the submission video (needs voice I/O + hosting done
-  first — see `ROADMAP.md`).
-- [Issue #6](../../issues/6) — decide the Devpost submission representative.
-
-Closed: [Issue #2](../../issues/2) (ASR backend), [Issue #3](../../issues/3) (Day-2 recall), [Issue #9](../../issues/9) (Real voice I/O).
-
-Not filed as an issue (lower priority, explicitly deferred per `README.md`'s Status section):
-a caregiver-facing dashboard beyond the terminal panel. The old Issue #4 covered this; see its
+A caregiver-facing dashboard (explicitly deferred per `README.md`'s Status section) beyond the terminal panel. The old Issue #4 covered this; see its
 closing comment for why it was replaced with a narrower, higher-priority voice-I/O issue
 instead of being built as scoped.

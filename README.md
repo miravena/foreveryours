@@ -109,7 +109,7 @@ cp .env.example .env   # fill in NEBIUS_API_KEY for the full pipeline; works wit
 # open http://localhost:7860
 ```
 
-### Cloudflare & Cloud Hosting (Milestone M5)
+### Cloudflare & Cloud Hosting ([Milestone M5](../../milestone/2))
 
 - **Cloudflare Pages**: Deploys the landing page and presentation directly from `docs/index.html` with zero build commands.
 - **Hugging Face Spaces** (the judge-facing link, issue #11): `scripts/deploy_hf_space.py`
@@ -143,5 +143,6 @@ sees it — see [`docs/SELF_JUDGING.md`](docs/SELF_JUDGING.md).
 ## Status / what's not here yet
 
 This is a thin vertical slice, intentionally. Out of scope for this build: weather/news, a
-weekly digest, physical hardware, medical certification. See open GitHub Issues for the current
-remaining-work list, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for how we work on this together.
+weekly digest, physical hardware, medical certification. Current work, order, due dates and blockers live only on GitHub: [milestones](../../milestones)
+and [Issues](../../issues). Plan and reasoning: [`docs/ROADMAP.md`](docs/ROADMAP.md). How we work
+together: [`HOW_TO_WORK_HERE.md`](HOW_TO_WORK_HERE.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).

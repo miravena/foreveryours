@@ -16,6 +16,7 @@ Example: "Blocks M5 (go-live); without this, judges will see silent replies afte
 - [ ] **Criterion 1:** Clear, measurable, testable
 - [ ] **Criterion 2:** Can be verified without subjective judgment
 - [ ] **Criterion 3:** (if needed)
+- [ ] **Single source of truth:** this Issue has a milestone and any blockers set as *blocked by*; no status or dates copied into a doc
 
 Example:
 - [ ] pyttsx3 produces non-empty audio on turns 1–50 without segfault
@@ -49,13 +50,13 @@ Things to watch for:
 
 ## Related
 
-- **Blocks:** [M5 deployment](../../../issues/11)
-- **Related:** [Issue #9](../../../issues/9) (voice I/O wired), [ADR-001](../docs/decisions/ADR-001-tts-backend.md) (why espeak)
+- **Blocked by / blocks:** set under *Relationships* in the sidebar (not only here)
+- **Related:** [Issue #9](../../../issues/9) (voice I/O wired), [ADR-001](../../docs/decisions/ADR-001-tts-backend.md) (why espeak)
 
 ## How to update this
 
 **As you investigate:**
-- Add findings to [WORK_LOG.md](../app/docs/WORK_LOG.md) (what you tried, test results)
+- Add findings to [WORK_LOG.md](../../docs/WORK_LOG.md) (what you tried, test results)
 - Comment here with blockers or pivots
 - Link to commits/PRs as you land fixes
 
