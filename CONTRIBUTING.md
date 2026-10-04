@@ -35,6 +35,8 @@ don't let an open PR sit unreviewed and block progress.
 
 ## Documentation guidelines
 
+- **`CHANGELOG.md`** — add a line under `[Unreleased]` in the same PR as the change. Releases are tagged `vX.Y.Z` on `main` with GitHub Release notes.
+- **`docs/WORK_LOG.md`** and **`docs/decisions/`** — dated session log and decision records (ADRs). See `HOW_TO_WORK_HERE.md` for which record gets what.
 - **README.md** is the pitch + setup — keep it current with whatever actually
   runs. If a setup step changes, update it in the same PR, not a follow-up.
 - **`docs/DEMO_SCRIPT.md`** is the contract for what "working" means. If your
