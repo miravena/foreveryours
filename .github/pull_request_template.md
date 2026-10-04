@@ -6,5 +6,6 @@
 <!-- e.g. `python -m unittest discover tests -v`, or the demo beat to run -->
 
 - [ ] `CHANGELOG.md` updated under `[Unreleased]` (skip for pure typo fixes)
+- [ ] `docs/WORK_LOG.md` entry added; ADR added if a decision was made
 - [ ] `main` stays demo-able (README three-beat demo still works)
 - [ ] No `.env`, keys, `data/` or `out/` committed

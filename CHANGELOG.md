@@ -10,6 +10,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Docs
+- Add `TEAM_STATUS.md`, `HOW_TO_WORK_HERE.md`, `docs/WORK_LOG.md` and the decision log `docs/decisions/` (ADR-001 to ADR-005).
+
 ## [0.1.0] - 2026-10-03
 
 First tagged state: the hackathon demo, runnable end to end (CLI three-beat
