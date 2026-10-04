@@ -63,6 +63,29 @@ so nothing gets missed. The right column says where each is tracked; it is not a
 | Written text description of features/functionality/tech used | [M12](../../milestone/6), [#20](../../issues/20); draft in `docs/Project_Description.md` |
 | One designated team Representative to submit | [M9](../../milestone/4), [#6](../../issues/6) |
 
+## How entries are judged
+
+From the same rules page (re-read 2026-10-04; re-check in M13 in case it changes). Judging
+happens after the deadline (2026-12-01 to 12-15), and **the 10-30 10:00 PDT cutoff is a hard
+submission time**, not the judging time.
+
+1. **Stage One, pass/fail:** the project reasonably fits the theme and reasonably applies the
+   required APIs/SDKs. Our entry meets this by using Nebius Token Factory with an NVIDIA
+   Nemotron model (see [ADR-002](decisions/ADR-002-think-audit-model.md)).
+2. **Stage Two, four equally weighted criteria** (each is 25% of the score):
+
+| Criterion | What the judges ask | Where we invest |
+|---|---|---|
+| Technological Implementation | How well it's built, and how effectively it uses Nebius model(s) and NVIDIA Nemotron | Pipeline, fast-path, tests/CI, ADRs |
+| Design | A complete, coherent product experience, not just a technical proof of concept | The hosted web demo, voice quality, the split-screen disclosure beat ([#21](../../issues/21)) |
+| Potential Impact | A credible, specific case for a real problem and audience, shown in the demo | `docs/PRD.md`, `docs/Project_Description.md`, the video |
+| Quality of the Idea | A creative, non-obvious use of the models, and real understanding of the problem | Honest-disclosure design, caregiver briefing |
+
+**Tie-break:** tied entries are compared on the first criterion above, then the next, so
+Technological Implementation breaks ties first.
+
+How we score ourselves against these, and the log of scores: [`SELF_JUDGING.md`](SELF_JUDGING.md).
+
 ## Self-judging
 
 We don't have to wait for a real judge to find out we're weak on Design. See
