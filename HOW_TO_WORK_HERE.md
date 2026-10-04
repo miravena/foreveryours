@@ -36,6 +36,7 @@ tag `vX.Y.Z` on `main`, and publish a GitHub Release (notes auto-generate from l
 
 - Title starts with the milestone: `[M5] Fix ...`, and set the matching [GitHub milestone](../../milestones) (M4, M5, M8, M9, M11, M12 exist; create the next one when a roadmap item needs it). Use the *Work item* issue template.
 - Acceptance criteria must be testable. Link related Issues and the relevant ADR.
+- If it can't start until something else lands, set **Relationships -> blocked by** on the Issue (not just a comment), and note it in `TEAM_STATUS.md`'s Blockers/Schedule.
 - Labels: `bug`, `enhancement`, `documentation`, `question` (needs a team decision), `help wanted`.
 - Found a bug while on something else? Open a new Issue. Want to change the architecture? Open
   an Issue first, then write the ADR.

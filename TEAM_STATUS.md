@@ -22,6 +22,31 @@ Milestones are tracked as [GitHub milestones](../../milestones); filter Issues b
 Legend: 🟢 done · 🟡 in progress · 🔴 blocked/needs fix · ⬜ waiting on a blocker.
 Put your GitHub handle in Owner when you start an item.
 
+## Schedule (milestone due dates)
+
+Deadline **2026-10-30 10:00 PDT**. MVP is a live URL by 10-09; 10-11 to 10-21 is the iterate
+window; 10-26 onward is review and freeze, leaving two days of buffer.
+
+| Due | Milestone | Depends on | Unblocks |
+|-----|-----------|------------|----------|
+| 10-05 | M10 Team Nebius key ([#36](../../issues/36)) | - | M5 |
+| 10-07 | M4 Voice I/O + memory quality | - | - |
+| **10-09** | **M5 Judge-accessible hosting (MVP)** | M10, [#33](../../issues/33), [#28](../../issues/28) | M11, M9, M8 |
+| 10-11 | M11 Latency verified on hosted instance | M5 | M8 |
+| 10-16 | M9 Representative + early Devpost draft | M5 | M13 |
+| 10-21 | M8 Final demo video | M5, M11, [#21](../../issues/21) | M12, M13 |
+| 10-24 | M12 Final Devpost text | M8 | M13 |
+| **10-28** | **M13 Final review and submit** ([#37](../../issues/37)) | M8, M12 | - |
+
+Order follows due date, not the M-number. See [open milestones](../../milestones).
+
+## Blockers
+
+Blocking is tracked on the Issues themselves with GitHub's **blocked by / blocking**
+relationships (Issue sidebar -> *Relationships*), so a blocked Issue shows it and clears when
+the blocker closes. Milestones cannot depend on each other; the table above is that view.
+When you add a blocker, also say why in a comment.
+
 ## Where things live
 
 | Document | Purpose | Update |
