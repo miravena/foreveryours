@@ -22,6 +22,7 @@ This folder is the **decision log**: *why* we made each major choice. Use it whe
 | [ADR-003](ADR-003-hosting.md) | Host the judge demo on Hugging Face Spaces | Accepted | 2026-10-01 |
 | [ADR-004](ADR-004-asr-backend.md) | ASR: local `faster-whisper` | Accepted | 2026-10-02 |
 | [ADR-005](ADR-005-safety-fastpath.md) | Safety fast-path is deterministic rules, not a model | Accepted | 2026-10-01 |
+| [ADR-006](ADR-006-working-agreement.md) | Direct commits to `main`; three writers; guardrails stay on | Accepted | 2026-10-04 |
 
 ## Superseded / reconsidered
 

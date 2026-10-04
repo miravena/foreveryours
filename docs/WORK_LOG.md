@@ -52,6 +52,7 @@ One line each; the reasoning is in the ADR.
 | Hosting | HF Spaces | 10-01 | [003](decisions/ADR-003-hosting.md) |
 | ASR | Local faster-whisper | 10-02 | [004](decisions/ADR-004-asr-backend.md) |
 | Safety fast-path | Rule-based regex | 10-01 | [005](decisions/ADR-005-safety-fastpath.md) |
+| Working agreement | Direct commits to `main`; pvjthomas keeps write access | 10-04 | [006](decisions/ADR-006-working-agreement.md) |
 
 ## How to update this
 
