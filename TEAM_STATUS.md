@@ -17,6 +17,8 @@ The single entry point for syncing. Start here, then the linked Issue, then
 | Devpost draft | 🟡 Text drafted | [#20](../../issues/20), [#6](../../issues/6) | unassigned |
 | Memory fixes | 🟡 Open | [#32](../../issues/32), [#34](../../issues/34) | unassigned |
 
+Milestones are tracked as [GitHub milestones](../../milestones); filter Issues by milestone for the per-milestone view.
+
 Legend: 🟢 done · 🟡 in progress · 🔴 blocked/needs fix · ⬜ waiting on a blocker.
 Put your GitHub handle in Owner when you start an item.
 
