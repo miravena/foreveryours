@@ -48,8 +48,8 @@ live, PR #25). Full reasoning: [ADR-004](decisions/ADR-004-asr-backend.md).
 
 ## Judging requirements we're building against
 
-Pulled from the hackathon's own rules page
-([nebiusglobalaihackathon.devpost.com/rules](https://nebiusglobalaihackathon.devpost.com/rules)),
+Taken from the hackathon's own rules ([`HACKATHON_RULES.md`](HACKATHON_RULES.md), source
+[nebiusglobalaihackathon.devpost.com/rules](https://nebiusglobalaihackathon.devpost.com/rules)),
 so nothing gets missed. The right column says where each is tracked; it is not a status.
 
 | Requirement | Tracked in |
@@ -58,16 +58,19 @@ so nothing gets missed. The right column says where each is tracked; it is not a
 | README with setup + running instructions | `README.md` (reviewed in M13) |
 | Documentation of NVIDIA model + Nebius tool usage | `README.md` "Pipeline" section; [ADR-002](decisions/ADR-002-think-audit-model.md) |
 | **A live/testable demo link, or a test build.** Judges don't just watch the video. We host it ourselves with our key configured rather than rely on a judge getting their own | [M5](../../milestone/2), [#11](../../issues/11) |
-| Demo video, at most 3 minutes, showing the project functioning, public on YouTube | [M8](../../milestone/3), [#5](../../issues/5) |
+| Demo video, under 3 minutes, showing the project functioning, public on YouTube, no third-party trademarks or copyrighted music | [M8](../../milestone/3), [#5](../../issues/5) |
 | Runtime proof: a real call to Token Factory, or deployment on Nebius AI Cloud compute | Satisfied by THINK + AUDIT calling Token Factory at runtime (verified live, PR #25); re-check in M13 |
 | Written text description of features/functionality/tech used | [M12](../../milestone/6), [#20](../../issues/20); draft in `docs/Project_Description.md` |
 | One designated team Representative to submit | [M9](../../milestone/4), [#6](../../issues/6) |
+| Demo stays **free and unrestricted until the Judging Period ends (2026-12-15)** | [M5](../../milestone/2), [#11](../../issues/11) |
+| Feedback on Nebius Token Factory / AI Cloud and the NVIDIA tools used (also qualifies for the Most Valuable Feedback prize) | [M12](../../milestone/6), [#41](../../issues/41) |
+| Identify the track (**Personal AI**) and, if the project predates the Submission Period, what was updated | Devpost form, checked in [M13](../../milestone/8) / [#37](../../issues/37) |
 
 ## How entries are judged
 
-From the same rules page (re-read 2026-10-04; re-check in M13 in case it changes). Judging
-happens after the deadline (2026-12-01 to 12-15), and **the 10-30 10:00 PDT cutoff is a hard
-submission time**, not the judging time.
+Full dated rules: [`HACKATHON_RULES.md`](HACKATHON_RULES.md) (snapshot 2026-10-04). Judging happens
+after the deadline (2026-12-01 to 12-15), and **the 10-30 10:00 PDT cutoff is a hard submission
+time**, not the judging time.
 
 1. **Stage One, pass/fail:** the project reasonably fits the theme and reasonably applies the
    required APIs/SDKs. Our entry meets this by using Nebius Token Factory with an NVIDIA
