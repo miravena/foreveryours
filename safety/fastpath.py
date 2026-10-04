@@ -27,6 +27,7 @@ DISTRESS_PATTERNS = [
     r"\b(someone\s+help\s+me|please\s+help\s+me|help\s+me\s+please)\b",
     r"\bhelp\s+me\s+(up|get\s+up|i\s+can'?t|i\s+fell|i('m| am)\s+(hurt|bleeding|stuck|trapped|in\s+pain))\b",
     r"^(can\s+someone\s+)?help\s+me[!.?\s]*$",
+    r"\bhelp\b[\s,!.]*(i('m| am)\s+)?(so\s+|really\s+|very\s+)?(scared|afraid|frightened|terrified)\b",
     r"\bi('m| am)?\s*(hurt|bleeding|dizzy|can'?t breathe)\b",
     r"\bchest (pain|hurts?)\b",
     r"\bcall\s+(for\s+)?(911|an\s+ambulance|help)\b",

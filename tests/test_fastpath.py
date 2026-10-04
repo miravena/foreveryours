@@ -19,6 +19,9 @@ class TestFastPath(unittest.TestCase):
             "Someone help me!",
             "Help me up",
             "Call for help",
+            "Help, I'm scared",
+            "help I am so scared",
+            "Help! I'm terrified",
         ]
         for phrase in cases:
             with self.subTest(phrase=phrase):
@@ -39,6 +42,10 @@ class TestFastPath(unittest.TestCase):
             "Can you help me with this puzzle?",
             "Could you help me look for my coat?",
             "I think I'm falling asleep in front of the TV",
+            "I'm scared of thunderstorms",
+            "Does that help? I'm scared of the dark",
+            "That helps, I'm scared less now",
+            "Help me understand why I'm scared of storms",
         ]
         for phrase in cases:
             with self.subTest(phrase=phrase):
