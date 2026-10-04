@@ -10,9 +10,6 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
-### Docs
-- Add `TEAM_STATUS.md`, `HOW_TO_WORK_HERE.md`, `docs/WORK_LOG.md` and the decision log `docs/decisions/` (ADR-001 to ADR-005).
-
 ## [0.1.0] - 2026-10-03
 
 First tagged state: the hackathon demo, runnable end to end (CLI three-beat
@@ -38,6 +35,9 @@ demo and the Gradio web demo).
 - Circadian awareness (sundowning and night-mode behaviour), acoustic
   biomarkers and perseveration tracking (#31).
 - PRD and implementation plan docs (#8); roadmap and principles.
+- Collaboration docs: `CHANGELOG.md`, PR and issue templates, `TEAM_STATUS.md`,
+  `HOW_TO_WORK_HERE.md`, `docs/WORK_LOG.md` and the decision log `docs/decisions/`
+  (ADR-001 to ADR-005) (#35).
 
 ### Changed
 - Time to first audio under ~1s by disabling hidden reasoning tokens on the
