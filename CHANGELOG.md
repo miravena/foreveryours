@@ -16,6 +16,10 @@ rename `Unreleased` to the version and date, then tag it.
 ### Changed
 - One source of truth: GitHub (milestones, Issues, blocked-by) records all work state; `docs/ROADMAP.md`, `IMPLEMENTATION_PLAN.md` and `WORK_LOG.md` no longer carry status or dates (#38).
 
+### Fixed
+- Memory retrieval now correctly matches plurals/inflections on short words (e.g., 'dog' matches 'dogs') (#32).
+- Updating a caregiver schedule (supersession) now preserves the original memory's temporal expiration and privacy scope instead of silently making it permanent (#34).
+
 ### Removed
 - `TEAM_STATUS.md` (its table duplicated GitHub) (#38).
 

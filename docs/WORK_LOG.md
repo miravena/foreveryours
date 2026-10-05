@@ -9,6 +9,9 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-05
+- Fixed #32 (memory recall for short words like dog/dogs) and #34 (memory supersession preserving temporal/privacy properties).
+
 ### 2026-10-03
 - PR #29 (audit fixes, sub-second latency, `espeak-ng` CLI, dual text input, memory badges) and PR #31 (circadian rhythm, acoustic biomarkers, perseveration tracking) merged.
 - Code review filed #32, #33, #34.
