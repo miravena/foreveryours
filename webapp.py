@@ -336,7 +336,15 @@ def _run_demo_turn(
                 panel(),
                 "### 📊 Acoustic Biomarkers\n_Awaiting API Key_",
             )
-        raise
+        
+        print(f"Pipeline error processing turn: {type(exc).__name__}")
+        return (
+            f'**Dad said:** "{transcript}"\n\n⚠️ *I\'m sorry, I ran into an unexpected error processing that.*',
+            None,
+            history,
+            panel(),
+            "### 📊 Acoustic Biomarkers\n_Error_",
+        )
 
     if result.background_thread is not None:
         result.background_thread.join(timeout=10)
