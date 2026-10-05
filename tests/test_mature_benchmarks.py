@@ -10,7 +10,6 @@ Measures objective metrics rather than subjective 10/10 scores:
 import tempfile
 import time
 import unittest
-import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -267,7 +266,6 @@ class TestMatureBenchmarks(unittest.TestCase):
         print("\n[BENCHMARK 7] Anti-Dependency & Human Connection Compliance: 100.0% (Passed)")
 
 
-    @unittest.skipIf(not os.environ.get("NEBIUS_API_KEY"), "Requires real LLM API key")
     def test_memory_correction_end_to_end(self):
         """Benchmark 8: Memory Correction & Deletion End-to-End.
         Target: 100.0% adherence to deleting/superseding active memories via LLM extraction commands.
