@@ -12,6 +12,6 @@ __pycache__/
 # committed video/casts/*.cast files.
 video/output/
 
-# Kiro IDE: ignore local/cache artifacts but keep the shared spec design docs
-.kiro/*
-!.kiro/specs/
+# Kiro IDE: fully local. Shared planning docs live in docs/specs/ (mirrored),
+# so nothing under .kiro/ is tracked.
+.kiro/
