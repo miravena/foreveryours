@@ -170,5 +170,61 @@ class TestMemoryStore(unittest.TestCase):
         self.assertFalse(any("Dad loves jazz" == f for f in facts))
 
 
+class TestSupersedeInheritsProperties(unittest.TestCase):
+    """Fixes #34: supersede() must preserve scope, privacy and expires_at."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.data_dir = Path(self.temp_dir.name)
+        self.store = MemoryStore("test_dad", self.data_dir)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_temporary_schedule_stays_temporary(self):
+        """A 2-hour schedule update must remain temporary after correction."""
+        import time
+        expires = time.time() + 7200  # 2 hours from now
+        self.store.add(
+            "Groceries at 4 PM",
+            source="caregiver_memo",
+            scope="temporary",
+            privacy="public",
+            expires_at=expires,
+        )
+        new_item = self.store.supersede("Groceries at 4 PM", "Groceries at 5 PM", source="caregiver_memo")
+        self.assertEqual(new_item.scope, "temporary")
+        self.assertEqual(new_item.privacy, "public")
+        self.assertEqual(new_item.expires_at, expires)
+
+    def test_private_memory_stays_private(self):
+        """A CAREGIVER_ONLY memory must stay private after supersession."""
+        self.store.add(
+            "Dad might need a walker",
+            source="caregiver_memo",
+            privacy="caregiver_only",
+        )
+        new_item = self.store.supersede("Dad might need a walker", "Dad needs a walker soon", source="caregiver_memo")
+        self.assertEqual(new_item.privacy, "caregiver_only")
+
+    def test_permanent_memory_defaults_preserved(self):
+        """A normal permanent memory should stay permanent after supersession."""
+        self.store.add("Dad loves jazz", source="caregiver_memo")
+        new_item = self.store.supersede("Dad loves jazz", "Dad loves classical", source="caregiver_memo")
+        self.assertEqual(new_item.scope, "permanent")
+        self.assertEqual(new_item.privacy, "public")
+        self.assertIsNone(new_item.expires_at)
+
+    def test_chained_supersession_preserves(self):
+        """Superseding a superseded memory still inherits from the latest active one."""
+        import time
+        expires = time.time() + 3600
+        self.store.add("Meeting at 2 PM", source="caregiver_memo", scope="temporary", expires_at=expires)
+        self.store.supersede("Meeting at 2 PM", "Meeting at 3 PM", source="caregiver_memo")
+        new_item = self.store.supersede("Meeting at 3 PM", "Meeting at 4 PM", source="caregiver_memo")
+        self.assertEqual(new_item.scope, "temporary")
+        self.assertEqual(new_item.expires_at, expires)
+
+
 if __name__ == "__main__":
     unittest.main()

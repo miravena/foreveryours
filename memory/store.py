@@ -143,12 +143,30 @@ class MemoryStore:
         return item
 
     def supersede(self, old_text: str, new_text: str, source: str = "conversation_extract") -> MemoryItem:
-        """Evolves a memory: marks the old fact as superseded and introduces the new active fact."""
+        """Evolves a memory: marks the old fact as superseded and introduces the new active fact.
+        Fixes #34: inherits scope, privacy and expires_at from the original so that
+        e.g. a 2-hour schedule update stays temporary after correction."""
+        inherited_scope = MemoryScope.PERMANENT.value
+        inherited_privacy = PrivacyLevel.PUBLIC_TO_SENIOR.value
+        inherited_expires_at = None
+
         for item in self._items:
             if item.text.lower() == old_text.lower() and item.status == "active":
                 item.status = "superseded"
                 item.superseded_by = new_text
-        new_item = MemoryItem(text=new_text, source=source, status="active")
+                # Inherit temporal and privacy properties from the original
+                inherited_scope = item.scope
+                inherited_privacy = item.privacy
+                inherited_expires_at = item.expires_at
+
+        new_item = MemoryItem(
+            text=new_text,
+            source=source,
+            status="active",
+            scope=inherited_scope,
+            privacy=inherited_privacy,
+            expires_at=inherited_expires_at,
+        )
         self._items.append(new_item)
         self._flush()
         return new_item
