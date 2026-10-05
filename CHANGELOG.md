@@ -11,7 +11,7 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Added
-- Memory control in conversation: THINK now emits `ADD:` / `SUPERSEDE:` / `DELETE:` commands that the memory store applies, so the senior can correct a wrong fact or ask to forget one instead of memories only ever being appended.
+- Memory control in conversation: THINK now emits `ADD:` / `SUPERSEDE:` / `DELETE:` commands that the memory store applies. Additions work; **corrections and forget-requests phrased with a family marker are currently stored as new facts instead** — the marker heuristic returns before the model can supersede or delete, so the request to forget gets remembered. Tracked in #54.
 - Anti-dependency prompting: rule 17 of the THINK system prompt now actively redirects the senior toward their human family ("Sarah would love to hear your voice — why not give her a call?") rather than only declining to claim exclusivity.
 - GitHub Actions workflow running the test suite on every push to `main` and every PR; `SECURITY.md` with private vulnerability reporting (#39).
 
