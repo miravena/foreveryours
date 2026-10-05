@@ -23,6 +23,7 @@ This folder is the **decision log**: *why* we made each major choice. Use it whe
 | [ADR-004](ADR-004-asr-backend.md) | ASR: local `faster-whisper` | Accepted | 2026-10-02 |
 | [ADR-005](ADR-005-safety-fastpath.md) | Safety fast-path is deterministic rules, not a model | Accepted | 2026-10-01 |
 | [ADR-006](ADR-006-working-agreement.md) | Direct commits to `main`; three writers; guardrails stay on | Accepted | 2026-10-04 |
+| [ADR-007](ADR-007-attribution.md) | The human is the author; AI help is a `Co-Authored-By` trailer; guardrails warn, never block | Accepted | 2026-10-05 |
 
 ## Superseded / reconsidered
 

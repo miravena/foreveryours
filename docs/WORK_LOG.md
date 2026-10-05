@@ -62,6 +62,7 @@ One line each; the reasoning is in the ADR.
 | ASR | Local faster-whisper | 10-02 | [004](decisions/ADR-004-asr-backend.md) |
 | Safety fast-path | Rule-based regex | 10-01 | [005](decisions/ADR-005-safety-fastpath.md) |
 | Working agreement | Direct commits to `main`; pvjthomas keeps write access | 10-04 | [006](decisions/ADR-006-working-agreement.md) |
+| Attribution | Human = author, AI = `Co-Authored-By` trailer; warn-only guardrails | 10-05 | [007](decisions/ADR-007-attribution.md) |
 
 ## How to update this
 
