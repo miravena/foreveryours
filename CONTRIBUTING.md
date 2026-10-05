@@ -133,6 +133,39 @@ Some of this codebase is written with AI assistance. That's fine, but it changes
   (an issue, `docs/ROADMAP.md`, a comment) instead of leaving it in chat — chat doesn't
   outlive the hackathon, the repo does.
 
+## Commit attribution
+
+Every commit has two slots: the **author** (the human) and **co-authors** (AI help).
+GitHub only credits a commit to an account whose registered email matches the author
+email — co-author trailers are credited separately — so this convention is what makes the
+Contributors graph read *"the human, plus the assistant"* instead of crediting the
+assistant alone.
+
+- **Author = the human who made the change**, with a GitHub-linked email. The ID form is
+  the safest (it survives a username change) and is what this repo is configured with:
+  `287302999+elevenbaselab@users.noreply.github.com` — GitHub → Settings → Emails →
+  "Keep my email addresses private" shows yours. **Never put an AI identity in the
+  author field.**
+- **AI help is shown only as `Co-Authored-By` trailers**, one per provider/model, at the
+  end of the commit message:
+
+  ```
+  Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+  Co-Authored-By: MiMo v2.6 Flash Free <noreply@opencode.ai>
+  ```
+
+  Keep the trailer your tool already writes rather than stripping it, and when you use
+  another provider, use that provider's own name and email. Don't invent an address for a
+  provider that doesn't publish one — the trailer still documents the assistance in the
+  commit text; it just won't add a Contributors-graph entry unless the email belongs to a
+  GitHub account.
+- **Old commits keep the email they were written with.** We're not rewriting history to
+  relabel them, and we never force-push `main`. The convention applies going forward.
+- The commit template (`.github/commit-template.txt`) restates this inline when you
+  commit. Enable it once per clone:
+  `git config commit.template .github/commit-template.txt`
+  (already set in this clone).
+
 ## Secrets
 
 Nebius Token Factory key setup is in `README.md` → Setup. If you get your own

@@ -1,0 +1,16 @@
+# <type>: <summary, <= 72 chars>        e.g. fix: guard fast-path against empty audio
+#
+# Why: <what prompted this change and the alternative you rejected>
+#      (delete this block if the subject already says it)
+#
+# --- Attribution -------------------------------------------------------------
+# Author = you, a human, with a GitHub-linked email:
+#   287302999+elevenbaselab@users.noreply.github.com   (Settings -> Emails -> "Keep my
+#   email addresses private"). Never put an AI identity in the author field.
+#
+# AI help goes below as trailers only, one per provider/model. Uncomment what applies:
+#
+# Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+# Co-Authored-By: MiMo v2.6 Flash Free <noreply@opencode.ai>
+#
+# (Commented lines are stripped automatically by git.)
