@@ -79,4 +79,9 @@ missing or logged out, stop and tell the founder.
 - On Windows the test suite fails on emoji assertions under the default
   cp1252 console. Run with `PYTHONUTF8=1` (PowerShell: `$env:PYTHONUTF8=1`;
   cmd: `set PYTHONUTF8=1`) or `chcp 65001`. Linux and CI are UTF-8 already.
+- **`git commit -m` silently drops the attribution.** The commit template pre-fills
+  the `Co-Authored-By` trailer; passing `-m` bypasses it, and no hook warns, so a
+  run of six commits went out with a correct author and no trailer at all. Append
+  the trailer yourself whenever you use `-m` — see CONTRIBUTING.md →
+  "Commit attribution" and ADR-007.
 - When an assistant makes the same mistake twice, put the correction here.
