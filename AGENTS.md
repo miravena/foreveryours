@@ -14,6 +14,7 @@ cp .env.example .env                                   # .env is gitignored; nev
 
 python -m unittest discover tests -v                   # tests — standard library only
 scripts/smoke.sh                                       # tests + beats 1/3/day2, ~10s, no key
+scripts/openai_review.sh [base]                        # OpenAI review of committed diff vs main (needs `codex login`)
 
 .venv/bin/python main.py beat1 --audio samples/caregiver_memo.wav   # offline
 .venv/bin/python main.py beat2 --audio samples/senior_jazz.wav      # needs NEBIUS_API_KEY
@@ -27,6 +28,11 @@ scripts/smoke.sh                                       # tests + beats 1/3/day2,
 Run the test suite and paste the output in your summary. If a test fails, fix the
 code, never the test. Keep `main` demo-able: the three-beat demo in `README.md` must
 work after every change.
+
+For non-trivial work, also commit, run `scripts/openai_review.sh`, and address or
+answer each finding before reporting done. Assistants only run the script: never
+read, print or ask for any OpenAI key or `~/.codex` contents; if it says codex is
+missing or logged out, stop and tell the founder.
 
 ## Conventions
 
