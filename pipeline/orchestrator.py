@@ -116,17 +116,24 @@ class TurnResult:
     memories_used: list[str] = field(default_factory=list)
     memory_saved: str | None = None
     caregiver_flag: str | None = None
-    time_to_first_audio_s: float | None = None
+    time_to_first_audio_s: float | None = None  # time to first WAV WRITTEN (synthesis)
+    time_to_first_sound_s: float | None = None  # time to first SOUND played (issue #17)
     audit_verdict: str | None = None  # filled in async, may arrive after return
     background_thread: threading.Thread | None = None  # join() this before reading audit_verdict/memory_saved
     is_fallback: bool = False
     consecutive_errors: int = 0
 
 
-def _speak_turn(sentences, audio_out_dir: Path) -> tuple[str, list[Path], float | None]:
+def _speak_turn(sentences, audio_out_dir: Path, on_chunk=None) -> tuple[str, list[Path], float | None]:
     """Runs one full SPEAK pass over a sentence stream, returns the joined
     reply text, every audio chunk's path, and the wall-clock time at which
-    the FIRST chunk was ready (None if the stream was empty)."""
+    the FIRST chunk was ready (None if the stream was empty).
+
+    If ``on_chunk`` is given, it is called as ``on_chunk(sentence, audio_path)``
+    for each chunk the moment it is synthesized -- this lets a caller play a
+    sentence while the next one is still being synthesized (issue #17). When
+    ``on_chunk`` is None (the default), behavior is exactly as before, so
+    callers like webapp.py that only read ``audio_paths`` are unaffected."""
     t0 = time.monotonic()
     parts: list[str] = []
     paths: list[Path] = []
@@ -136,6 +143,8 @@ def _speak_turn(sentences, audio_out_dir: Path) -> tuple[str, list[Path], float 
         paths.append(audio_path)
         if first_audio_time is None:
             first_audio_time = time.monotonic() - t0
+        if on_chunk is not None:
+            on_chunk(sentence, audio_path)
     return " ".join(parts), paths, first_audio_time
 
 
@@ -148,6 +157,7 @@ def run_turn(
     history: list[dict] | None = None,
     consecutive_errors: int = 0,
     simulated_hour: int | None = None,
+    on_chunk=None,
 ) -> TurnResult:
     """`history` is session-scoped prior-turn context (see think.build_prompt's
     docstring for why this is kept separate from memory_store) -- pass None
@@ -162,7 +172,7 @@ def run_turn(
         # Fast-path IS the disclosure: the senior hears this before anything
         # else happens, so disclosed_to_senior=True is simply true here.
         flags.add(fast.caregiver_flag, severity=fast.severity, disclosed_to_senior=True)
-        _, immediate_audio_paths, first_audio_time = _speak_turn(iter([fast.immediate_reply]), audio_out_dir)
+        _, immediate_audio_paths, first_audio_time = _speak_turn(iter([fast.immediate_reply]), audio_out_dir, on_chunk=on_chunk)
         continuation_note = fast.continuation_note
     else:
         first_audio_time = None
@@ -261,7 +271,7 @@ def run_turn(
             for s in s_iter:
                 yield physical_claim_pattern.sub(f"{caregiver_name} will \\2", s)
                 
-        reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir)
+        reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir, on_chunk=on_chunk)
         if first_audio_time is None:
             first_audio_time = think_first_audio_time
     except NebiusNotConfigured:
@@ -278,7 +288,7 @@ def run_turn(
             is_fallback = True
             consecutive_errors += 1
             reply_text = FALLBACK_REPLY_2 if consecutive_errors >= 2 else FALLBACK_REPLY_1
-            _, fallback_paths, fallback_first_time = _speak_turn(iter([reply_text]), audio_out_dir)
+            _, fallback_paths, fallback_first_time = _speak_turn(iter([reply_text]), audio_out_dir, on_chunk=on_chunk)
             think_audio_paths.extend(fallback_paths)
             if first_audio_time is None:
                 first_audio_time = fallback_first_time
@@ -288,7 +298,7 @@ def run_turn(
         is_fallback = True
         consecutive_errors += 1
         reply_text = FALLBACK_REPLY_2 if consecutive_errors >= 2 else FALLBACK_REPLY_1
-        _, fallback_paths, fallback_first_time = _speak_turn(iter([reply_text]), audio_out_dir)
+        _, fallback_paths, fallback_first_time = _speak_turn(iter([reply_text]), audio_out_dir, on_chunk=on_chunk)
         think_audio_paths.extend(fallback_paths)
         if first_audio_time is None:
             first_audio_time = fallback_first_time
