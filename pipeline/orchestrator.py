@@ -75,6 +75,15 @@ def _words_match(w1: str, w2: str) -> bool:
         shorter, longer = (w1, w2) if len(w1) < len(w2) else (w2, w1)
         if longer.startswith(shorter) and len(longer) - len(shorter) <= 4:
             return True
+    # Fixes #32: Safe inflection matching for short words (3-4 chars).
+    # Allows common English suffixes (s, d, es, ed, ing) so that e.g.
+    # "dog" matches "dogs" and "walk" matches "walked"/"walking".
+    if len(w1) >= 3 and len(w2) >= 3:
+        shorter, longer = (w1, w2) if len(w1) < len(w2) else (w2, w1)
+        if longer.startswith(shorter):
+            suffix = longer[len(shorter):]
+            if suffix in ("s", "d", "es", "ed", "ing"):
+                return True
     return False
 
 

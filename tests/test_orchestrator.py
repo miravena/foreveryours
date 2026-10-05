@@ -247,3 +247,52 @@ if __name__ == "__main__":
         )
         flag_items = self.flags.all()
         self.assertTrue(any("Perseveration loop detected" in f.text for f in flag_items))
+
+
+class TestWordsMatchShortInflections(unittest.TestCase):
+    """Fixes #32: _words_match must handle short-word inflections (3-4 chars)."""
+
+    def test_dog_dogs(self):
+        from pipeline.orchestrator import _words_match
+        self.assertTrue(_words_match("dog", "dogs"))
+
+    def test_dogs_dog(self):
+        from pipeline.orchestrator import _words_match
+        self.assertTrue(_words_match("dogs", "dog"))
+
+    def test_walk_walked(self):
+        from pipeline.orchestrator import _words_match
+        self.assertTrue(_words_match("walk", "walked"))
+
+    def test_walk_walking(self):
+        from pipeline.orchestrator import _words_match
+        self.assertTrue(_words_match("walk", "walking"))
+
+    def test_cat_cats(self):
+        from pipeline.orchestrator import _words_match
+        self.assertTrue(_words_match("cat", "cats"))
+
+    def test_car_cart_no_match(self):
+        """'car' and 'cart' share a prefix but 't' is not a valid inflection suffix."""
+        from pipeline.orchestrator import _words_match
+        self.assertFalse(_words_match("car", "cart"))
+
+    def test_run_runs(self):
+        from pipeline.orchestrator import _words_match
+        self.assertTrue(_words_match("run", "runs"))
+
+    def test_exact_short_match(self):
+        from pipeline.orchestrator import _words_match
+        self.assertTrue(_words_match("dog", "dog"))
+
+    def test_unrelated_short_words(self):
+        from pipeline.orchestrator import _words_match
+        self.assertFalse(_words_match("dog", "fog"))
+
+    def test_find_matching_facts_short_words(self):
+        """End-to-end: 'I like the dogs' should match 'Senior loves walking the dog'."""
+        from pipeline.orchestrator import _find_matching_facts
+        facts = ["Senior loves walking the dog"]
+        result = _find_matching_facts("I like the dogs", facts)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0], "Senior loves walking the dog")
