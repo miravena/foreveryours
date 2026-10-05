@@ -15,6 +15,7 @@ cp .env.example .env                                   # .env is gitignored; nev
 python -m unittest discover tests -v                   # tests — standard library only
 # Windows only: prefix with PYTHONUTF8=1 (set PYTHONUTF8=1) — emoji test asserts need UTF-8
 scripts/smoke.sh                                       # tests + beats 1/3/day2, ~10s, no key
+scripts/openai_review.sh [base]                        # OpenAI review of commits not yet on origin/main (needs `codex login`)
 
 .venv/bin/python main.py beat1 --audio samples/caregiver_memo.wav   # offline
 .venv/bin/python main.py beat2 --audio samples/senior_jazz.wav      # needs NEBIUS_API_KEY
@@ -33,6 +34,11 @@ When changing `safety/fastpath.py`, this file, or `.agents/skills/`, also run
 `tests/test_mature_benchmarks.py` before merging — it guards the fastpath
 false-positive bias (Benchmark 2) and the caregiver privacy firewall (Benchmark 4).
 It is part of the normal suite, so a full `discover` run covers it.
+
+For non-trivial work, also commit, run `scripts/openai_review.sh`, and address or
+answer each finding before reporting done. Assistants only run the script: never
+read, print or ask for any OpenAI key or `~/.codex` contents; if it says codex is
+missing or logged out, stop and tell the founder.
 
 ## Conventions
 

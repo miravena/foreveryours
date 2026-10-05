@@ -1,0 +1,36 @@
+#!/bin/sh
+# pre-push: the last local gate before anything becomes public. Runs for every tool
+# (Claude Code, OpenCode, a human) because it is a git hook, not an assistant feature.
+#   1. BLOCK if the unit tests fail.
+#   2. BLOCK if any commit being pushed lacks a "Fixes #N:" / "Refs #N" subject.
+#   3. WARN (never block) if the pushed range has not been through the OpenAI review.
+# Bypass with `git push --no-verify` only on the founder's say-so. CI re-checks.
+# See AGENTS.md -> "Verify before reporting anything done".
+
+ROOT=$(git rev-parse --show-toplevel)
+status=0
+zero=0000000000000000000000000000000000000000
+
+while read -r _ local_sha _ remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue                    # branch deletion
+  if [ "$remote_sha" = "$zero" ]; then range="origin/main..$local_sha"; else range="$remote_sha..$local_sha"; fi
+  # Remote tip not fetched locally: check only what origin/main doesn't have, never all history.
+  git rev-parse --verify --quiet "${range%%..*}" >/dev/null || range="origin/main..$local_sha"
+  git rev-parse --verify --quiet origin/main >/dev/null || continue
+
+  bad=$(git log --format='%h %s' "$range" 2>/dev/null | grep -vE '^[0-9a-f]+ (Fixes|Refs) #[0-9]+: |^[0-9a-f]+ (docs|ci|chore|Merge)' || true)
+  if [ -n "$bad" ]; then
+    echo "pre-push: BLOCKED — commits without 'Fixes #N: <what and why>':" >&2
+    printf '%s\n' "$bad" | sed 's/^/  /' >&2
+    status=1
+  fi
+done
+
+PY="$ROOT/.venv/bin/python"; [ -x "$PY" ] || PY=python3
+if ! (cd "$ROOT" && "$PY" -m unittest discover tests >/dev/null 2>&1); then
+  echo "pre-push: BLOCKED — unit tests fail. Run: python -m unittest discover tests -v" >&2
+  status=1
+fi
+
+echo "pre-push: reminder — non-trivial work needs scripts/openai_review.sh before it is called done." >&2
+exit $status
