@@ -102,3 +102,82 @@ def speak_sentences(sentences: Iterator[str], out_dir: Path) -> Iterator[tuple[s
         _synthesize_file(sentence, out_path, engine)
         yield sentence, out_path
 
+
+def play_wav(audio_path: "Path") -> None:
+    """Play a single WAV file through the OS audio backend, blocking until it
+    finishes. Factored out of main.py so both the CLI and the pipelined player
+    share one implementation (no duplication). No-ops with a printed note if the
+    backend is missing, so headless boxes never crash a turn."""
+    if sys.platform == "win32":
+        try:
+            import winsound
+
+            winsound.PlaySound(str(audio_path), winsound.SND_FILENAME)
+        except Exception as exc:  # pragma: no cover - platform/audio specific
+            print(f"  (windows playback failed for {audio_path.name}: {exc})")
+        return
+
+    player = "afplay" if sys.platform == "darwin" else "aplay"
+    try:
+        subprocess.run([player, str(audio_path)], check=True, capture_output=True)
+    except FileNotFoundError:
+        print(f"  (no {player} found -- skipping playback of {audio_path.name})")
+    except subprocess.CalledProcessError as exc:  # pragma: no cover - audio specific
+        print(f"  (playback of {audio_path.name} failed: {exc})")
+
+
+class PipelinedPlayer:
+    """Plays reply audio on a background thread, overlapping with synthesis (issue #17).
+
+    Used as the ``on_chunk`` callback passed to ``orchestrator.run_turn``: the
+    synthesis loop calls ``feed(sentence, path)`` the instant each WAV is written,
+    and this player drains a FIFO queue on its own thread -- so sentence 2 is being
+    synthesized while sentence 1 is already playing. Playback order is preserved
+    (single consumer thread, FIFO queue).
+
+    ``time_to_first_sound_s`` is the wall-clock delay from construction to the
+    first ``play_wav`` call actually starting -- i.e. time to first SOUND HEARD,
+    the number issue #17 says we should report instead of time-to-first-WAV-written.
+
+    Usage:
+        player = PipelinedPlayer(play=play)
+        result = run_turn(..., on_chunk=player.feed)
+        player.close()                      # wait for all queued audio to finish
+        t = player.time_to_first_sound_s    # None if nothing played
+
+    When ``play`` is False the player is inert: ``feed`` is a no-op, nothing is
+    queued or played, and ``time_to_first_sound_s`` stays None.
+    """
+
+    def __init__(self, play: bool = True) -> None:
+        import queue
+        import threading
+
+        self.play = play
+        self.time_to_first_sound_s: float | None = None
+        self._t0 = time.monotonic()
+        self._q: "queue.Queue[Path | None]" = queue.Queue()
+        self._thread: "threading.Thread | None" = None
+        if play:
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+
+    def _run(self) -> None:
+        while True:
+            path = self._q.get()
+            if path is None:  # sentinel from close()
+                return
+            if self.time_to_first_sound_s is None:
+                self.time_to_first_sound_s = time.monotonic() - self._t0
+            play_wav(path)
+
+    def feed(self, sentence: str, audio_path: "Path") -> None:
+        """on_chunk callback: queue a freshly synthesized WAV for playback."""
+        if self.play:
+            self._q.put(audio_path)
+
+    def close(self) -> None:
+        """Signal end-of-stream and block until all queued audio has played."""
+        if self._thread is not None:
+            self._q.put(None)
+            self._thread.join()

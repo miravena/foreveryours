@@ -40,8 +40,11 @@ slower safety audit + memory-save step run in a background thread *after* the fi
 audio is already on its way out. Target: under 2 seconds to first audio on the common path.
 **Measured:** 0.11s on the fast-path (no LLM); about 0.9s to first audio on a live Nemotron turn with
 reasoning off (was 4.22s before, PR #25 -> PR #29). Dated measurements are in
-[`docs/WORK_LOG.md`](docs/WORK_LOG.md). That is time-to-first-WAV-written, not time-to-first-sound-heard;
-see [#17](../../issues/17).
+[`docs/WORK_LOG.md`](docs/WORK_LOG.md). The CLI (`main.py`/`chat`) now plays each reply sentence
+as soon as it is synthesized (pipelined playback, [#17](../../issues/17)), so it reports both
+**time to first WAV written** (synthesis) and **time to first sound heard** (the number a judge
+actually perceives). The browser demo still plays one combined clip; sentence-level browser
+streaming is tracked separately.
 
 ## Demo script
 

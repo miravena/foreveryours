@@ -59,5 +59,62 @@ class TestSpeak(unittest.TestCase):
             self.assertGreater(path.stat().st_size, 500, f"Path {path} must contain real audio bytes")
 
 
+class TestPipelinedPlayer(unittest.TestCase):
+    """Issue #17: playback overlaps synthesis, in order, and reports
+    time-to-first-SOUND. Playback is always mocked -- no audio hardware."""
+
+    def test_plays_all_chunks_in_order(self):
+        from unittest.mock import patch
+
+        played = []
+        with patch("pipeline.speak.play_wav", side_effect=lambda p: played.append(p)):
+            player = speak.PipelinedPlayer(play=True)
+            for i in range(4):
+                player.feed(f"s{i}", Path(f"chunk_{i}.wav"))
+            player.close()
+        self.assertEqual(played, [Path(f"chunk_{i}.wav") for i in range(4)])
+
+    def test_play_false_is_inert(self):
+        from unittest.mock import patch
+
+        with patch("pipeline.speak.play_wav") as mock_play:
+            player = speak.PipelinedPlayer(play=False)
+            player.feed("s0", Path("chunk_0.wav"))
+            player.close()
+        mock_play.assert_not_called()
+        self.assertIsNone(player.time_to_first_sound_s)
+
+    def test_first_sound_time_is_recorded(self):
+        from unittest.mock import patch
+
+        with patch("pipeline.speak.play_wav"):
+            player = speak.PipelinedPlayer(play=True)
+            player.feed("s0", Path("chunk_0.wav"))
+            player.close()
+        self.assertIsNotNone(player.time_to_first_sound_s)
+        self.assertGreaterEqual(player.time_to_first_sound_s, 0.0)
+
+    def test_playback_overlaps_synthesis(self):
+        """The first chunk must START playing before the LAST chunk is fed
+        (i.e. while 'synthesis' of later chunks is still happening)."""
+        import threading
+        import time as _time
+        from unittest.mock import patch
+
+        play_started = threading.Event()
+
+        def slow_play(_path):
+            play_started.set()
+            _time.sleep(0.05)
+
+        with patch("pipeline.speak.play_wav", side_effect=slow_play):
+            player = speak.PipelinedPlayer(play=True)
+            player.feed("s0", Path("chunk_0.wav"))
+            # Playback of chunk 0 should begin on the background thread without
+            # waiting for us to feed chunk 1 -- prove it started before we feed more.
+            self.assertTrue(play_started.wait(timeout=2.0), "playback did not start concurrently")
+            player.feed("s1", Path("chunk_1.wav"))
+            player.close()
+
 if __name__ == "__main__":
     unittest.main()

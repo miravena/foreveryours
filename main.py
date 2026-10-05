@@ -40,7 +40,7 @@ except ImportError:
 
 from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags
 from memory.store import MemoryStore
-from pipeline import hear
+from pipeline import hear, speak
 from pipeline.orchestrator import run_turn
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -48,22 +48,9 @@ AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
 
 
 def _play(audio_path: Path) -> None:
-    if sys.platform == "win32":
-        try:
-            import winsound
-
-            winsound.PlaySound(str(audio_path), winsound.SND_FILENAME)
-        except Exception as exc:
-            print(f"  (windows playback failed for {audio_path.name}: {exc})")
-        return
-
-    player = "afplay" if sys.platform == "darwin" else "aplay"
-    try:
-        subprocess.run([player, str(audio_path)], check=True, capture_output=True)
-    except FileNotFoundError:
-        print(f"  (no {player} found -- skipping playback of {audio_path.name})")
-    except subprocess.CalledProcessError as exc:
-        print(f"  (playback of {audio_path.name} failed: {exc})")
+    # Single implementation lives in pipeline.speak.play_wav (shared with the
+    # pipelined player); this thin wrapper keeps the existing call sites.
+    speak.play_wav(audio_path)
 
 
 def _print_memory_panel(store: MemoryStore, flags: CaregiverFlags) -> None:
@@ -104,27 +91,33 @@ def beat2_senior_turn(transcript: str | None, audio_in: Path | None = None, play
 
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR)
-    result = run_turn(transcript, store, flags, AUDIO_DIR, caregiver_name=DEFAULT_CAREGIVER_NAME)
+    # Pipelined playback (issue #17): the player plays each reply sentence on a
+    # background thread the instant it is synthesized, so sentence 2 synthesizes
+    # while sentence 1 is already audible. first_sound time = time to first SOUND
+    # heard, not time to first WAV written.
+    player = speak.PipelinedPlayer(play=play)
+    result = run_turn(
+        transcript, store, flags, AUDIO_DIR,
+        caregiver_name=DEFAULT_CAREGIVER_NAME, on_chunk=player.feed,
+    )
 
     print(f'Senior said: "{transcript}"')
     print(f"Companion replied: \"{result.reply_text}\"")
     if result.time_to_first_audio_s is not None:
-        tag = "OK" if result.time_to_first_audio_s < 2.0 else "SLOW"
-        print(f"Time to first audio: {result.time_to_first_audio_s:.2f}s [{tag}]")
+        print(f"Time to first WAV written (synthesis): {result.time_to_first_audio_s:.2f}s")
     print(f"Memories recalled: {result.memories_used}")
     print(f"Audio chunks: {[p.name for p in result.audio_paths]}")
-    if play:
-        played_paths = set(result.audio_paths)
-        for audio_path in list(result.audio_paths):
-            _play(audio_path)
 
     if result.background_thread is not None:
         result.background_thread.join(timeout=10)  # the audit/memory-save LLM call can be slower than a fixed sleep
-        
-    if play and result.background_thread is not None:
-        for audio_path in result.audio_paths:
-            if audio_path not in played_paths:
-                _play(audio_path)
+
+    # Wait for all queued/overlapped playback (including any audio the background
+    # audit/disclosure appended after the turn returned) to finish.
+    player.close()
+    result.time_to_first_sound_s = player.time_to_first_sound_s
+    if result.time_to_first_sound_s is not None:
+        tag = "OK" if result.time_to_first_sound_s < 2.0 else "SLOW"
+        print(f"Time to first sound heard: {result.time_to_first_sound_s:.2f}s [{tag}]")
     if result.memory_saved:
         print(f"New memory saved: {result.memory_saved}")
     if result.audit_verdict:
@@ -220,6 +213,7 @@ def chat_loop(play: bool = True) -> None:
             break
 
         try:
+            player = speak.PipelinedPlayer(play=play)
             result = run_turn(
                 senior_input,
                 store,
@@ -228,6 +222,7 @@ def chat_loop(play: bool = True) -> None:
                 caregiver_name=DEFAULT_CAREGIVER_NAME,
                 history=history,
                 consecutive_errors=consecutive_errors,
+                on_chunk=player.feed,
             )
             consecutive_errors = result.consecutive_errors
         except NebiusNotConfigured:
@@ -241,18 +236,18 @@ def chat_loop(play: bool = True) -> None:
 
         print(f"\nCompanion: \"{result.reply_text}\"")
         if result.time_to_first_audio_s is not None:
-            tag = "OK" if result.time_to_first_audio_s < 2.0 else "SLOW"
-            print(f"Time to first audio: {result.time_to_first_audio_s:.2f}s [{tag}]")
+            print(f"Time to first WAV written (synthesis): {result.time_to_first_audio_s:.2f}s")
         if result.caregiver_flag:
             print(f"[FLAGGED] Caregiver alert: {result.caregiver_flag}")
         print(f"Audio chunks: {[p.name for p in result.audio_paths]}")
 
-        if play:
-            for audio_path in result.audio_paths:
-                _play(audio_path)
-
         if result.background_thread is not None:
             result.background_thread.join(timeout=10)
+        player.close()
+        result.time_to_first_sound_s = player.time_to_first_sound_s
+        if result.time_to_first_sound_s is not None:
+            tag = "OK" if result.time_to_first_sound_s < 2.0 else "SLOW"
+            print(f"Time to first sound heard: {result.time_to_first_sound_s:.2f}s [{tag}]")
         if result.memory_saved:
             print(f"[MEMORY] New memory saved: {result.memory_saved}")
         if result.audit_verdict and not result.caregiver_flag:

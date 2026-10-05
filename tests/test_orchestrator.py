@@ -50,6 +50,42 @@ class TestOrchestrator(unittest.TestCase):
         self.assertTrue(flag_items[0].disclosed_to_senior)
         self.assertEqual(flag_items[0].severity, "distress")
 
+    def test_on_chunk_callback_fires_per_audio_chunk(self):
+        # Issue #17: run_turn must invoke on_chunk(sentence, path) for each audio
+        # chunk as it is produced, so a caller can pipeline playback. Uses the
+        # offline fast-path so no NEBIUS_API_KEY is needed.
+        seen = []
+        result = run_turn(
+            transcript="I fell down earlier and I'm scared",
+            memory_store=self.store,
+            flags=self.flags,
+            audio_out_dir=self.audio_dir,
+            caregiver_name="Sarah",
+            on_chunk=lambda sentence, path: seen.append(path),
+        )
+        if result.background_thread is not None:
+            result.background_thread.join(timeout=10)
+        # The fast-path immediate reply produced at least one chunk; every chunk
+        # the callback saw must be one of the turn's audio paths, in order.
+        self.assertGreaterEqual(len(seen), 1)
+        for path in seen:
+            self.assertIn(path, result.audio_paths)
+        self.assertEqual(seen, result.audio_paths[: len(seen)])
+
+    def test_default_on_chunk_none_preserves_behavior(self):
+        # Regression: omitting on_chunk (default None) must not raise and must
+        # still return audio paths, exactly as before.
+        result = run_turn(
+            transcript="I fell down earlier and I'm scared",
+            memory_store=self.store,
+            flags=self.flags,
+            audio_out_dir=self.audio_dir,
+            caregiver_name="Sarah",
+        )
+        if result.background_thread is not None:
+            result.background_thread.join(timeout=10)
+        self.assertGreaterEqual(len(result.audio_paths), 1)
+
     def test_non_fastpath_without_api_key_raises_gracefully(self):
         # When no API key is configured, non-distress conversational turns
         # raise NebiusNotConfigured so caller can provide clear guidance (fail loud, never fake).
