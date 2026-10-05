@@ -11,6 +11,9 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ### 2026-10-05
 - Fixed #32 (memory recall for short words like dog/dogs) and #34 (memory supersession preserving temporal/privacy properties).
+- Merged `miravena/work` -> `main` (review script, pre-push hook, AGENTS.md review rule; one AGENTS.md conflict resolved as a union). Closed #49.
+- Closed #28 with a hardened 60-sentence endurance test and a 200-sentence verification run; split its stretch scope into #52.
+- Filed #51 (fastpath `help me` gap), #53 (test suite consumes the demo quota), rewrote #48 to mean live Nemotron behaviour.
 
 ### 2026-10-03
 - PR #29 (audit fixes, sub-second latency, `espeak-ng` CLI, dual text input, memory badges) and PR #31 (circadian rhythm, acoustic biomarkers, perseveration tracking) merged.
@@ -36,6 +39,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
 | Day-2 recall | Cross-process persistence | 10-01 | |
 | Real voice round trip | Works | 10-01 | audio -> ASR -> model -> TTS -> play |
 | Hosted isolation (dry run) | Sessions independent | 10-02 | `--dry-run --keep-stage` |
+| TTS endurance, 200 sentences in one process | 0 empty WAVs, min 123 KB, 12.5s | 10-05 | #28 evidence; regression test runs 60 in-suite (~3s) |
 
 ## Known gotchas
 
@@ -43,6 +47,8 @@ Format: newest first. One entry per session: date, who, what, result, next.
 - **Playwright + Gradio audio upload:** click `button[aria-label='Upload file']`, then `set_input_files` on `[data-testid=file-upload]`.
 - **Pull before you trust status:** your teammate may have pushed to `main`. `git pull` before trusting what you remember of the app.
 - **Free HF Spaces sleep:** keep the Space awake before judging; a cold first click can hang.
+- **A worktree needs its own `.venv`:** `.githooks/pre-push` runs `$ROOT/.venv/bin/python`, so a fresh worktree silently falls back to system `python3`, which lacks gradio — the hook then reports "unit tests fail" when really the runner has no dependencies. Build one per worktree (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`).
+- **Tests spend the demo's quota:** the suite increments the live daily counter 11x per run (see #53). A day of local testing will make webapp tests fail with a message about the daily cap, and can deny a real judge their turn.
 
 ## Decisions logged
 

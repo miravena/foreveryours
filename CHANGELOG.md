@@ -11,9 +11,12 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Added
+- Memory control in conversation: THINK now emits `ADD:` / `SUPERSEDE:` / `DELETE:` commands that the memory store applies, so the senior can correct a wrong fact or ask to forget one instead of memories only ever being appended.
+- Anti-dependency prompting: rule 17 of the THINK system prompt now actively redirects the senior toward their human family ("Sarah would love to hear your voice — why not give her a call?") rather than only declining to claim exclusivity.
 - GitHub Actions workflow running the test suite on every push to `main` and every PR; `SECURITY.md` with private vulnerability reporting (#39).
 
 ### Changed
+- Benchmark 8 (memory correction end-to-end) is always attempted instead of being skipped outright without an API key; it now skips inside the test only if the API call itself fails (e.g. a dummy key in CI).
 - One source of truth: GitHub (milestones, Issues, blocked-by) records all work state; `docs/ROADMAP.md`, `IMPLEMENTATION_PLAN.md` and `WORK_LOG.md` no longer carry status or dates (#38).
 
 ### Fixed
