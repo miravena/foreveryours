@@ -14,7 +14,9 @@ zero=0000000000000000000000000000000000000000
 while read -r _ local_sha _ remote_sha; do
   [ "$local_sha" = "$zero" ] && continue                    # branch deletion
   if [ "$remote_sha" = "$zero" ]; then range="origin/main..$local_sha"; else range="$remote_sha..$local_sha"; fi
-  git rev-parse --verify --quiet "${range%%..*}" >/dev/null || range="$local_sha"
+  # Remote tip not fetched locally: check only what origin/main doesn't have, never all history.
+  git rev-parse --verify --quiet "${range%%..*}" >/dev/null || range="origin/main..$local_sha"
+  git rev-parse --verify --quiet origin/main >/dev/null || continue
 
   bad=$(git log --format='%h %s' "$range" 2>/dev/null | grep -vE '^[0-9a-f]+ (Fixes|Refs) #[0-9]+: |^[0-9a-f]+ (docs|ci|chore|Merge)' || true)
   if [ -n "$bad" ]; then

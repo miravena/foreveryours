@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Independent OpenAI review of this branch's diff, via the Codex CLI.
 #
-#   scripts/openai_review.sh              # reviews main...HEAD
-#   scripts/openai_review.sh origin/main  # reviews against another base
+#   scripts/openai_review.sh              # reviews origin/main...HEAD (a branch's changes,
+#                                         # or the unpushed commits when on main)
+#   scripts/openai_review.sh <base>       # reviews against another base
 #
 # Safe for assistants to run: it only prints the review. Login lives in ~/.codex
 # (run `codex login` yourself, once); no key is read from or written to this repo.
@@ -10,7 +11,7 @@
 # sees .env, data/, out/ or .venv. Only committed files are reviewed: commit first.
 set -euo pipefail
 
-BASE="${1:-main}"
+BASE="${1:-origin/main}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 

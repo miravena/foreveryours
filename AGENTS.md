@@ -14,7 +14,7 @@ cp .env.example .env                                   # .env is gitignored; nev
 
 python -m unittest discover tests -v                   # tests — standard library only
 scripts/smoke.sh                                       # tests + beats 1/3/day2, ~10s, no key
-scripts/openai_review.sh [base]                        # OpenAI review of committed diff vs main (needs `codex login`)
+scripts/openai_review.sh [base]                        # OpenAI review of commits not yet on origin/main (needs `codex login`)
 
 .venv/bin/python main.py beat1 --audio samples/caregiver_memo.wav   # offline
 .venv/bin/python main.py beat2 --audio samples/senior_jazz.wav      # needs NEBIUS_API_KEY
