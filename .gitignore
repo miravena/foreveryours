@@ -12,6 +12,7 @@ __pycache__/
 # committed video/casts/*.cast files.
 video/output/
 
-# Kiro IDE: fully local. Shared planning docs live in docs/specs/ (mirrored),
-# so nothing under .kiro/ is tracked.
+# Kiro IDE: fully local. docs/specs/ is the authoritative copy of every planning
+# doc (see docs/specs/README.md); .kiro/ is Kiro's own scratch, so nothing under
+# it is tracked.
 .kiro/

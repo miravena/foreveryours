@@ -28,7 +28,7 @@ Run each pass and tag every finding with the pass it came from.
   tries to defeat it). Caregiver-only memories must not leak into senior turns
   (Benchmark 4).
 - **Compliance-with-plan** -- the diff matches the committed
-  `.kiro/specs/<feature>/plan.md` (or the Issue's acceptance criteria) for the
+  `docs/specs/<feature>/plan.md` (or the Issue's acceptance criteria) for the
   change. Call out undocumented scope.
 
 ## What "Important" means here

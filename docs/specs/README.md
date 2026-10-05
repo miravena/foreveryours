@@ -43,14 +43,24 @@ Rule of thumb: a bug fix uses `bugfix.md`; a feature uses `requirements.md`.
 Both share `design.md` + `tasks.md`. `plan.md` is used when the `.agents`
 plan-before-code step produced one.
 
-## Relationship to `.kiro/specs/`
+## Relationship to `.kiro/`
 
-These are human-readable mirrors. The authoritative copies live in
-`.kiro/specs/<name>/`, where Kiro's spec tooling reads them (validation,
-task-run links). Kiro-internal files like `.config.kiro` are deliberately not
-mirrored here. If you don't use Kiro, read these `docs/specs/` copies. If a doc
-changes in `.kiro/specs/`, it is re-mirrored here in the same change so the two
-do not drift.
+**`docs/specs/` is the authoritative copy.** One repo, any number of tools: Kiro,
+Claude Code, OpenCode and a human with `cat` all read the same committed files,
+so the copy in git is the one that counts. A tool's private directory is local
+state, never a second source of truth.
+
+`.kiro/` is Kiro's own working directory -- gitignored, present only on a machine
+running Kiro, and holding what Kiro needs to keep for itself (`.config.kiro`,
+task-run links), none of which is committed. If Kiro's spec tooling needs a
+`plan.md` under `.kiro/specs/` to do validation or task links, derive it from
+this folder; **on any conflict the `docs/specs/` copy wins**, so nobody has to
+know which tool was the last writer. Never let a doc exist *only* under
+`.kiro/` -- nobody else can see it, and it will drift.
+
+That rule scales to whatever tool shows up next: it gets a gitignored directory
+for its own state and reads `AGENTS.md` plus `docs/` for the shared rules. If a
+tool insists on being the authoritative writer for a doc, it doesn't belong here.
 
 The repo-wide review policy is `REVIEW.md` at the repo root -- it is not a
 per-feature doc and does not live here.
