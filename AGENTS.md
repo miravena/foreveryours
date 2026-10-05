@@ -13,6 +13,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env                                   # .env is gitignored; never commit it
 
 python -m unittest discover tests -v                   # tests — standard library only
+# Windows only: prefix with PYTHONUTF8=1 (set PYTHONUTF8=1) — emoji test asserts need UTF-8
 scripts/smoke.sh                                       # tests + beats 1/3/day2, ~10s, no key
 
 .venv/bin/python main.py beat1 --audio samples/caregiver_memo.wav   # offline
@@ -27,6 +28,11 @@ scripts/smoke.sh                                       # tests + beats 1/3/day2,
 Run the test suite and paste the output in your summary. If a test fails, fix the
 code, never the test. Keep `main` demo-able: the three-beat demo in `README.md` must
 work after every change.
+
+When changing `safety/fastpath.py`, this file, or `.agents/skills/`, also run
+`tests/test_mature_benchmarks.py` before merging — it guards the fastpath
+false-positive bias (Benchmark 2) and the caregiver privacy firewall (Benchmark 4).
+It is part of the normal suite, so a full `discover` run covers it.
 
 ## Conventions
 
@@ -64,4 +70,7 @@ work after every change.
 - `safety/fastpath.py` is deliberately biased to false positives. Do not "optimise"
   it toward fewer alerts without an Issue and an ADR.
 - `.env.example` must match the real config — it drifted once for a full day.
+- On Windows the test suite fails on emoji assertions under the default
+  cp1252 console. Run with `PYTHONUTF8=1` (PowerShell: `$env:PYTHONUTF8=1`;
+  cmd: `set PYTHONUTF8=1`) or `chcp 65001`. Linux and CI are UTF-8 already.
 - When an assistant makes the same mistake twice, put the correction here.
