@@ -1,0 +1,22 @@
+#!/bin/sh
+# commit-msg: warn when this commit's author email can't be credited on GitHub.
+# Advisory only — always exits 0 so it never blocks a commit.
+# See CONTRIBUTING.md -> "Commit attribution".
+
+email=$(git var GIT_AUTHOR_EMAIL 2>/dev/null || git config user.email)
+
+case "$email" in
+  *@users.noreply.github.com) exit 0 ;;          # linked by construction
+  elevenbaselab@gmail.com|mathewgc007@gmail.com) exit 0 ;;  # verified on a GitHub account
+esac
+
+cat >&2 <<EOF
+
+WARNING: author email '$email' is not a known GitHub-linked address.
+Commits with an unlinked author email do not appear under your account in the
+Contributors graph (they credit nobody, while any Co-Authored-By trailer still
+credits the assistant). Expected something ending in
+@users.noreply.github.com — see CONTRIBUTING.md -> "Commit attribution".
+
+EOF
+exit 0

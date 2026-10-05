@@ -1,0 +1,34 @@
+#!/bin/sh
+# pre-commit: block staged content that looks like a secret or a gitignored env file.
+# .gitignore only covers plain 'git add' — it does not stop 'git add -f .env' or a key
+# pasted into code. A leaked key can only be fixed by rotation, never by rewriting
+# history, so this one blocks instead of warning.
+# See CONTRIBUTING.md -> "What never gets committed".
+
+staged=$(git diff --cached --diff-filter=ACM -U0)
+names=$(git diff --cached --name-only --diff-filter=ACM)
+status=0
+
+# 1. The env file itself, staged by force or by name
+if printf '%s\n' "$names" | grep -qx '\.env'; then
+  echo "pre-commit: BLOCKED — .env is staged. It must never be committed." >&2
+  status=1
+fi
+
+# 2. Key-shaped strings in the staged lines (placeholders like your_... / hf_... are fine)
+hits=$(printf '%s\n' "$staged" | grep -nE \
+  -e 'hf_[A-Za-z0-9]{20,}' \
+  -e 'sk-[A-Za-z0-9]{20,}' \
+  -e 'AKIA[0-9A-Z]{16}' \
+  -e 'BEGIN [A-Za-z ]*PRIVATE KEY' \
+  -e '(NEBIUS_API_KEY|HF_TOKEN)=[A-Za-z0-9_/.-]{16,}' \
+  | grep -vE 'your_|hf_\.\.\.|\$\{' || true)
+
+if [ -n "$hits" ]; then
+  echo "pre-commit: BLOCKED — possible secret in staged changes:" >&2
+  printf '%s\n' "$hits" | sed 's/^/  /' >&2
+  echo "  Move the value into .env (gitignored) and reference it from code." >&2
+  status=1
+fi
+
+exit $status

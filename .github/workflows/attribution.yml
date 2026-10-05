@@ -1,0 +1,53 @@
+name: attribution
+
+# Advisory governance checks (AI-native SDLC, Stage 5: enforce policy where the
+# agent acts, not in a review cycle nobody runs). Warn-only on purpose: we start
+# quiet, and can turn a warning into a failure once it has been clean for a week.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  author-and-secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Warn when an author email is not GitHub-linked
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          else
+            range="${{ github.event.before }}..${{ github.sha }}"
+          fi
+          authors=$(git log --format='%ae|%an|%h' "$range" 2>/dev/null || git log -1 --format='%ae|%an|%h')
+          printf '%s\n' "$authors" | while IFS='|' read -r email name sha; do
+            [ -z "$email" ] && continue
+            case "$email" in
+              *@users.noreply.github.com|elevenbaselab@gmail.com|mathewgc007@gmail.com) ;;
+              *)
+                echo "::warning::commit ${sha:-?} by '$name' has author email '$email', which is not GitHub-linked — it will not appear under an account in the Contributors graph (see CONTRIBUTING.md -> Commit attribution)"
+                ;;
+            esac
+          done
+
+      - name: Warn when tracked files contain key-shaped strings
+        run: |
+          hits=$(git grep -nIE \
+            -e 'hf_[A-Za-z0-9]{20,}' \
+            -e 'sk-[A-Za-z0-9]{20,}' \
+            -e 'AKIA[0-9A-Z]{16}' \
+            -e 'BEGIN [A-Za-z ]*PRIVATE KEY' \
+            -e '(NEBIUS_API_KEY|HF_TOKEN)=[A-Za-z0-9_/.-]{16,}' \
+            -- '.env.example' ':!.env.example' 2>/dev/null | grep -vE 'your_|hf_\.\.\.' || true)
+          if [ -n "$hits" ]; then
+            printf '%s\n' "$hits"
+            echo "::warning::possible secret committed — rotate the key and move it to .env or a GitHub Actions secret"
+          fi

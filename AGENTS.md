@@ -41,6 +41,8 @@ work after every change.
 - **State never goes in a doc** — status, dates, blockers and "next" live only on
   GitHub Issues/milestones. Docs describe what, why and how.
 - Never commit `.env`, `data/`, `out/`, or anything secret. The repo is public.
+  A pre-commit hook blocks staged secrets; a commit-msg hook warns when the author
+  email isn't GitHub-linked (both in `.githooks/`), and CI re-checks on every push.
 
 ## Where to change what
 
