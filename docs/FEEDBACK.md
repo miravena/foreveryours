@@ -1,23 +1,23 @@
-# Nebius and NVIDIA Feedback
+# Feedback: Nebius Token Factory, AI Cloud & NVIDIA Tools
 
-This feedback is provided as part of the Nebius x NVIDIA Global AI Hackathon submission requirements.
+This feedback is provided for the Nebius x NVIDIA Global AI Hackathon (Requirement 9) and the Most Valuable Feedback prize.
 
-## 1. Nebius Token Factory & AI Cloud
-
-**What worked well:**
-*   **API Compatibility:** Integrating with Token Factory was extremely smooth as a drop-in replacement for standard OpenAI-compatible endpoints. It allowed us to quickly connect our orchestrator pipeline.
-*   **Performance:** Once optimized, the inference speed on Nebius Token Factory was exceptional, giving us the sub-second perceived latency (~0.91s to first audio) required for a natural conversational voice AI.
-
-**Areas for improvement (Friction points):**
-*   **Missing Audio Transcription Endpoint:** We originally planned to use an NVIDIA-hosted ASR model via Nebius, but calls to `/audio/transcriptions` returned a 404 (as verified in our live testing on 2026-10-02). We had to pivot to using local `faster-whisper` for our speech-to-text layer. Adding a standard audio transcription endpoint to Token Factory would greatly simplify voice-first application architectures.
-*   **Reasoning Token Latency Surprises:** Initially, we experienced significant latency spikes (over 4.22s to first audio). We eventually diagnosed that hidden reasoning tokens were dominating the generation time. Setting `enable_thinking: false` fixed this immediately. Surfacing reasoning token behavior more transparently in the API documentation or usage dashboards would help developers diagnose latency faster.
-*   **Model ID Casing:** We experienced minor friction with exact model ID casing requirements when interacting with the API compared to some documentation references. 
-
-## 2. NVIDIA Models (`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`)
+## Nebius Token Factory & AI Cloud
 
 **What worked well:**
-*   **Dual-Purpose Capability:** We used the Nemotron Nano 30B model for two very different tasks in our pipeline: the primary conversational generative layer (THINK) and a secondary, analytical safety checker (AUDIT). The model excelled at both. It maintained the warm, empathetic tone required for an eldercare companion, while also being capable of strict, rule-based auditing of its own outputs.
-*   **Efficiency:** The 30B size was the perfect sweet spot for our use case—large enough to maintain conversational context and follow strict system prompts (such as time-of-day circadian rules), but light enough to hit our stringent latency targets for real-time voice interaction.
+- **Latency & Speed:** Once optimized, latency was exceptional. We achieved ~0.91s to first audio output, which was critical for maintaining a natural pace in a voice-first interface.
+- **Credit Allocation:** The provided sponsor credits and Builder Program allowance ($25 + $25) were generous, frictionless to activate, and more than sufficient for full prototyping and deployment testing.
 
 **Areas for improvement:**
-*   We found that the model would occasionally struggle with very short word inflections in our early retrieval pipelines, requiring us to build more robust substring matching logic on our end. However, as an LLM, its core generative performance was highly reliable.
+- **Missing Audio/Transcription Endpoints:** Token Factory lacked a direct audio-transcription API. We had to pivot to using a local `faster-whisper` deployment (ADR-004), which complicated our initial cloud-native architecture. Adding native STT endpoints would greatly simplify voice-first development on the platform.
+- **Reasoning Tokens Impacting Latency:** By default, hidden reasoning tokens significantly degraded time-to-first-byte (initial tests showed 4.22s to first audio). We had to explicitly discover and pass `enable_thinking: false` to reach our <1s target. It would be helpful if documentation highlighted the latency tradeoff of reasoning tokens for real-time applications.
+- **Model-ID Casing:** We encountered friction with exact model-ID string casing and undocumented variations. Clearer documentation or case-insensitive matching on the API side would smooth out the initial developer experience.
+
+## NVIDIA Models (Nemotron Nano 30B)
+
+**What worked well:**
+- **Contextual Recall (THINK pass):** Nemotron Nano 30B excelled at seamlessly integrating retrieved RAG context (from ChromaDB) without sounding robotic. It successfully recalled specific biographical details (e.g., "Grandson Leo") in a warm, conversational tone.
+- **Safety Auditing (AUDIT pass):** The model proved capable of running secondary safety checks in the background asynchronously, ensuring responses adhered to our strict privacy and no-medical-claims policies without hallucinating false positives.
+
+**Areas for improvement:**
+- **Conversational Brevity:** The model tends to produce longer, more detailed responses by default. For a zero-screen, voice-first application aimed at older adults, we had to aggressively prompt it to maintain short, patient conversational pacing.
