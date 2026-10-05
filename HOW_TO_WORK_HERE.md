@@ -26,8 +26,12 @@ Issue or milestone instead. Not in chat, not in a second tracking file.
 1. **Pick up:** open the [milestones page](../../milestones) (sorted by due date), take an Issue
    in the earliest open milestone that isn't blocked, read its acceptance criteria and
    comments, comment `Starting work on this`, and assign yourself.
-2. **Work:** comment progress on the Issue (tried / result / next). Journal measurements and
-   gotchas in `WORK_LOG.md` after the session.
+2. **Plan, then work:** for anything non-trivial, write the plan into the Issue's
+   acceptance criteria (or commit a `plan.md` alongside the change) *before* coding —
+   a plan another person or an assistant can read beats a plan in someone's head, and
+   the PR review checks the diff against it. Then comment progress on the Issue
+   (tried / result / next). Journal measurements and gotchas in `WORK_LOG.md` after the
+   session.
 3. **Land:** commit with `Fixes #N: <what and why>`, one logical change per commit. Per
    [`CONTRIBUTING.md`](CONTRIBUTING.md), direct commits to `main` are fine; use a branch + PR
    when you want the other person's eyes first. Never force-push. Keep `main` demo-able.
