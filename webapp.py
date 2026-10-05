@@ -317,7 +317,7 @@ def _run_demo_turn(
         return "Record audio or type what Dad says first.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_"
 
     if not transcript.strip():
-        return "Couldn't make out any speech or text -- try again.", None, history, panel()
+        return "Couldn't make out any speech or text -- try again.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_"
 
     _clear_session_audio(audio_dir)
     try:

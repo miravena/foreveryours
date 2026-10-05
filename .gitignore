@@ -11,3 +11,7 @@ __pycache__/
 # terminal mp4s and frame dumps) rebuilds deterministically from the
 # committed video/casts/*.cast files.
 video/output/
+
+# Kiro IDE: ignore local/cache artifacts but keep the shared spec design docs
+.kiro/*
+!.kiro/specs/
