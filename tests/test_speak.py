@@ -50,13 +50,29 @@ class TestSpeak(unittest.TestCase):
             self.assertEqual(call1_args[7], "Good morning.")
 
     def test_multi_sentence_endurance_no_silence(self):
-        # Multi-sentence endurance in a single process (proving zero silence / zero deadlock)
-        sentences = iter([f"Sentence number {i} is speaking clearly." for i in range(5)])
+        # Regression test for #28: on Linux, one long-lived in-process engine
+        # started returning empty WAVs (44-byte header, no audio) after ~19
+        # sentences, which would have gone silent mid-demo on a hosted server.
+        # The fix is one clean espeak-ng subprocess per sentence (ADR-001), so
+        # this runs a full 3x past the old failure point in a single process.
+        # Keep the count well above 19 -- lowering it re-opens the bug.
+        n_sentences = 60
+        sentences = iter(
+            [f"Sentence number {i} is speaking clearly." for i in range(n_sentences)]
+        )
         results = list(speak.speak_sentences(sentences, self.out_dir))
-        self.assertEqual(len(results), 5)
-        for text, path in results:
-            self.assertTrue(path.exists(), f"Path {path} must exist on disk")
-            self.assertGreater(path.stat().st_size, 500, f"Path {path} must contain real audio bytes")
+        self.assertEqual(len(results), n_sentences)
+
+        empty = []
+        for i, (text, path) in enumerate(results):
+            self.assertTrue(path.exists(), f"sentence {i}: path must exist on disk")
+            size = path.stat().st_size
+            if size <= 500:
+                empty.append((i, size))
+        self.assertEqual(
+            empty, [],
+            f"empty/near-empty WAVs at sentences {empty} -- #28-style silence regression",
+        )
 
 
 class TestPipelinedPlayer(unittest.TestCase):
