@@ -70,19 +70,19 @@ class TestThink(unittest.TestCase):
         # Valid markers
         self.assertEqual(
             think.extract_new_memory("My favorite flavor is strawberry", "", use_llm=False),
-            "My favorite flavor is strawberry",
+            "ADD: My favorite flavor is strawberry",
         )
         self.assertEqual(
             think.extract_new_memory("I used to work as a teacher in Boston", "", use_llm=False),
-            "I used to work as a teacher in Boston",
+            "ADD: I used to work as a teacher in Boston",
         )
         self.assertEqual(
             think.extract_new_memory("I love jazz so much", "", use_llm=False),
-            "I love jazz so much",
+            "ADD: I love jazz so much",
         )
         self.assertEqual(
             think.extract_new_memory("My grandson will visit on Sunday", "", use_llm=False),
-            "My grandson will visit on Sunday",
+            "ADD: My grandson will visit on Sunday",
         )
 
         # Word boundary tests: should NOT trigger on partial substrings

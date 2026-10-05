@@ -346,10 +346,26 @@ def run_turn(
                 result.audit_verdict = f"audit error: {exc}"
 
             try:
-                saved = think.extract_new_memory(transcript, reply_text)
-                if saved:
-                    memory_store.add(saved, source="conversation_extract")
-                    result.memory_saved = saved
+                active_facts = memory_store.senior_profile_facts()
+                saved_cmd = think.extract_new_memory(transcript, reply_text, active_facts)
+                if saved_cmd:
+                    if saved_cmd.startswith("ADD:"):
+                        fact = saved_cmd[4:].strip()
+                        memory_store.add(fact, source="conversation_extract")
+                        result.memory_saved = fact
+                    elif saved_cmd.startswith("SUPERSEDE:") or saved_cmd.startswith("SUPERSESE:"):
+                        parts = saved_cmd.split(":", 1)[-1].split("|")
+                        if len(parts) == 2:
+                            old_fact, new_fact = parts[0].strip(), parts[1].strip()
+                            memory_store.supersede(old_fact, new_fact, source="conversation_extract")
+                            result.memory_saved = f"Corrected: {new_fact}"
+                    elif saved_cmd.startswith("DELETE:"):
+                        old_fact = saved_cmd[7:].strip()
+                        memory_store.delete(old_fact)
+                        result.memory_saved = f"Forgot: {old_fact}"
+                    else:
+                        memory_store.add(saved_cmd, source="conversation_extract")
+                        result.memory_saved = saved_cmd
             except Exception:  # pragma: no cover - best-effort background extraction
                 pass
 

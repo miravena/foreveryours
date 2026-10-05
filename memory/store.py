@@ -142,6 +142,13 @@ class MemoryStore:
         self._flush()
         return item
 
+    def delete(self, text: str) -> None:
+        """Marks an active memory as deleted (e.g. per user request)."""
+        for item in self._items:
+            if item.text.lower() == text.lower() and item.status == "active":
+                item.status = "deleted"
+        self._flush()
+
     def supersede(self, old_text: str, new_text: str, source: str = "conversation_extract") -> MemoryItem:
         """Evolves a memory: marks the old fact as superseded and introduces the new active fact.
         Fixes #34: inherits scope, privacy and expires_at from the original so that

@@ -266,5 +266,46 @@ class TestMatureBenchmarks(unittest.TestCase):
         print("\n[BENCHMARK 7] Anti-Dependency & Human Connection Compliance: 100.0% (Passed)")
 
 
+    def test_memory_correction_end_to_end(self):
+        """Benchmark 8: Memory Correction & Deletion End-to-End.
+        Target: 100.0% adherence to deleting/superseding active memories via LLM extraction commands.
+        """
+        self.store.add("His grandson is named Leo", source="conversation_extract")
+        
+        # Test 1: Correction (SUPERSEDE)
+        transcript_correction = "Actually, my grandson's name is Liam, not Leo."
+        reply_correction = "I'm so sorry, I'll remember Liam from now on."
+        
+        from pipeline.think import extract_memory_llm
+        # Manually invoke the extractor like orchestrator does
+        cmd1 = extract_memory_llm(transcript_correction, reply_correction, self.store.senior_profile_facts())
+        self.assertIsNotNone(cmd1)
+        self.assertTrue(cmd1.startswith("SUPERSEDE:") or cmd1.startswith("SUPERSESE:"), f"Expected SUPERSEDE, got {cmd1}")
+        
+        parts = cmd1.split(":", 1)[-1].split("|")
+        self.assertEqual(len(parts), 2)
+        old_fact, new_fact = parts[0].strip(), parts[1].strip()
+        self.store.supersede(old_fact, new_fact)
+        
+        facts = self.store.senior_profile_facts()
+        self.assertFalse(any("Leo" in f for f in facts))
+        self.assertTrue(any("Liam" in f for f in facts))
+        
+        # Test 2: Deletion (DELETE)
+        transcript_delete = "Please forget what I said about Liam."
+        reply_delete = "Of course, I've forgotten it."
+        
+        cmd2 = extract_memory_llm(transcript_delete, reply_delete, self.store.senior_profile_facts())
+        self.assertIsNotNone(cmd2)
+        self.assertTrue(cmd2.startswith("DELETE:"), f"Expected DELETE, got {cmd2}")
+        
+        old_fact_del = cmd2[7:].strip()
+        self.store.delete(old_fact_del)
+        
+        facts2 = self.store.senior_profile_facts()
+        self.assertFalse(any("Liam" in f for f in facts2))
+        
+        print("\n[BENCHMARK 8] Memory Correction & Deletion (End-to-End): 100.0% (Passed)")
+
 if __name__ == "__main__":
     unittest.main()

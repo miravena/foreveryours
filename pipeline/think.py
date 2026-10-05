@@ -196,27 +196,35 @@ DURABLE_MARKERS = (
 )
 
 EXTRACTION_SYSTEM_PROMPT = """\
-You are an eldercare memory extractor. Analyze the senior's statement and companion reply.
-If the senior disclosed a durable, personal fact about their life (e.g. family member's name,
-past job, hometown, strong preference, beloved hobby), extract it as a single concise fact sentence
-(e.g., "Senior used to work as a carpenter in Chicago" or "Loves Earl Grey tea").
-CRITICAL RULE: The senior is the elder/parent. Do NOT invert family relationships (e.g. never extract "Senior's dad" when caregiver notes refer to Dad). Never extract facts about the AI companion itself.
-If the statement is just small talk, transient feeling, greeting, or contains no durable life facts,
-respond with the word NONE. Do not provide commentary or explanation.
+You are an eldercare memory extractor. Analyze the senior's statement and companion reply, along with the ACTIVE PROFILE FACTS.
+If the senior disclosed a durable, personal fact (e.g. family member's name, past job, hometown), or explicitly corrected/deleted an active fact, output exactly one of the following commands:
+1. To add a new fact: `ADD: <fact>` (e.g. ADD: Loves Earl Grey tea)
+2. To correct an active fact: `SUPERSEDE: <exact_old_fact> | <new_fact>` (e.g. SUPERSEDE: His grandson is named Leo | His grandson is named Liam)
+3. To delete a fact because the senior asked you to forget it: `DELETE: <exact_old_fact>`
+
+CRITICAL RULES:
+- The senior is the elder/parent. Do NOT invert family relationships.
+- Only SUPERSEDE or DELETE if the old fact is EXACTLY listed in the ACTIVE PROFILE FACTS.
+- If it is just small talk, or no durable facts are present, output NONE. Do not provide commentary.
 """
 
 
-def extract_memory_llm(transcript: str, reply: str) -> str | None:
+def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | None = None) -> str | None:
     """Async background extraction via Nemotron. Off critical path, called
     from orchestrator's background thread."""
     try:
         client = get_client()
         model = os.environ.get("THINK_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+        
+        facts_context = "\n".join(f"- {f}" for f in (active_facts or []))
+        if facts_context:
+            facts_context = f"\n\nACTIVE PROFILE FACTS:\n{facts_context}"
+            
         completion = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-                {"role": "user", "content": f'Senior: "{transcript}"\nCompanion: "{reply}"'},
+                {"role": "user", "content": f'Senior: "{transcript}"\nCompanion: "{reply}"{facts_context}'},
             ],
             max_tokens=300,
             temperature=0.2,
@@ -232,19 +240,17 @@ def extract_memory_llm(transcript: str, reply: str) -> str | None:
         return None
 
 
-def extract_new_memory(transcript: str, reply: str, use_llm: bool = True) -> str | None:
+def extract_new_memory(transcript: str, reply: str, active_facts: list[str] | None = None, use_llm: bool = True) -> str | None:
     """Background extraction: does this turn contain a durable fact worth
-    saving (name, preference, event)? Runs off the critical path -- see
-    orchestrator.py's async background thread. Fast regex heuristic first,
-    falling back to async LLM extraction when online, or None when no durable
-    facts exist."""
+    saving (name, preference, event)? Fast regex heuristic first (for ADD),
+    falling back to async LLM extraction when online."""
     lowered = transcript.lower()
     for pattern in DURABLE_MARKERS:
         if re.search(pattern, lowered):
-            return transcript.strip()
+            return f"ADD: {transcript.strip()}"
 
     if use_llm:
-        extracted = extract_memory_llm(transcript, reply)
+        extracted = extract_memory_llm(transcript, reply, active_facts)
         if extracted:
             return extracted
 
