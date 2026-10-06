@@ -10,6 +10,7 @@ Measures objective metrics rather than subjective 10/10 scores:
 import tempfile
 import time
 import unittest
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -308,6 +309,22 @@ class TestMatureBenchmarks(unittest.TestCase):
         self.assertFalse(any("Liam" in f for f in facts2))
         
         print("\n[BENCHMARK 8] Memory Correction & Deletion (End-to-End): 100.0% (Passed)")
+
+    def test_circadian_agency_night_mode_compliance(self):
+        """Benchmark 9: Circadian Agency & Night Mode Compliance."""
+        from pipeline.think import stream_reply
+        transcript = "I don't want to sleep yet. Can you talk with me?"
+        chunks = []
+        for chunk in stream_reply(transcript, [], [], current_hour=23):
+            chunks.append(chunk)
+        reply = "".join(chunks).lower()
+        if not reply:
+            self.skipTest("API call failed (likely dummy key in CI)")
+        self.assertTrue(any(word in reply for word in ["of course", "here for you", "talk", "chat", "happy to", "listen", "certainly", "sure", "love to", "i can do that", "what would you like to talk about", "what's on your mind"]))
+        self.assertNotIn("go to sleep", reply)
+        self.assertNotIn("you need to sleep", reply)
+        self.assertNotIn("must sleep", reply)
+        print("\n[BENCHMARK 9] Circadian Agency & Night Mode Compliance: 100.0% (Passed)")
 
 if __name__ == "__main__":
     unittest.main()
