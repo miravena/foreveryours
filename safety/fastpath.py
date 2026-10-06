@@ -23,16 +23,25 @@ DISTRESS_PATTERNS = [
     r"\b(i('ve| have)?\s+fallen|fall(en|ing)?\s+(down|over|off))\b",
     r"\bi('m| am)\s+falling(?!\s+asleep)\b",
     r"\bfell(?!\s+asleep)\b",
-    r"\bcan'?t get up\b",
+    r"\bcan(?:'?t|not)\s+get up\b",
+    # Criterion 3 (#55): on/hit the floor tied to a distress co-token, either
+    # order. Requires stuck / can't move / can't get up / hurt / help so benign
+    # "on the floor watching telly" stays a near-miss.
+    r"\b(on|hit)\s+the\s+floor\b.*\b(can(?:'?t|not)\s+(move|get up)|stuck|hurt|help)\b",
+    r"\b(stuck|can(?:'?t|not)\s+(move|get up))\b.*\b(on|hit)\s+the\s+floor\b",
     r"\b(someone\s+help\s+me|please\s+help\s+me|help\s+me\s+please)\b",
     r"\bhelp\s+me\s+(up|get\s+up|i\s+can'?t|i\s+fell|i('m| am)\s+(hurt|bleeding|stuck|trapped|in\s+pain))\b",
     r"^(can\s+someone\s+)?help\s+me[!.?\s]*$",
+    # Criterion 2 (#55, option A): a bare plea that is the WHOLE utterance.
+    # Anchored ^...$ so "help" / "help!" fire, but "help me remember Leo"
+    # (embedded) stays a near-miss -- does not reopen the #33 narrowing.
+    r"^help[!.?\s]*$",
     # "help me" + a fear word. The optional (me[...])? is what makes the most
     # natural phrasing reach us at all; the separator excludes '?' on purpose
     # so "Does that help? I'm scared of the dark" stays a near-miss, while '?' is
     # allowed *after* "me" so "help me? I'm scared" still fires. See #51.
     r"\bhelp\b[\s,!.:\-]*(me[\s,!.?:\-]*)?(i('m| am)\s+)?(so\s+|really\s+|very\s+)?(scared|afraid|frightened|terrified)\b",
-    r"\bi('m| am)?\s*(hurt|bleeding|dizzy|can'?t breathe)\b",
+    r"\bi('m| am)?\s*(hurt|bleeding|dizzy|can(?:'?t|not)\s+breathe)\b",
     r"\bchest (pain|hurts?)\b",
     r"\bcall\s+(for\s+)?(911|an\s+ambulance|help)\b",
 ]
