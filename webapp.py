@@ -294,6 +294,7 @@ def _run_demo_turn(
     history: list[dict],
     session_id: str,
     simulated_hour: int = 10,
+    is_proactive: bool = False,
 ) -> tuple[str, str | None, list[dict], str, str]:
     data_dir, audio_dir = _session_dirs(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
@@ -312,20 +313,22 @@ def _run_demo_turn(
             "### 📊 Acoustic Biomarkers\n_Rate limited_",
         )
 
-    if text_in and text_in.strip():
+    if is_proactive:
+        transcript = "[System: The senior is currently quiet. Please initiate a conversation based on the context above. BE BRIEF AND WARM.]"
+    elif text_in and text_in.strip():
         transcript = text_in.strip()
     elif audio_in:
         transcript, biomarkers = hear.transcribe(Path(audio_in), return_metrics=True)
     else:
         return "Record audio or type what Dad says first.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_"
 
-    if not transcript.strip():
+    if not transcript.strip() and not is_proactive:
         return "Couldn't make out any speech or text -- try again.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_"
 
     _clear_session_audio(audio_dir)
     try:
         result = run_turn(
-            transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour
+            transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour, is_proactive=is_proactive
         )
     except Exception as exc:
         err = str(exc)
@@ -451,6 +454,14 @@ def build_demo() -> gr.Blocks:
                         label="Simulated Time of Day"
                     )
 
+                with gr.Accordion("🛠️ Simulate Proactive Triggers", open=False):
+                    gr.Markdown("Clicking these simulates the background agent initiating conversation without a microphone prompt.")
+                    with gr.Row():
+                        proactive_btn_morning = gr.Button("Morning Greeting")
+                        proactive_btn_grocery = gr.Button("Caregiver Reminder")
+                        proactive_btn_hobby = gr.Button("Hobby Engagement")
+                        proactive_btn_silence = gr.Button("Silence Check-in")
+
                 run_btn = gr.Button("Send", variant="primary")
                 transcript_out = gr.Markdown(label="Conversation")
                 audio_out = gr.Audio(label="Companion's reply", autoplay=True)
@@ -476,6 +487,18 @@ def build_demo() -> gr.Blocks:
             inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in],
         )
+
+        def run_proactive_turn(history, session, sim_time):
+            # Wrapper to pass is_proactive=True and clear text_in output
+            res = run_demo_turn(None, None, history, session, sim_time, is_proactive=True)
+            return res
+
+        for btn in [proactive_btn_morning, proactive_btn_grocery, proactive_btn_hobby, proactive_btn_silence]:
+            btn.click(
+                fn=run_proactive_turn,
+                inputs=[history_state, session_state, simulated_time_in],
+                outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in],
+            )
 
         text_in.submit(
             fn=run_demo_turn,

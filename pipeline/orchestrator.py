@@ -158,6 +158,7 @@ def run_turn(
     consecutive_errors: int = 0,
     simulated_hour: int | None = None,
     on_chunk=None,
+    is_proactive: bool = False,
 ) -> TurnResult:
     """`history` is session-scoped prior-turn context (see think.build_prompt's
     docstring for why this is kept separate from memory_store) -- pass None
@@ -259,6 +260,7 @@ def run_turn(
             caregiver_updates=filtered_schedule,
             intent=intent.value,
             current_hour=simulated_hour,
+            is_proactive=is_proactive,
         )
         sentences = think.sentence_chunks(token_stream)
         
