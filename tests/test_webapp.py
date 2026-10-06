@@ -22,7 +22,7 @@ class TestWebappSessions(unittest.TestCase):
         self.patches = [
             patch.object(webapp, "SESSIONS_DIR", self.sessions_dir),
             patch.object(webapp, "SHARED_PROFILE", False),
-            patch.dict(os.environ, {"NEBIUS_API_KEY": ""}),
+            # Issue #53: redirect the rate-limit counter into the temp dir so the            # suite never spends the live demo's daily request quota.            patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"),            patch.dict(os.environ, {"NEBIUS_API_KEY": ""}),
         ]
         for p in self.patches:
             p.start()
@@ -174,6 +174,9 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         self.patches = [
             patch.object(webapp, "SESSIONS_DIR", self.sessions_dir),
             patch.object(webapp, "SHARED_PROFILE", False),
+            # Issue #53: redirect the rate-limit counter into the temp dir so the
+            # suite never spends the live demo's daily request quota.
+            patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"),
             patch.dict(os.environ, {"NEBIUS_API_KEY": ""}),
         ]
         for p in self.patches:
