@@ -26,6 +26,13 @@ rename `Unreleased` to the version and date, then tag it.
 ### Removed
 - `TEAM_STATUS.md` (its table duplicated GitHub) (#38).
 
+### Docs
+- `docs/ROADMAP.md` now stages delivery as **MVP1 → MVP2 → MVP3**, each stage a whole releasable build rather than a pile of parts, with how we estimate and release against stage boundaries.
+- `VENDOR_DECISIONS.md` gains an **"If we must leave it"** exit plan for every row that depends on someone else's service, and two stale rows were corrected: the espeak silence bug is resolved (#28), and the request limiter counts per day on disk rather than resetting on restart.
+- New `docs/STANDARDS.md`: the naming, error-handling, API-shape, UI and test conventions the code already follows, so two people (and their assistants) write it the same way.
+- `HOW_TO_WORK_HERE.md` documents the working method we actually use: **one Issue, one branch, one worktree, and the `main` worktree always clean** — previously undocumented, while the step it sits under said the opposite.
+- `webapp.py`'s request-counter comment no longer claims it resets on restart.
+
 ## [0.1.0] - 2026-10-03
 
 First tagged state: the hackathon demo, runnable end to end (CLI three-beat

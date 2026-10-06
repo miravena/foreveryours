@@ -62,6 +62,7 @@ missing or logged out, stop and tell the founder.
 |---|---|
 | Behaviour | `pipeline/{hear,think,speak,audit,orchestrator}.py`, `memory/store.py`, `safety/fastpath.py`, `webapp.py` |
 | Component map / design notes | `docs/IMPLEMENTATION_PLAN.md` |
+| Naming, error handling, API shapes, UI, tests | `docs/STANDARDS.md` |
 | Pipeline diagram & latency rationale | `README.md` → "Pipeline" (don't restate it elsewhere) |
 | Why we chose X over Y | `docs/decisions/` (open an Issue first, then the ADR) |
 | Plan and ordering, judges' requirements | `docs/ROADMAP.md` (no status, no dates) |
