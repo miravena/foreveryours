@@ -51,7 +51,7 @@ not that the deadline arrives with pieces that never met each other.
 
 | Stage | What it gives a stranger | Built from |
 |---|---|---|
-| **MVP1 — runs** | `main.py` beats 1–4 and the web demo run offline on a laptop: hear, recall, speak, the safety fast-path, day-2 recall | [M4](../../milestone/1) and the work before it |
+| **MVP1 — runs** | The demo runs on a laptop with one Nebius key and no hosting: hear, recall, speak, the safety fast-path, day-2 recall. Beats 1 and 3 need no key at all; beats 2 and 4 and a normal web conversation call Token Factory | [M4](../../milestone/1) and the work before it |
 | **MVP2 — hosted** | A public URL that answers on its own: no false alert on the demo script, memory corrections hold, first audio under 2s | [M10](../../milestone/7), [M5](../../milestone/2), [M11](../../milestone/5) |
 | **MVP3 — submittable** | Everything the judges actually open: representative, video, Devpost text, feedback, final review | [M9](../../milestone/4), [M8](../../milestone/3), [M12](../../milestone/6), [M13](../../milestone/8) |
 
