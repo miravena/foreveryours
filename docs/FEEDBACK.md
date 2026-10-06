@@ -16,7 +16,7 @@ This feedback is provided for the Nebius x NVIDIA Global AI Hackathon (Requireme
 ## NVIDIA Models (Nemotron Nano 30B)
 
 **What worked well:**
-- **Contextual Recall (THINK pass):** Nemotron Nano 30B excelled at seamlessly integrating retrieved RAG context (from ChromaDB) without sounding robotic. It successfully recalled specific biographical details (e.g., "Grandson Leo") in a warm, conversational tone.
+- **Contextual Recall (THINK pass):** Nemotron Nano 30B excelled at seamlessly integrating retrieved personal context (from our JSON-backed MemoryStore) without sounding robotic. It successfully recalled specific biographical details (e.g., "Grandson Leo") in a warm, conversational tone.
 - **Safety Auditing (AUDIT pass):** The model proved capable of running secondary safety checks in the background asynchronously, ensuring responses adhered to our strict privacy and no-medical-claims policies without hallucinating false positives.
 
 **Areas for improvement:**

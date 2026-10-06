@@ -205,7 +205,7 @@ The senior's speech is converted into text using the selected NVIDIA speech tech
 
 ### 2. RECALL
 
-The transcript is embedded and searched against **ChromaDB**, which stores the senior's persistent memories.
+The transcript is processed through a fast keyword-overlap algorithm against our JSON-backed **MemoryStore**, which securely stores the senior's persistent memories locally without unnecessary database bloat.
 
 Relevant memories are retrieved based on the current conversation.
 
@@ -257,7 +257,7 @@ The architecture is designed with a target of **under two seconds to first audio
                               ▼
                     ┌───────────────────┐
                     │ Context Retrieval │
-                    │     ChromaDB      │
+                    │   MemoryStore     │
                     └─────────┬─────────┘
                               │
                               ▼
@@ -312,11 +312,11 @@ The hackathon requires projects in this track to use at least one NVIDIA open-so
 
 ### Application Stack
 
-**ChromaDB** — persistent vector memory
+**Custom MemoryStore** — persistent JSON-backed local memory with intelligent keyword/inflection overlap retrieval
 
-**LangChain** — orchestration, retrieval, agent routing, and tool integration
+**Native Orchestration Pipeline** — custom-built, zero-dependency Python orchestration (`pipeline/think.py` and `pipeline/orchestrator.py`)
 
-**RAG** — retrieval of relevant personal context
+**Contextual Retrieval** — extraction and injection of relevant personal facts (via zero-shot LLM commands like ADD/SUPERSEDE/DELETE)
 
 **Background agents** — memory extraction and safety processing
 
