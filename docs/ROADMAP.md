@@ -32,7 +32,7 @@ enforced version is each Issue's *blocked by* relationship.
 |---|---|---|
 | [M10 Team Nebius key](../../milestone/7) | A second Nebius key is on hand, so deploying, testing and recording don't depend on one person's credits | - |
 | [M4 Voice I/O + memory quality](../../milestone/1) | Real voice I/O wired; recall handles word inflections | - |
-| [M5 Judge-accessible hosting](../../milestone/2) **(MVP)** | A public HF Spaces URL answers, with no false-positive distress alerts on the demo script ([ADR-003](decisions/ADR-003-hosting.md), [ADR-005](decisions/ADR-005-safety-fastpath.md)) | M10 |
+| [M5 Judge-accessible hosting](../../milestone/2) **(MVP2)** | A public HF Spaces URL answers, with no false-positive distress alerts on the demo script ([ADR-003](decisions/ADR-003-hosting.md), [ADR-005](decisions/ADR-005-safety-fastpath.md)) | M10 |
 | [M11 Latency under 2s](../../milestone/5) | Under ~2s to first audio, measured on the hosted instance (if still above, build browser streaming) | M5 |
 | [M9 Representative + early draft](../../milestone/4) | Representative chosen; early editable Devpost draft with the live URL | M5 |
 | [M8 Final demo video](../../milestone/3) | Video of at most 3 minutes, recorded on the hosted URL | M5, ideally M11 |
@@ -40,6 +40,32 @@ enforced version is each Issue's *blocked by* relationship.
 | [M13 Final review and submit](../../milestone/8) | Review freeze, end-to-end check, submitted | M8, M12 |
 
 Work completed before these milestones is recorded in [`CHANGELOG.md`](../CHANGELOG.md).
+
+## Staging: MVP1 → MVP2 → MVP3
+
+We deliver in three complete stages rather than one drop at the deadline. **A stage is a whole
+product, not a pile of parts** — at every stage boundary there is a build a stranger could be
+handed, a tagged release for it, and a demo that runs. That is what makes a missed estimate
+survivable: the worst case is that the next stage starts later, sitting on a known-good version,
+not that the deadline arrives with pieces that never met each other.
+
+| Stage | What it gives a stranger | Built from |
+|---|---|---|
+| **MVP1 — runs** | `main.py` beats 1–4 and the web demo run offline on a laptop: hear, recall, speak, the safety fast-path, day-2 recall | [M4](../../milestone/1) and the work before it |
+| **MVP2 — hosted** | A public URL that answers on its own: no false alert on the demo script, memory corrections hold, first audio under 2s | [M10](../../milestone/7), [M5](../../milestone/2), [M11](../../milestone/5) |
+| **MVP3 — submittable** | Everything the judges actually open: representative, video, Devpost text, feedback, final review | [M9](../../milestone/4), [M8](../../milestone/3), [M12](../../milestone/6), [M13](../../milestone/8) |
+
+**How we estimate against it.** The stage is the unit we promise and the Issue is the unit we do.
+An Issue-level estimate only predicts that Issue, and a whole stage is too big to hold as one
+number — so we check ourselves at stage boundaries, where the evidence is a running build rather
+than a feeling. When an estimate runs long the answer is to cut inside the stage or move the
+stage, never to let slices quietly accumulate toward the deadline.
+
+**How we release against it.** Each stage ends the same way: rename `[Unreleased]` in the
+changelog, tag `vX.Y.Z` on `main`, publish a GitHub Release
+([`HOW_TO_WORK_HERE.md`](../HOW_TO_WORK_HERE.md) → *Releases*). The version lines are `v0.1.0`
+for MVP1, `v0.2.0` for MVP2 and `v1.0.0` for MVP3, so every stage we reach is also a version we
+can hand a judge or a partner — going back never means rebuilding.
 
 ## Decided: ASR backend
 
