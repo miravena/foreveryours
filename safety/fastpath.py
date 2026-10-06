@@ -27,7 +27,11 @@ DISTRESS_PATTERNS = [
     r"\b(someone\s+help\s+me|please\s+help\s+me|help\s+me\s+please)\b",
     r"\bhelp\s+me\s+(up|get\s+up|i\s+can'?t|i\s+fell|i('m| am)\s+(hurt|bleeding|stuck|trapped|in\s+pain))\b",
     r"^(can\s+someone\s+)?help\s+me[!.?\s]*$",
-    r"\bhelp\b[\s,!.]*(i('m| am)\s+)?(so\s+|really\s+|very\s+)?(scared|afraid|frightened|terrified)\b",
+    # "help me" + a fear word. The optional (me[...])? is what makes the most
+    # natural phrasing reach us at all; the separator excludes '?' on purpose
+    # so "Does that help? I'm scared of the dark" stays a near-miss, while '?' is
+    # allowed *after* "me" so "help me? I'm scared" still fires. See #51.
+    r"\bhelp\b[\s,!.:\-]*(me[\s,!.?:\-]*)?(i('m| am)\s+)?(so\s+|really\s+|very\s+)?(scared|afraid|frightened|terrified)\b",
     r"\bi('m| am)?\s*(hurt|bleeding|dizzy|can'?t breathe)\b",
     r"\bchest (pain|hurts?)\b",
     r"\bcall\s+(for\s+)?(911|an\s+ambulance|help)\b",
@@ -40,10 +44,21 @@ CONFUSION_PATTERNS = [
 
 
 def _normalize(text: str) -> str:
-    """Normalize curly quotes (common from ASR/phone keyboards) to ASCII
-    before matching, so "I’m hurt" matches the same as "I'm hurt"."""
+    """Normalize punctuation that varies by source before matching.
+
+    Curly quotes come from phone keyboards and ASR output, so "I'm hurt" and
+    the curly-quoted form must match identically. Dashes are folded to a space
+    for the same reason: transcripts arrive as "-", en dash, em dash or hyphen,
+    and a separator class in the rules would otherwise have to name every one --
+    which is how "help—I'm frightened" slipped through as a false negative
+    (#51). Folding to a space also keeps \\b intact, so "well-known" still
+    yields word boundaries rather than becoming one long token.
+    """
     text = unicodedata.normalize("NFKD", text)
-    return text.replace("’", "'").replace("‘", "'").lower()
+    text = text.replace("’", "'").replace("‘", "'")
+    for dash in ("—", "–", "―", "‐", "‑", "−"):
+        text = text.replace(dash, " ")
+    return text.lower()
 
 
 @dataclass

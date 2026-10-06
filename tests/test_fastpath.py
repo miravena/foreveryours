@@ -22,6 +22,14 @@ class TestFastPath(unittest.TestCase):
             "Help, I'm scared",
             "help I am so scared",
             "Help! I'm terrified",
+            # #51: the most natural way a senior says this, plus dash variants
+            # that ASR/LLM punctuation produces
+            "Help me, I'm scared",
+            "help me I'm scared",
+            "help me? I'm scared",
+            "help—I'm frightened",
+            "help - I'm frightened",
+            "Help – I'm frightened",
         ]
         for phrase in cases:
             with self.subTest(phrase=phrase):
@@ -46,6 +54,10 @@ class TestFastPath(unittest.TestCase):
             "Does that help? I'm scared of the dark",
             "That helps, I'm scared less now",
             "Help me understand why I'm scared of storms",
+            # #51 Criterion 3: allowing "me" must not make task- or
+            # memory-requests look like distress
+            "help me remember Leo's birthday",
+            "Help me pay the electricity bill, please",
         ]
         for phrase in cases:
             with self.subTest(phrase=phrase):
@@ -59,6 +71,15 @@ class TestFastPath(unittest.TestCase):
         res = fastpath.check("I’m dizzy")
         self.assertTrue(res.triggered)
         self.assertEqual(res.severity, "distress")
+
+    def test_dashes_are_folded_before_matching(self):
+        # #51: a dash between words is punctuation, not a word. Every dash
+        # variant collapses to a space so no rule has to enumerate them.
+        for dash in ("—", "–", "―", "‐", "‑", "−"):
+            with self.subTest(dash=repr(dash)):
+                self.assertEqual(fastpath._normalize(f"help{dash}I'm frightened"), "help i'm frightened")
+        # ASCII hyphen and curly quotes still normalize as before
+        self.assertEqual(fastpath._normalize("Help–I’m hurt"), "help i'm hurt")
 
     def test_confusion_triggers(self):
         cases = [
