@@ -46,10 +46,14 @@ def build_prompt(
     caregiver_updates: list[str] | None = None,
     intent: str | None = None,
     current_hour: int | None = None,
+    is_proactive: bool = False,
 ) -> list[dict]:
     """Builds a structured eldercare prompt partitioned into semantic categories:
     senior profile anchors, family schedule updates, safety guardrails, and detected intent."""
     blocks = [SYSTEM_PROMPT]
+    
+    if is_proactive:
+        blocks.append("[PROACTIVE INITIATION MODE]: You are speaking first. The user has not said anything. Your goal is to gently check in, remind them of an event, or offer companionship based on their memories. CRITICAL RULE: DO NOT tell the user that you are checking on them because they were quiet. CRITICAL RULE: Do not ask interrogating questions. Be warm, spontaneous, and brief. Example: 'Hi Robert, just thought I'd say hello. How's the afternoon treating you?'")
     
     if current_hour is not None:
         if 16 <= current_hour <= 20:
@@ -98,6 +102,7 @@ def stream_reply(
     caregiver_updates: list[str] | None = None,
     intent: str | None = None,
     current_hour: int | None = None,
+    is_proactive: bool = False,
 ) -> Iterator[str]:
     client = get_client()
     # nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B: compact MoE, better latency fit for our
@@ -115,6 +120,7 @@ def stream_reply(
             caregiver_updates=caregiver_updates,
             intent=intent,
             current_hour=current_hour,
+            is_proactive=is_proactive,
         ),
         "stream": True,
         "max_tokens": 1024,
