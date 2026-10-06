@@ -78,7 +78,7 @@ SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
 GRADIO_CACHE_SWEEP = (600, SESSION_TTL_S)  # (check every N s, delete files older than M s)
 
 _lock = threading.Lock()
-_request_log: dict[str, int] = {}  # date string -> count, in-memory, resets on restart
+_request_log: dict[str, int] = {}  # date string -> count; re-read from rate_limit.json on each call
 
 
 def _rate_limit_ok() -> bool:
