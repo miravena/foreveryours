@@ -30,6 +30,17 @@ class TestFastPath(unittest.TestCase):
             "help—I'm frightened",
             "help - I'm frightened",
             "Help – I'm frightened",
+            # #55 Criterion 1: "cannot" must fire like "can't"
+            "I cannot get up",
+            "I cannot breathe",
+            # #55 Criterion 2 (option A): a bare plea that is the whole message
+            "help",
+            "Help!",
+            "Help!!",
+            # #55 Criterion 3: on/hit the floor + a distress co-token, either order
+            "I'm on the floor and I can't move",
+            "I'm stuck on the floor",
+            "I hit the floor and can't get up",
         ]
         for phrase in cases:
             with self.subTest(phrase=phrase):
@@ -58,6 +69,13 @@ class TestFastPath(unittest.TestCase):
             # memory-requests look like distress
             "help me remember Leo's birthday",
             "Help me pay the electricity bill, please",
+            # #55 Criterion 2 near-misses: embedded "help" must stay silent
+            "that was a big help!",
+            "I need help with the crossword",
+            # #55 Criterion 3 near-misses: benign floor use must stay silent
+            "I'm on the floor watching telly",
+            "I'm sitting on the floor doing a puzzle",
+            "the baby is on the floor",
         ]
         for phrase in cases:
             with self.subTest(phrase=phrase):

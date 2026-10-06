@@ -175,7 +175,10 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
 
-    lines = []
+    lines = [
+        "🛡️ **Peace of mind without surveillance.** ForeverYours summarizes important updates and medical/safety flags. Verbatim conversations are kept strictly private to preserve dignity.",
+        "---"
+    ]
     flag_items = flags.all()
     distress_flags = [f for f in flag_items if f.severity in ("distress", "confusion")]
     if distress_flags:

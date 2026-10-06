@@ -55,7 +55,7 @@ def build_prompt(
         if 16 <= current_hour <= 20:
             blocks.append("CIRCADIAN DYNAMICS (SUNDOWNING SYNDROME ACTIVE): It is late afternoon/evening. The senior may be experiencing sundowning anxiety, disorientation, or fatigue. Keep your sentences extremely short, highly soothing, and avoid asking complex questions, making them recall schedules, or introducing new information.")
         elif 22 <= current_hour or current_hour <= 6:
-            blocks.append("CIRCADIAN DYNAMICS (NIGHT MODE): It is nighttime. The senior should be resting. Speak very softly, briefly, and gently encourage them to go back to sleep if they are awake.")
+            blocks.append("CIRCADIAN DYNAMICS (NIGHT MODE): It is nighttime. Speak softly and concisely. You may gently encourage rest, but if the senior wants to stay awake and talk, you MUST respect their choice, be a warm companion, and do NOT force them to sleep or sound controlling/patronizing.")
 
     if intent:
         blocks.append(f"CURRENT CONVERSATIONAL INTENT: {intent}")
