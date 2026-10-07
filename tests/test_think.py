@@ -32,9 +32,20 @@ class TestExtractNewMemoryDispatch(unittest.TestCase):
         out, _ = self._with_llm(cmd, "Actually, my daughter is Sarah, not Susan.")
         self.assertEqual(out, cmd)
 
-    def test_marker_fallback_when_llm_returns_nothing(self):
-        out, _ = self._with_llm(None, "My grandson will visit on Sunday")
+    def test_marker_fallback_only_when_llm_call_failed(self):
+        out, _ = self._with_llm(think.LLM_CALL_FAILED, "My grandson will visit on Sunday")
         self.assertEqual(out, "ADD: My grandson will visit on Sunday")
+
+    def test_no_fallback_when_llm_succeeds_with_nothing_to_extract(self):
+        """Regression: a successful LLM verdict of 'nothing here' (plain
+        None) must not be second-guessed by the marker heuristic, even when
+        the transcript matches a DURABLE_MARKERS pattern."""
+        out, _ = self._with_llm(None, "My grandson will visit on Sunday")
+        self.assertIsNone(out)
+
+    def test_marker_fallback_never_stores_a_question(self):
+        out, _ = self._with_llm(think.LLM_CALL_FAILED, "What's my grandson's name again?")
+        self.assertIsNone(out)
 
     def test_offline_never_stores_forget_or_correction_as_fact(self):
         for t in (

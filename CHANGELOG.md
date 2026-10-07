@@ -11,6 +11,20 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Fixed
+- Memory scope: a memory whose text merely contained "am" as a substring (e.g. "Liam", "name") was
+  wrongly auto-scoped TEMPORARY with a 24h expiry; the time-word check now matches whole words only (#82).
+- `extract_new_memory()`'s offline marker fallback now runs only when the LLM extraction call itself
+  fails, not whenever the model succeeds and decides there's nothing to extract; it also never stores
+  a question as a new fact (#82).
+
+### Docs
+- Claims pass (#82, closing #64): README/Project_Description/FEEDBACK/PRD no longer claim Nebius AI
+  Cloud, NVIDIA speech (ASR/TTS), clinical-grade diagnosis, or a "family dashboard" the code doesn't
+  have; the webapp's caregiver pledge and "Live Telemetry" strings now match what's actually sent to
+  Token Factory and actually computed. Deleted `docs/specs/qa/FINAL_QA_REPORT.md` and
+  `docs/specs/qa/QA_STRATEGY.md` (both cited test IDs and a "36-point test plan" that don't exist in
+  the repo); marked `docs/specs/proactive-agency/plan.md` as not built (#65). Recorded in
+  `VENDOR_DECISIONS.md` that NemoGuard and NVIDIA ASR/TTS are not served on Token Factory (#56).
 - Every live turn returned the canned fallback reply because `think.stream_reply()` rejected the `pending_conflicts` kwarg the orchestrator passes; it now accepts and forwards it, the orchestrator logs the exception type and message to stderr whenever it falls back, and keyless tests guard the signature and the live path (#78).
 - Memory control: `extract_new_memory()` now asks the model first when online, so corrections ("my daughter is Sarah, not Susan") become `SUPERSEDE:` and forget-requests become `DELETE:` instead of being stored as new facts by the family-marker heuristic. Offline, the marker heuristic remains the fallback and no longer stores correction or forget phrasings as facts. Benchmark 8 now calls `extract_new_memory()` (#54).
 

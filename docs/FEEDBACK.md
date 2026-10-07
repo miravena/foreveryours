@@ -1,12 +1,12 @@
-# Feedback: Nebius Token Factory, AI Cloud & NVIDIA Tools
+# Feedback: Nebius Token Factory & NVIDIA Tools
 
-This feedback is provided for the Nebius x NVIDIA Global AI Hackathon (Requirement 9) and the Most Valuable Feedback prize.
+This feedback is provided for the Nebius x NVIDIA Global AI Hackathon (Requirement 9) and the Most Valuable Feedback prize. We used Nebius Token Factory only; we have no feedback on Nebius AI Cloud because the project does not use it.
 
-## Nebius Token Factory & AI Cloud
+## Nebius Token Factory
 
 **What worked well:**
 - **Latency & Speed:** Once optimized, latency was exceptional. We achieved ~0.91s to first audio output, which was critical for maintaining a natural pace in a voice-first interface.
-- **Credit Allocation:** The provided sponsor credits and Builder Program allowance ($25 + $25) were generous, frictionless to activate, and more than sufficient for full prototyping and deployment testing.
+- **Credit Allocation:** The provided sponsor credits and Builder Program allowance ($25 + $25) were generous and frictionless to activate, and more than sufficient for full prototyping.
 
 **Areas for improvement:**
 - **Missing Audio/Transcription Endpoints:** Token Factory lacked a direct audio-transcription API. We had to pivot to using a local `faster-whisper` deployment (ADR-004), which complicated our initial cloud-native architecture. Adding native STT endpoints would greatly simplify voice-first development on the platform.

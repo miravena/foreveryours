@@ -178,7 +178,7 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
 
     lines = [
-        "🛡️ **Peace of mind without surveillance.** ForeverYours summarizes important updates and medical/safety flags. Verbatim conversations are kept strictly private to preserve dignity.",
+        "🛡️ **Peace of mind without surveillance.** ForeverYours summarizes important updates and medical/safety flags. Turn transcripts (not audio) go to Nebius Token Factory to generate replies and run the safety check; see [Safety & privacy design](docs/SAFETY_AND_PRIVACY.md).",
         "---"
     ]
     flag_items = flags.all()
@@ -381,7 +381,7 @@ def _run_demo_turn(
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
     if wpm > 0:
-        biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Longitudinal drift tracked over time._"
+        biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
     else:
         biomarker_str = "### 📊 Acoustic Biomarkers\n_Calculated from live voice input only_"
 
@@ -430,10 +430,10 @@ def build_demo() -> gr.Blocks:
             "this link sees it, and its memory, flags and audio are deleted when you close "
             "the tab or after an hour."
         )
-        with gr.Accordion("Live Telemetry (Powered by Nebius AI)", open=True):
+        with gr.Accordion("Model & Pipeline Info", open=True):
             gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
-                        "**Audio Perception (HEAR):** `faster-whisper` (Local CPU offline fallback)\n\n"
-                        "*Background memory extraction & safety audit run asynchronously via Nebius API.*")
+                        "**Audio Perception (HEAR):** `faster-whisper` (local CPU)\n\n"
+                        "*Background memory extraction & safety audit run asynchronously via Nebius Token Factory.*")
         history_state = gr.State([])
         session_state = gr.State(None, time_to_live=SESSION_TTL_S, delete_callback=_end_session)
 

@@ -135,7 +135,9 @@ class MemoryStore:
         Auto-infers TEMPORARY scope for schedule/time notes."""
         if any(i.text == text and i.source == source and i.status == "active" for i in self._items):
             return None
-        if scope == MemoryScope.PERMANENT.value and any(m in text.lower() for m in ("today", "tomorrow", "tonight", "pm", "am")):
+        if scope == MemoryScope.PERMANENT.value and re.search(
+            r"\b(?:today|tomorrow|tonight|pm|am)\b", text.lower()
+        ):
             scope = MemoryScope.TEMPORARY.value
             
         if scope == MemoryScope.TEMPORARY.value and expires_at is None:
