@@ -214,6 +214,7 @@ class MemoryStore:
 
     def delete(self, text: str) -> None:
         """Marks an active memory as deleted (e.g. per user request)."""
+        text = text.replace("[UNVERIFIED/UNCERTAIN]: ", "").replace("[EMOTIONAL STATE]: ", "")
         for item in self._items:
             if item.text.lower() == text.lower() and item.status == "active":
                 item.status = "deleted"
@@ -223,6 +224,9 @@ class MemoryStore:
         """Evolves a memory: marks the old fact as superseded and introduces the new active fact.
         Fixes #34: inherits scope, privacy and expires_at from the original so that
         e.g. a 2-hour schedule update stays temporary after correction."""
+        old_text = old_text.replace("[UNVERIFIED/UNCERTAIN]: ", "").replace("[EMOTIONAL STATE]: ", "")
+        new_text = new_text.replace("[UNVERIFIED/UNCERTAIN]: ", "").replace("[EMOTIONAL STATE]: ", "")
+        
         inherited_scope = MemoryScope.PERMANENT.value
         inherited_privacy = PrivacyLevel.PUBLIC_TO_SENIOR.value
         inherited_expires_at = None
@@ -235,6 +239,9 @@ class MemoryStore:
                 inherited_scope = item.scope
                 inherited_privacy = item.privacy
                 inherited_expires_at = item.expires_at
+                
+                if inherited_scope == MemoryScope.UNCERTAIN.value:
+                    inherited_scope = MemoryScope.PERMANENT.value
 
         new_item = MemoryItem(
             text=new_text,
@@ -262,6 +269,7 @@ class MemoryStore:
     def search(self, query: str, k: int = 5, now: float | None = None) -> list[MemoryItem]:
         """Scored memory retrieval with stopword pruning and semantic synonym
         expansion over active, public conversation-derived memories."""
+        self._decay_emotions(now)
         raw_query = set(re.findall(r"[a-z0-9]+", query.lower()))
         meaningful_query = {t for t in raw_query if t not in STOPWORDS and len(t) > 1}
         if not meaningful_query:
@@ -316,9 +324,24 @@ class MemoryStore:
                 updates.append(item.text)
         return updates
 
+    def _decay_emotions(self, now: float | None = None):
+        import time
+        current_time = now or time.time()
+        mutated = False
+        for i in self._items:
+            if i.scope == MemoryScope.EMOTIONAL.value and i.status == "active" and i.expires_at:
+                if current_time >= i.expires_at:
+                    i.scope = MemoryScope.HISTORICAL.value
+                    i.text = f"[PAST EMOTION]: {i.text}"
+                    i.expires_at = None
+                    mutated = True
+        if mutated:
+            self._flush()
+
     def senior_profile_facts(self, now: float | None = None) -> list[str]:
         """Extracts enduring biographical anchors, preferences, and relationships.
         Strictly excludes private caregiver-only items, expired items, and superseded facts."""
+        self._decay_emotions(now)
         facts = []
         schedule_items = set(self.caregiver_schedule_updates(now=now))
         guardrail_items = set(self.caregiver_guardrails())

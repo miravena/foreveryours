@@ -460,6 +460,50 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         print("\n[BENCHMARK 15] Uncertainty Grounding: 100.0% (Passed)")
 
+    def test_memory_lifecycle_profound_grief(self):
+        """Benchmark 16: Profound Grief handling.
+        Target: AI correctly extracts profound life events (death) as permanent facts, not fleeting emotions.
+        """
+        from pipeline.think import extract_memory_llm
+        transcript = "My dog Buddy passed away today."
+        cmd = extract_memory_llm(transcript, "I am so incredibly sorry to hear that.", [])
+        if cmd is None:
+            self.skipTest("API call failed (likely dummy key in CI)")
+            
+        self.assertFalse(cmd.startswith("EMOTION:"), f"Profound grief should not be EMOTION: {cmd}")
+        self.assertFalse(cmd.startswith("UNCERTAIN:"), f"Profound grief should not be UNCERTAIN: {cmd}")
+        # Could be just standard fact output, e.g., 'His dog Buddy passed away recently'
+        print("\n[BENCHMARK 16] Profound Grief Extraction: 100.0% (Passed)")
+
+    def test_memory_lifecycle_historical_archiving(self):
+        """Benchmark 17: Historical Archiving of Emotions.
+        Target: Expired emotions are converted to [PAST EMOTION] and remain searchable.
+        """
+        import time
+        self.store.add("Angry with Sarah", source="extract", scope="emotional", expires_at=time.time() - 3600)
+        
+        facts = self.store.senior_profile_facts()
+        self.assertFalse(any("EMOTIONAL STATE" in f for f in facts))
+        
+        search_res = self.store.search("angry")
+        self.assertTrue(any("[PAST EMOTION]" in m.text for m in search_res))
+        
+        print("\n[BENCHMARK 17] Historical Archiving: 100.0% (Passed)")
+
+    def test_memory_lifecycle_certainty_escalation(self):
+        """Benchmark 18: Certainty Escalation.
+        Target: UNCERTAIN facts can be cleanly superseded to PERMANENT.
+        """
+        self.store.add("Grandson is moving", source="extract", scope="uncertain")
+        
+        self.store.supersede("[UNVERIFIED/UNCERTAIN]: Grandson is moving", "Grandson is officially moving")
+        
+        facts = self.store.senior_profile_facts()
+        self.assertFalse(any("UNCERTAIN" in f for f in facts))
+        self.assertTrue(any("Grandson is officially moving" in f for f in facts))
+        
+        print("\n[BENCHMARK 18] Certainty Escalation: 100.0% (Passed)")
+
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
         from pipeline.think import stream_reply
