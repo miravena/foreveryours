@@ -538,6 +538,10 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
     if not memo_text or not memo_text.strip():
         return _format_caregiver_panel(session_id), session_id, ""
     data_dir, _ = _session_dirs(session_id)
+    # A conversation turn's background extraction can still be writing this
+    # session's MemoryStore; join it first so this save doesn't get wiped by
+    # that thread's later _flush() of a now-stale snapshot (Codex review, PR #90).
+    _join_previous_turn(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     for raw_part in re.split(r"[.!?\n]+", memo_text):
         line = raw_part.strip()
@@ -553,6 +557,7 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
         return _format_caregiver_panel(session_id), session_id
     transcript = hear.transcribe(Path(memo_audio))
     data_dir, _ = _session_dirs(session_id)
+    _join_previous_turn(session_id)  # see save_caregiver_text_memo
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     for line in transcript.split(". "):
         line = line.strip().rstrip(".")
