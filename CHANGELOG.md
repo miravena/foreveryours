@@ -10,6 +10,12 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Docs
+- `CONTRIBUTING.md` gains a "Which model and effort for what" table (which AI assistant
+  and effort level to use for a build ticket, a safety-critical change, a review, a
+  mechanical chore, or a founder-gated judgement call), with pointers from `AGENTS.md`
+  and `REVIEW.md`.
+
 ### Changed
 - Hosting hardening per the judge red-team (#81, #11 row 8): the per-turn Nebius call now uses
   `OpenAI(timeout=20, max_retries=1)` instead of the SDK's 600s/2-retry default, so a hung call

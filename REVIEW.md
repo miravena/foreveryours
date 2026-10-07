@@ -61,7 +61,8 @@ worth doing if it leaves a trace, so every review ends in **a comment on the PR*
 Run each review in a **separate subagent** so the reviewer's reading never fills the author's
 context. Give it the PR number, this file, and a read-only brief: no edits, no commits, no
 pushes, never read `.env` or any key. Opus/Fable are not the default; ask for them only when
-Sonnet's review of a safety-critical change looks thin.
+Sonnet's review of a safety-critical change looks thin. For model/effort choices beyond
+reviewing, see [`CONTRIBUTING.md`](CONTRIBUTING.md)'s "Which model and effort for what".
 
 ### The review comment
 

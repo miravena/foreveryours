@@ -133,6 +133,35 @@ Some of this codebase is written with AI assistance. That's fine, but it changes
   (an issue, `docs/ROADMAP.md`, a comment) instead of leaving it in chat — chat doesn't
   outlive the hackathon, the repo does.
 
+### Which model and effort for what
+
+"Match effort to what the demo/deadline actually needs" (above) also applies to picking
+*which* AI assistant and effort level does the work. There's no universal right answer, but
+this repo's experience so far:
+
+| Work | Model, effort | Notes |
+|---|---|---|
+| Build one scoped ticket | Sonnet, medium | default |
+| Safety-critical build (`safety/fastpath.py`, `memory/store.py`, `caregiver.py`, disclosure logic, crisis referral) | Sonnet, high | plus both reviewers — see [`REVIEW.md`](REVIEW.md)'s reviewer table |
+| Review your own Claude PR | Codex via `scripts/openai_review.sh` | comment on the PR |
+| Review a partner's merged PR | Sonnet, medium, runtime-checked | see [`REVIEW.md`](REVIEW.md) |
+| Mechanical chores (extract, list, diff, status checks) | Haiku, or a minimal-toolset subagent | no judgement needed |
+| Coverage or consistency checks across documents | Sonnet, medium | |
+| Hard design where Sonnet was wrong despite full context | Opus, high | ask the founder first |
+| Judgement whose output is a decision, on real artifacts: self-judging runs on the live Space, the post-video/text run, the final go/no-go | Fable, high (xhigh only for long multi-step work) | ask the founder first; never for drafting that depends on undecided choices or a URL that does not exist |
+
+Rules:
+
+1. **Wrong despite full context → a bigger model. Skipped files or tests, shallow
+   answers → higher effort, not a bigger model.** These are different failure modes and
+   call for different fixes.
+2. **Fable and Opus are never started without the founder's yes.**
+3. **Parallel seats must not overlap scope**, and each reads the sibling outputs on the
+   Issue first.
+4. **Every PR or review comment names the model and effort that produced it** (already
+   required by [`REVIEW.md`](REVIEW.md)).
+5. **Record the model and effort of each work item in the Issue that tracks it.**
+
 ## Commit attribution
 
 Every commit has two slots: the **author** (the human) and **co-authors** (AI help).
