@@ -57,13 +57,18 @@ already said.
 
 ## What's stored
 
-Caregiver memos and caregiver daily notes, stored verbatim. When the senior's
-turn contains a durable-fact marker (name, preference, family — see
-`pipeline/think.py`'s `DURABLE_MARKERS`), **the whole turn's transcript is
-stored verbatim, not just the extracted fact** — real extraction (pulling
-just "I love Miles Davis" out of a longer sentence) needs an LLM call we
-haven't budgeted into the latency path yet. Known imprecision, not a design
-goal: a future pass should extract the fact, not the sentence it arrived in.
+Caregiver memos and caregiver daily notes, stored verbatim. For the senior's
+turn, Nemotron (via Nebius Token Factory, `pipeline/think.py`'s
+`extract_memory_llm`) runs first and returns a specific `ADD:`/`SUPERSEDE:`/
+`DELETE:` command, which lets a correction ("my grandson's name is Liam, not
+Leo") or a forget request update or remove the existing fact instead of
+piling on a new one (#54). When that call fails (not just when the model
+decides there's nothing to extract — see #82), the offline `DURABLE_MARKERS`
+heuristic in `pipeline/think.py` is the fallback: it cannot see which stored
+fact a correction targets, so it stores only plain new facts, never a
+correction or forget request or a question, and **stores the whole turn's
+transcript verbatim, not just the fact** — it has no LLM call available to
+do the per-fact extraction instead.
 Nothing else is kept on purpose, but audio does touch disk, so here is
 exactly where and for how long (issue #18):
 

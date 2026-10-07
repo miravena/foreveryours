@@ -84,6 +84,14 @@ DOMAIN_SYNONYMS: dict[str, set[str]] = {
     "food": {"groceries", "food", "dinner", "lunch", "breakfast"},
 }
 
+# Matches a day/time-of-day word that should auto-infer TEMPORARY scope:
+# whole words ("today", "tomorrow", "tonight") or "am"/"pm" as a clock marker
+# -- standalone ("4 PM") or glued to a digit ("4pm", "10am"). The lookbehind
+# blocks "am"/"pm" as a substring of a name or word (e.g. "Liam", "name"):
+# digits aren't letters, so "4pm" still matches, but "Liam" and "name" don't
+# because a letter precedes the "am".
+_TEMPORAL_MARKER_RE = re.compile(r"\b(?:today|tomorrow|tonight)\b|(?<![a-z])(?:am|pm)\b")
+
 
 class MemoryStore:
     def __init__(self, profile_id: str, data_dir: Path, timezone_str: str = "UTC"):
@@ -135,7 +143,7 @@ class MemoryStore:
         Auto-infers TEMPORARY scope for schedule/time notes."""
         if any(i.text == text and i.source == source and i.status == "active" for i in self._items):
             return None
-        if scope == MemoryScope.PERMANENT.value and any(m in text.lower() for m in ("today", "tomorrow", "tonight", "pm", "am")):
+        if scope == MemoryScope.PERMANENT.value and _TEMPORAL_MARKER_RE.search(text.lower()):
             scope = MemoryScope.TEMPORARY.value
             
         if scope == MemoryScope.TEMPORARY.value and expires_at is None:

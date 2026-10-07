@@ -38,7 +38,8 @@ python main.py beat2 --audio samples/senior_jazz.wav     # real voice input
   raises the guardrail ("avoid driving") on its own — caregiver memos/notes
   are always injected into the prompt now, not dependent on word-overlap
   with what the senior said (`memory/store.py`'s `caregiver_context()`).
-- Time-to-first-audio printed and under 2 seconds.
+- Time-to-first-audio printed; README's Pipeline section has the measured numbers (~0.9-1.1s
+  observed on a live Nemotron turn with reasoning off, target under 2s).
 - Memory panel shows what was *recalled* for this turn (always includes the
   caregiver facts; conversation-derived memories are still overlap-searched).
 - Because the audio mentions a durable fact (listening to Miles
@@ -58,14 +59,10 @@ python main.py beat3 --audio samples/senior_distress.wav # real voice distress
 **Expect:**
 - The companion speaks an immediate, honest reassurance first — *"I hear
   you, and I'm taking this seriously. I'm letting your family know right now
-  so someone can check on you."* — never a silent report. That line itself
-  IS the disclosure (see `docs/SAFETY_AND_PRIVACY.md`).
-  **Planned addition (review finding, 2026-10-01, not yet implemented):**
-  this line discloses the one instance but doesn't state the standing rule.
-  Adding something like *"I'll only tell [caregiver] if I'm worried about
-  your safety"* states the boundary up front, which answers the "elder
-  surveillance" objection more directly — see `docs/SAFETY_AND_PRIVACY.md`'s
-  "Planned refinement" note.
+  so someone can check on you. I'll only tell them if I'm worried about your
+  safety."* — never a silent report. That line discloses both the one
+  instance and the standing rule (see `safety/fastpath.py` and
+  `docs/SAFETY_AND_PRIVACY.md`).
 - A caregiver flag appears in the panel, severity `distress`, marked
   "disclosed to senior."
 - The fast-path's regex check (`safety/fastpath.py`) never calls the LLM for

@@ -14,6 +14,20 @@ rename `Unreleased` to the version and date, then tag it.
 - The public Gradio page is the product now, not a developer console (#83): above the fold on laptop and phone there's only the title, a two-line intro, and a persistent AI/recording disclosure (with a link to the privacy notice) before the microphone — no accordion to open first. The telemetry accordion, Clinical Configuration, the four proactive-trigger buttons and the Acoustic Biomarkers panel are behind `FY_DEV_MODE=1` (default off). Send sits directly under the textbox. The caregiver pledge was unintentionally rendering as a Markdown heading (a line of text immediately followed by `---` is a setext `<h2>`) as well as bold; both are fixed. On narrow screens a short alert strip now appears above the mic so a caregiver flag is visible without scrolling past the whole senior column. The first sample chip (`senior_schedule.wav`, new) asks a schedule question so it recalls the caregiver's groceries update instead of looking like a generic chatbot. The perseveration ("asked 3 times in a row") flag no longer fires on the public path — it fired undisclosed, which broke the product's own disclosure invariant on screen (`orchestrator.run_turn(..., enable_perseveration_flag=...)`, default on, off via `FY_DEV_MODE`). The "NEBIUS_API_KEY is pending approval" message is replaced with an honest "the live AI model isn't reachable right now" line. A session that expires mid-demo now says so instead of silently starting over, and `audio_in` is cleared after every turn so a loaded sample clip can't be silently re-sent. The browser tab title and the Gradio footer no longer say "judge demo" (`css` is set on the `gr.Blocks()` constructor, not only `launch()`, so `app.py`'s hosted/Spaces entrypoint carries it too). The periodic AI/recording reminder counts real turns from a persistent per-session counter rather than the truncated prompt history, so it actually fires.
 
 ### Fixed
+- Memory scope: a memory whose text merely contained "am" as a substring (e.g. "Liam", "name") was
+  wrongly auto-scoped TEMPORARY with a 24h expiry; the time-word check now matches whole words only (#82).
+- `extract_new_memory()`'s offline marker fallback now runs only when the LLM extraction call itself
+  fails, not whenever the model succeeds and decides there's nothing to extract; it also never stores
+  a question as a new fact (#82).
+
+### Docs
+- Claims pass (#82, closing #64): README/Project_Description/FEEDBACK/PRD no longer claim Nebius AI
+  Cloud, NVIDIA speech (ASR/TTS), clinical-grade diagnosis, or a "family dashboard" the code doesn't
+  have; the webapp's caregiver pledge and "Live Telemetry" strings now match what's actually sent to
+  Token Factory and actually computed. Deleted `docs/specs/qa/FINAL_QA_REPORT.md` and
+  `docs/specs/qa/QA_STRATEGY.md` (both cited test IDs and a "36-point test plan" that don't exist in
+  the repo); marked `docs/specs/proactive-agency/plan.md` as not built (#65). Recorded in
+  `VENDOR_DECISIONS.md` that NemoGuard and NVIDIA ASR/TTS are not served on Token Factory (#56).
 - Every live turn returned the canned fallback reply because `think.stream_reply()` rejected the `pending_conflicts` kwarg the orchestrator passes; it now accepts and forwards it, the orchestrator logs the exception type and message to stderr whenever it falls back, and keyless tests guard the signature and the live path (#78).
 - Memory control: `extract_new_memory()` now asks the model first when online, so corrections ("my daughter is Sarah, not Susan") become `SUPERSEDE:` and forget-requests become `DELETE:` instead of being stored as new facts by the family-marker heuristic. Offline, the marker heuristic remains the fallback and no longer stores correction or forget phrasings as facts. Benchmark 8 now calls `extract_new_memory()` (#54).
 

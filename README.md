@@ -2,13 +2,18 @@
 
 **The companion the family briefs — your voice in Dad's day when you can't be there.**
 
+ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
+there, and never tells the senior anything it hasn't already told him.
+
 A voice-first AI companion for older adults. A caregiver gives it context once (a voice memo:
 names, preferences, daily updates), and the senior gets a warm, low-friction voice conversation
 that actually uses that context — while the caregiver gets honest safety flags, never silent
 surveillance.
 
 Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackathon.devpost.com/)
-(Personal AI track), on Nebius AI Cloud / Token Factory with open-weight NVIDIA models.
+(Personal AI track, which permits either Nebius Token Factory or Nebius AI Cloud). This project
+runs on Nebius Token Factory with open-weight NVIDIA Nemotron models; it does not use Nebius AI
+Cloud.
 
 ## The three-beat demo
 
@@ -23,7 +28,8 @@ Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackat
 
 ## Pipeline
 
-**🏆 100% of the cognitive and perceptual workloads are hosted on the Nebius AI Cloud 🏆**
+THINK and AUDIT run on Nebius Token Factory with open-weight NVIDIA Nemotron models; speech-to-text
+and text-to-speech are local (`faster-whisper` and `espeak-ng`) and run on neither Nebius service.
 
 ```
 HEAR (speech-to-text via local faster-whisper, offline-resilient)
@@ -38,8 +44,12 @@ Latency is treated as a first-class judging risk: the fast-path skips the LLM en
 emergency/distress phrases, THINK streams tokens straight into sentence-sized TTS chunks, and the
 slower safety audit + memory-save step run in a background thread *after* the first sentence of
 audio is already on its way out. Target: under 2 seconds to first audio on the common path.
-**Measured:** 0.11s on the fast-path (no LLM); about 0.9s to first audio on a live Nemotron turn with
-reasoning off (was 4.22s before, PR #25 -> PR #29). Dated measurements are in
+**Measured:** 0.11s on the fast-path (no LLM); about 0.9s to first audio on the command-line beat
+on a live Nemotron turn with reasoning off (was 4.22s before, PR #25 -> PR #29). **The hosted
+browser demo is not this fast today:** six consecutive turns on the live page measured 3-41s to a
+reply appearing, mainly because AUDIT and memory extraction are joined onto the critical path
+before anything returns to the browser, not run async as above -- see #81's red-team finding (B1)
+for the breakdown and the fix in flight. Dated measurements are in
 [`docs/WORK_LOG.md`](docs/WORK_LOG.md). The CLI (`main.py`/`chat`) now plays each reply sentence
 as soon as it is synthesized (pipelined playback, [#17](../../issues/17)), so it reports both
 **time to first WAV written** (synthesis) and **time to first sound heard** (the number a judge
@@ -93,11 +103,12 @@ degrades gracefully to just the immediate reassurance instead of crashing.
 
 ## Demo video
 
-[`video/output/foreveryours_poc_demo.mp4`](video/output/foreveryours_poc_demo.mp4) (1920x1080,
-2:57) -- auto-generated, not personally recorded. The three terminal beats are real recordings
-of this CLI running live with zero API key; see [`video/README.md`](video/README.md) for how
-it's built and why. This is a working proof-of-concept video, not the final hackathon
-submission video (that one will show the browser demo with real audio).
+The hackathon submission video is screen-recorded from the hosted browser demo (see
+[`docs/VIDEO_SCRIPT.md`](docs/VIDEO_SCRIPT.md)); it replaces the earlier terminal
+proof-of-concept clip, [`video/output/foreveryours_poc_demo.mp4`](video/output/foreveryours_poc_demo.mp4)
+(1920x1080, 2:57, auto-generated CLI recordings with zero API key -- see
+[`video/README.md`](video/README.md)), which is kept for development reference only and does not
+appear in the submission.
 
 ## Web demo (judge-facing, same pipeline)
 
