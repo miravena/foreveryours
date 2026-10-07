@@ -32,7 +32,7 @@ This creates a gap between **what the family knows** and **what the AI knows**.
 # Our Idea
 
 > ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
-> there, and never tells the senior anything it hasn't already told him.
+> there, and never reports anything to the family that it hasn't first said to him out loud.
 
 **ForeverYours is a voice-first Personal AI for older adults that can be deliberately briefed by family members, remember relevant personal context, and carry that context across conversations.**
 
@@ -445,7 +445,7 @@ The architecture distinguishes between current conversation context, temporary c
 A common question is: *"Why can't an older adult simply use ChatGPT Advanced Voice Mode?"*
 
 > ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
-> there, and never tells the senior anything it hasn't already told him.
+> there, and never reports anything to the family that it hasn't first said to him out loud.
 
 General-purpose conversational voice bots are capable of engaging conversation, but they fail critically in eldercare for three structural reasons:
 

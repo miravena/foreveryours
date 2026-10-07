@@ -10,6 +10,14 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Docs
+- The #14 pitch sentence's second half was fixed for subject accuracy: "never tells the senior
+  anything it hasn't already told him" read as a promise that replies never introduce new
+  information (false — beat 2 surfaces a caregiver update the senior hasn't heard before). It now
+  reads "never reports anything to the family that it hasn't first said to him out loud," which
+  states the actual invariant (disclosure, not information novelty). Fixed everywhere it appeared:
+  README.md, both copies in docs/Project_Description.md, video/generate_slides.py.
+
 ### Fixed
 - Memory scope: a memory whose text merely contained "am" as a substring (e.g. "Liam", "name") was
   wrongly auto-scoped TEMPORARY with a 24h expiry; the time-word check now matches whole words only (#82).
