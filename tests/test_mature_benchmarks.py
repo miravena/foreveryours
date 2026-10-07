@@ -510,9 +510,17 @@ class TestMatureBenchmarks(unittest.TestCase):
         """
         import time
         import datetime
+        import zoneinfo
         
-        test_time = 1791331200.0 # Oct 04, 2026
-        date_str = datetime.datetime.fromtimestamp(test_time).strftime('%b %d, %Y')
+        # 1791331200 = 2026-10-07 00:00 UTC — a day boundary, so the expectation must be
+        # read in the STORE's timezone, never the host's (the store stamps in timezone_str,
+        # default UTC; naive fromtimestamp() made this fail on any non-UTC machine, #68).
+        test_time = 1791331200.0
+        date_str = (
+            datetime.datetime.fromtimestamp(test_time, tz=datetime.timezone.utc)
+            .astimezone(zoneinfo.ZoneInfo(self.store.timezone_str))
+            .strftime('%b %d, %Y')
+        )
         
         self.store.add("Sad about the rain", source="extract", scope="emotional", expires_at=test_time - 3600)
         
