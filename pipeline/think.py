@@ -194,14 +194,14 @@ DURABLE_MARKERS = (
     # is what keeps "my son" from matching "my song" and "i like" from
     # matching "i likely" (the original bug used plain `in` substring checks).
     r"\bmy name is\b",
-    r"\bi love\b",
+    r"\bi (?:actually |really |still )?love\b",
     r"\bmy grandson\b",
     r"\bmy granddaughter\b",
     r"\bmy daughter\b",
     r"\bmy son\b",
     r"\bmy wife\b",
     r"\bmy husband\b",
-    r"\bi like\b",
+    r"\bi (?:actually |really |still )?like\b",
     r"\bmy favorite\b",
     r"\bcall me\b",
     r"\bi used to work as\b",
@@ -310,18 +310,47 @@ def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | No
         return None
 
 
+# Phrasings that revise or retract an earlier fact. Offline there is no way to
+# know WHICH stored fact they target (SUPERSEDE/DELETE need the exact old fact),
+# so the offline fallback stores nothing rather than storing the request itself
+# as a new fact.
+REVISION_MARKERS = (
+    # Imperative forget/delete requests, at the start of the utterance (so
+    # "I forget my keys" or "my son will remove the tree" stay facts).
+    r"^\W*(?:(?:please|could you|can you|would you|will you)\s+)*(?:forget|delete|remove|erase)\b",
+    r"\bstop remembering\b",
+    r"\b(?:do not|don'?t) remember\b",
+    # Sentence-initial "Actually," is a correction opener; mid-sentence
+    # "I actually like jazz" is just a fact.
+    r"^\W*actually\s*,",
+    r"\bi was wrong\b",
+    r"\bi misspoke\b",
+    r"\bi meant\b",
+    r"\bcorrection\b",
+    # "X is Y not Z" restating the SAME slot (a name or a family relation).
+    # "My favorite color is blue, not red" is a plain fact and is not matched.
+    r"\b(?:name|daughter|son|grandson|granddaughter|wife|husband|sister|brother|mother|father)"
+    r"\s+(?:is|was|is called|is named|called|named)\s+[a-z]+,?\s+not\s+[a-z]+",
+)
+
+
 def extract_new_memory(transcript: str, reply: str, active_facts: list[str] | None = None, caregiver_updates: list[str] | None = None, use_llm: bool = True) -> str | None:
     """Background extraction: does this turn contain a durable fact worth
-    saving (name, preference, event)? Fast regex heuristic first (for ADD),
-    falling back to async LLM extraction when online."""
-    lowered = transcript.lower()
-    for pattern in DURABLE_MARKERS:
-        if re.search(pattern, lowered):
-            return f"ADD: {transcript.strip()}"
+    saving (name, preference, event), or a correction/forget request?
 
+    The LLM runs first when online, because only it sees the active facts and
+    can return SUPERSEDE/DELETE. The marker heuristic is the offline fallback
+    (and catches genuine facts the LLM returns nothing for); it never stores a
+    correction or forget request as a new fact."""
     if use_llm:
         extracted = extract_memory_llm(transcript, reply, active_facts, caregiver_updates=caregiver_updates)
         if extracted:
             return extracted
 
+    lowered = transcript.lower()
+    if any(re.search(p, lowered) for p in REVISION_MARKERS):
+        return None
+    for pattern in DURABLE_MARKERS:
+        if re.search(pattern, lowered):
+            return f"ADD: {transcript.strip()}"
     return None
