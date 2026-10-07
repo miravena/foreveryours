@@ -22,6 +22,8 @@ class MemoryScope(str, Enum):
     PERMANENT = "permanent"     # Lifelong identity, family relations, enduring passions
     TEMPORARY = "temporary"     # Daily visits, schedule updates, errands
     HISTORICAL = "historical"   # Superseded preferences, past events
+    EMOTIONAL = "emotional"
+    UNCERTAIN = "uncertain"
 
 
 class PrivacyLevel(str, Enum):
@@ -327,7 +329,14 @@ class MemoryStore:
                 continue
             if item.text in schedule_items or item.text in guardrail_items:
                 continue
-            facts.append(item.text)
+            if item.scope == MemoryScope.UNCERTAIN.value:
+                facts.append(f"[UNVERIFIED/UNCERTAIN]: {item.text}")
+            elif item.scope == MemoryScope.EMOTIONAL.value:
+                facts.append(f"[EMOTIONAL STATE]: {item.text}")
+            elif item.text == "[QUIET_MODE]":
+                pass
+            else:
+                facts.append(item.text)
         return facts
 
     def all(self) -> list[MemoryItem]:

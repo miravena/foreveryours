@@ -407,6 +407,59 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         print("\n[BENCHMARK 13] AI Restraint (Quiet Mode): 100.0% (Passed)")
 
+    def test_memory_lifecycle_emotional_decay(self):
+        """Benchmark 14: Emotional Memory Decay.
+        Target: AI stores fleeting emotions but mathematically expires them within 24 hours.
+        """
+        import time
+        from pipeline.think import extract_memory_llm
+        
+        transcript = "I am so incredibly angry with Sarah today."
+        cmd = extract_memory_llm(transcript, "I'm sorry you feel that way.", [])
+        if cmd is None:
+            self.skipTest("API call failed (likely dummy key in CI)")
+            
+        self.assertTrue(cmd.startswith("EMOTION:"), f"Expected EMOTION, got {cmd}")
+        
+        # Emulate orchestrator
+        fact = cmd.split(":", 1)[1].strip()
+        self.store.add(fact, source="extract", scope="emotional", expires_at=time.time() + 24*3600)
+        
+        # Verify it exists now
+        facts_now = self.store.senior_profile_facts(now=time.time())
+        self.assertTrue(any("EMOTIONAL STATE" in f for f in facts_now), "Emotional fact not in profile facts")
+        
+        # Verify it decays after 25 hours
+        facts_later = self.store.senior_profile_facts(now=time.time() + 25*3600)
+        self.assertFalse(any("EMOTIONAL STATE" in f for f in facts_later), "Emotional fact failed to decay")
+        
+        print("\n[BENCHMARK 14] Emotional Memory Decay: 100.0% (Passed)")
+
+    def test_memory_lifecycle_uncertainty_grounding(self):
+        """Benchmark 15: Uncertainty Grounding.
+        Target: AI correctly tags speculative facts as UNCERTAIN so the conversational LLM won't hallucinate them.
+        """
+        import time
+        from pipeline.think import extract_memory_llm
+        from pipeline.orchestrator import run_turn
+        
+        transcript = "I think my grandson might be moving to Penang next year, but I'm not really sure."
+        cmd = extract_memory_llm(transcript, "Oh, that would be a big change.", [])
+        if cmd is None:
+            self.skipTest("API call failed (likely dummy key in CI)")
+            
+        self.assertTrue(cmd.startswith("UNCERTAIN:"), f"Expected UNCERTAIN, got {cmd}")
+        
+        # Emulate orchestrator
+        fact = cmd.split(":", 1)[1].strip()
+        self.store.add(fact, source="extract", scope="uncertain")
+        
+        # Check formatting
+        facts_now = self.store.senior_profile_facts()
+        self.assertTrue(any("UNVERIFIED/UNCERTAIN" in f for f in facts_now), "Uncertain fact not formatted correctly")
+        
+        print("\n[BENCHMARK 15] Uncertainty Grounding: 100.0% (Passed)")
+
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
         from pipeline.think import stream_reply

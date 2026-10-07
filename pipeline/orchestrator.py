@@ -393,6 +393,15 @@ def run_turn(
                     elif saved_cmd.startswith("QUIET_MODE"):
                         memory_store.set_quiet_mode(hours=4.0)
                         result.memory_saved = "Activated Quiet Mode (4 hours)"
+                    elif saved_cmd.startswith("EMOTION:"):
+                        fact = saved_cmd.split(":", 1)[1].strip()
+                        import time
+                        memory_store.add(fact, source="conversation_extract", scope="emotional", expires_at=time.time() + 24 * 3600)
+                        result.memory_saved = f"Emotion: {fact}"
+                    elif saved_cmd.startswith("UNCERTAIN:"):
+                        fact = saved_cmd.split(":", 1)[1].strip()
+                        memory_store.add(fact, source="conversation_extract", scope="uncertain")
+                        result.memory_saved = f"Uncertain: {fact}"
                     else:
                         memory_store.add(saved_cmd, source="conversation_extract")
                         result.memory_saved = saved_cmd
