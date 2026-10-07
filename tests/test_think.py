@@ -47,6 +47,21 @@ class TestExtractNewMemoryDispatch(unittest.TestCase):
         out, _ = self._with_llm(think.LLM_CALL_FAILED, "What's my grandson's name again?")
         self.assertIsNone(out)
 
+    def test_empty_completion_falls_back_not_treated_as_deliberate_none(self):
+        """Regression (Codex review of #82): a truncated/empty completion
+        (e.g. finish_reason="length") is a failed call, not a successful
+        "nothing to extract" verdict, so the marker fallback must still run."""
+        from unittest.mock import patch
+        from types import SimpleNamespace
+
+        completion = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=""))]
+        )
+        with patch("pipeline.think.get_client") as mock_client:
+            mock_client.return_value.chat.completions.create.return_value = completion
+            out = think.extract_new_memory("My grandson is named Leo", "That is lovely.", [])
+        self.assertEqual(out, "ADD: My grandson is named Leo")
+
     def test_offline_never_stores_forget_or_correction_as_fact(self):
         for t in (
             "Please forget my grandson's name.",

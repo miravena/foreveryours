@@ -143,6 +143,14 @@ class TestMemoryStore(unittest.TestCase):
         self.assertEqual(tomorrow_item.scope, MemoryScope.TEMPORARY.value)
         self.assertIsNotNone(tomorrow_item.expires_at)
 
+        # Regression (Codex review of #82): "4pm"/"10am" glued to a digit,
+        # with no space, must still be caught as a clock marker.
+        for t in ("Sarah is dropping by at 4pm", "Dad's appointment is at 10am"):
+            store.add(t, source="conversation_extract")
+            item = next(i for i in store._items if i.text == t)
+            self.assertEqual(item.scope, MemoryScope.TEMPORARY.value, t)
+            self.assertIsNotNone(item.expires_at, t)
+
     def test_caregiver_privacy_firewall(self):
         from memory.store import PrivacyLevel
         store = MemoryStore(self.profile_id, self.data_dir)

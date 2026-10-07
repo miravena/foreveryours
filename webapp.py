@@ -178,7 +178,7 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
 
     lines = [
-        "🛡️ **Peace of mind without surveillance.** ForeverYours summarizes important updates and medical/safety flags. Turn transcripts (not audio) go to Nebius Token Factory to generate replies and run the safety check; see [Safety & privacy design](docs/SAFETY_AND_PRIVACY.md).",
+        "🛡️ **Peace of mind without surveillance.** ForeverYours summarizes important updates and medical/safety flags. Turn transcripts (not audio) go to Nebius Token Factory to generate replies and run the safety check; see [Safety & privacy design](https://github.com/miravena/foreveryours/blob/main/docs/SAFETY_AND_PRIVACY.md).",
         "---"
     ]
     flag_items = flags.all()

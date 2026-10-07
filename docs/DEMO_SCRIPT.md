@@ -38,7 +38,8 @@ python main.py beat2 --audio samples/senior_jazz.wav     # real voice input
   raises the guardrail ("avoid driving") on its own — caregiver memos/notes
   are always injected into the prompt now, not dependent on word-overlap
   with what the senior said (`memory/store.py`'s `caregiver_context()`).
-- Time-to-first-audio printed and under 2 seconds.
+- Time-to-first-audio printed; README's Pipeline section has the measured numbers (~0.9-1.1s
+  observed on a live Nemotron turn with reasoning off, target under 2s).
 - Memory panel shows what was *recalled* for this turn (always includes the
   caregiver facts; conversation-derived memories are still overlap-searched).
 - Because the audio mentions a durable fact (listening to Miles
