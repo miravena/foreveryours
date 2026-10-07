@@ -219,10 +219,36 @@ If the senior disclosed a durable, personal fact (e.g. family member's name, pas
 
 CRITICAL RULES:
 - Use CONFLICT instead of SUPERSEDE if the change is ambiguous and you are not 100% sure it's a direct correction.
-- If the senior's statement contradicts a CAREGIVER NOTE, always output a CONFLICT command (e.g. CONFLICT: Caregiver says doctor is Monday | Senior says doctor is Thursday | Source conflict).
+- If the senior's statement contradicts a CAREGIVER NOTE, always output a CONFLICT command.
 - The senior is the elder/parent. Do NOT invert family relationships.
 - Only SUPERSEDE or DELETE if the old fact is EXACTLY listed in the ACTIVE PROFILE FACTS.
 - If it is just small talk, or no durable facts are present, output NONE. Do not provide commentary.
+
+### EXAMPLES ###
+
+[SCENARIO A]
+ACTIVE PROFILE FACTS:
+- His grandson is named Leo
+Senior: "Actually, my grandson is Liam, not Leo."
+Output: SUPERSEDE: His grandson is named Leo | His grandson is named Liam
+
+[SCENARIO B]
+ACTIVE PROFILE FACTS:
+- His grandson is named Liam
+Senior: "My grandson Leo is coming tomorrow."
+Output: CONFLICT: His grandson is named Liam | My grandson Leo is coming | Might have two grandsons
+
+[SCENARIO C]
+CAREGIVER NOTES:
+- Doctor appointment is Monday
+Senior: "My doctor appointment is Thursday."
+Output: CONFLICT: Doctor appointment is Monday | Doctor appointment is Thursday | Source conflict
+
+[SCENARIO D]
+ACTIVE PROFILE FACTS:
+- Used to work as a carpenter
+Senior: "Please forget that I told you about my carpentry job."
+Output: DELETE: Used to work as a carpenter
 """
 
 
