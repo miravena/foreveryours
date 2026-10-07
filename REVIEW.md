@@ -48,7 +48,7 @@ pre-commit hook or CI (`.github/workflows/`) already enforces.
 
 ## When and how we review
 
-Reviews are optional and never block a merge ([ADR-006](docs/decisions/ADR-006-direct-commits.md):
+Reviews are optional and never block a merge ([ADR-006](docs/decisions/ADR-006-working-agreement.md):
 merge to `main`, fix forward). They are run by hand; there is no automation. A review is only
 worth doing if it leaves a trace, so every review ends in **a comment on the PR**.
 
