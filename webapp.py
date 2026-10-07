@@ -45,6 +45,20 @@ from __future__ import annotations
 
 import datetime
 import os
+
+if __name__ == "__main__":
+    # Only for `python webapp.py` (local dev). app.py (the hosted/Spaces
+    # entrypoint) already loads .env before importing this module; loading it
+    # unconditionally at import time made importing webapp for tests pick up
+    # a real key depending on process/import order (#81 D2). Must run before
+    # the os.environ.get() constants below, or they'd miss .env values
+    # (Codex review, PR #90) -- hence the guard sits here, not at EOF.
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+
 import re
 import shutil
 import tempfile
@@ -61,7 +75,6 @@ from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, Car
 from memory.store import MemoryScope, MemoryStore, PrivacyLevel
 from pipeline import hear
 from pipeline.orchestrator import run_turn
-from safety import fastpath
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
@@ -80,50 +93,50 @@ SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
 GRADIO_CACHE_SWEEP = (600, SESSION_TTL_S)  # (check every N s, delete files older than M s)
 
 _lock = threading.Lock()
-_request_log: dict[str, int] = {}  # date string -> count; re-read from rate_limit.json on each call
+_request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._request_log.clear() still resolves; _rate_limit_ok() keeps its own local dict now
 
 
 def _rate_limit_ok(data_dir: Path) -> bool:
     """Cap is keyed per session (`data_dir` is this session's own directory,
     see `_session_dirs`), so one judge filling theirs up never blocks another
-    judge's link (#81 A1)."""
-    global _request_log
+    judge's link (#81 A1). Reads/writes that session's own `rate_limit.json`
+    directly -- NOT the `_request_log` module global, which would otherwise
+    leak one session's count into the next session's first check whenever
+    the next session's file doesn't exist yet (Codex review, PR #90)."""
     today = datetime.date.today().isoformat()
     rate_file = data_dir / "rate_limit.json"
     with _lock:
+        log: dict[str, int] = {}
         if rate_file.exists():
             try:
                 import json
-                _request_log = json.loads(rate_file.read_text("utf-8"))
+                log = json.loads(rate_file.read_text("utf-8"))
             except Exception:
-                pass
+                log = {}
 
-        count = _request_log.get(today, 0)
+        count = log.get(today, 0)
         if count >= MAX_DAILY_REQUESTS:
             return False
 
-        _request_log.clear() # Keep it small, only need today
-        _request_log[today] = count + 1
+        log = {today: count + 1}  # keep it small, only need today
 
         try:
             import json
             data_dir.mkdir(parents=True, exist_ok=True)
-            rate_file.write_text(json.dumps(_request_log), "utf-8")
+            rate_file.write_text(json.dumps(log), "utf-8")
         except Exception:
             pass
         return True
 
 
-def _will_call_nebius(transcript: str, is_proactive: bool) -> bool:
+def _will_call_nebius() -> bool:
     """Whether this turn is actually about to spend a Nebius Token Factory
-    call -- the cap should count only that, never an empty send, a turn that
-    is about to fail for lack of a key, or the fully-offline safety fast-path
-    (#81 A1)."""
-    if not os.environ.get("NEBIUS_API_KEY", "").strip():
-        return False
-    if is_proactive:
-        return True
-    return not fastpath.check(transcript).triggered
+    call -- the cap should count only that, never an empty send or a turn
+    that's about to fail for lack of a key. With a key configured, THINK is
+    called for every turn, fast-path or not (the fast-path's immediate reply
+    is free, but its continuation isn't) -- so this is a key-presence check,
+    not a fast-path check (#81 A1, Codex review PR #90)."""
+    return bool(os.environ.get("NEBIUS_API_KEY", "").strip())
 
 
 def _session_dirs(session_id: str) -> tuple[Path, Path]:
@@ -409,7 +422,7 @@ def _run_demo_turn(
     # Cap only what's actually about to spend a Nebius call -- not the empty
     # sends and no-key misses handled above, and not the offline safety
     # fast-path (#81 A1).
-    if _will_call_nebius(transcript, is_proactive) and not _rate_limit_ok(data_dir):
+    if _will_call_nebius() and not _rate_limit_ok(data_dir):
         return (
             "This demo has hit its daily request cap -- please try again tomorrow.",
             None,
@@ -446,12 +459,17 @@ def _run_demo_turn(
             "### 📊 Acoustic Biomarkers\n_Error_",
         )
 
-    # AUDIT + memory extraction run in a background thread, off the critical
-    # path, EXCEPT when the crisis tier already fired this turn (caregiver_flag
-    # set): then we join, bounded, so the spoken disclosure follow-up still
-    # reaches the browser before the page moves on (#81 B1, #11 row 8 decision).
-    if result.caregiver_flag and result.background_thread is not None:
-        result.background_thread.join(timeout=10)
+    # AUDIT + memory extraction now run fully off the critical path (#81 B1):
+    # no join here on any turn. #11 row 8's decision was to keep a bounded
+    # join "only on turns where the crisis tier fired" -- but `background_thread`
+    # is only ever set on NON-fast-path turns (`orchestrator.run_turn`: the
+    # background task is created iff `not fast.triggered`), so that condition
+    # can never be true alongside a real thread to join; implementing it
+    # literally was dead code (Codex review, PR #90). Flagged back on #11:
+    # if AUDIT flags a reply unsafe after this returns, its spoken disclosure
+    # is generated but has already missed this turn's `audio_out` -- same
+    # gap as before this PR, not introduced by it, but now a known one
+    # instead of a silently-skipped "fix".
 
     if not result.is_fallback:
         new_history = history + [
@@ -653,10 +671,5 @@ def build_demo() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except ImportError:
-        pass
     hear._get_whisper_model()  # warm up now, not on the first judge's click (#81 B4)
     build_demo().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")))
