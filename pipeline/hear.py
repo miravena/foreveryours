@@ -35,6 +35,20 @@ def _get_whisper_model():
     return _whisper_model
 
 
+def warm_up() -> None:
+    """Load the local Whisper model now, at startup, instead of on the first
+    judge's audio click (#81 B4). A no-op when ASR_BACKEND=nebius (nothing to
+    warm up locally), and best-effort otherwise -- a failed download here
+    must not crash a text-only/no-mic session; `transcribe()` will raise the
+    real error if and when audio actually needs it (Codex review, PR #90)."""
+    if os.environ.get("ASR_BACKEND", "whisper_local") != "whisper_local":
+        return
+    try:
+        _get_whisper_model()
+    except Exception as exc:
+        print(f"[hear] Whisper warm-up failed ({exc}); will retry on first transcribe() call.")
+
+
 def transcribe(audio_path: Path, return_metrics: bool = False):
     if not audio_path.exists() or audio_path.stat().st_size == 0:
         return ("", {}) if return_metrics else ""

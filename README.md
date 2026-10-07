@@ -47,11 +47,17 @@ audio is already on its way out. Target: under 2 seconds to first audio on the c
 **Measured:** 0.11s on the fast-path (no LLM); about 0.9s to first audio on the command-line beat
 on a live Nemotron turn with reasoning off (was 4.22s before, PR #25 -> PR #29). **The browser
 demo was slower than this** because AUDIT and memory extraction were joined onto the critical
-path before anything returned to the browser (#81 red-team finding B1) -- fixed: that join now
-only happens on a turn where the crisis tier fired (so the spoken disclosure still reaches the
-browser), the Nebius client has a bounded 20s timeout instead of the SDK's 600s default, and the
-page shows "Companion is thinking..." the instant a turn starts. Six consecutive turns on the
-local page after the fix measured 0.6-1.1s each (was 3-41s before), run live against Token Factory.
+path before anything returned to the browser (#81 red-team finding B1) -- fixed: that join is
+gone (the next turn for the same session still joins the *previous* turn's background thread,
+bounded, before starting, so memory writes stay ordered — see `webapp._join_previous_turn`), the
+Nebius client has a bounded 20s timeout instead of the SDK's 600s default, and the page shows
+"Companion is thinking..." the instant a turn starts. Six consecutive turns on the local page
+after the fix measured 0.6-3.9s each (was 3-41s before), run live against Token Factory — a turn
+can still wait on the *previous* turn's background thread (bounded, up to 10s) rather than on its
+own. **Known
+gap (#11):** if AUDIT flags a reply unsafe after the turn has already returned, its spoken
+disclosure is synthesized but has already missed that turn's audio output — the caregiver panel
+still shows the flag (polled every 2s), just not as a voice the senior hears in the moment.
 Dated measurements are in
 [`docs/WORK_LOG.md`](docs/WORK_LOG.md). The CLI (`main.py`/`chat`) now plays each reply sentence
 as soon as it is synthesized (pipelined playback, [#17](../../issues/17)), so it reports both

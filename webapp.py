@@ -95,6 +95,31 @@ GRADIO_CACHE_SWEEP = (600, SESSION_TTL_S)  # (check every N s, delete files olde
 _lock = threading.Lock()
 _request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._request_log.clear() still resolves; _rate_limit_ok() keeps its own local dict now
 
+_bg_threads_lock = threading.Lock()
+_bg_threads: dict[str, threading.Thread] = {}  # session_id -> that session's in-flight AUDIT/memory-extraction thread, if any
+
+
+def _join_previous_turn(session_id: str) -> None:
+    """A turn's background AUDIT + memory-extraction thread is no longer
+    joined before returning to the browser (#81 B1 -- that's the whole point
+    of running it in the background). But NOT joining it at all let two
+    overlapping background threads for the same session race on
+    `MemoryStore`: turn B's store can load from disk before turn A's
+    background task calls `_flush()`, so B's own later `_flush()` writes a
+    stale snapshot that silently drops A's save (Codex review, PR #90). Join
+    the PREVIOUS turn's thread, bounded, before this turn does anything, so
+    writes stay ordered without blocking the turn that's actually in flight."""
+    with _bg_threads_lock:
+        prev = _bg_threads.pop(session_id, None)
+    if prev is not None and prev.is_alive():
+        prev.join(timeout=10)
+
+
+def _remember_background_thread(session_id: str, thread: threading.Thread | None) -> None:
+    if thread is not None:
+        with _bg_threads_lock:
+            _bg_threads[session_id] = thread
+
 
 def _rate_limit_ok(data_dir: Path) -> bool:
     """Cap is keyed per session (`data_dir` is this session's own directory,
@@ -193,6 +218,9 @@ def _new_session() -> str:
 
 
 def _end_session(session_id: str | None) -> None:
+    if session_id:
+        with _bg_threads_lock:
+            _bg_threads.pop(session_id, None)
     if session_id and not SHARED_PROFILE:
         shutil.rmtree(SESSIONS_DIR / session_id, ignore_errors=True)
 
@@ -401,6 +429,7 @@ def _run_demo_turn(
     is_proactive: bool = False,
 ) -> tuple[str, str | None, list[dict], str, str]:
     data_dir, audio_dir = _session_dirs(session_id)
+    _join_previous_turn(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
     panel = lambda: _format_caregiver_panel(session_id)  # noqa: E731
@@ -460,16 +489,20 @@ def _run_demo_turn(
         )
 
     # AUDIT + memory extraction now run fully off the critical path (#81 B1):
-    # no join here on any turn. #11 row 8's decision was to keep a bounded
-    # join "only on turns where the crisis tier fired" -- but `background_thread`
-    # is only ever set on NON-fast-path turns (`orchestrator.run_turn`: the
-    # background task is created iff `not fast.triggered`), so that condition
-    # can never be true alongside a real thread to join; implementing it
-    # literally was dead code (Codex review, PR #90). Flagged back on #11:
-    # if AUDIT flags a reply unsafe after this returns, its spoken disclosure
-    # is generated but has already missed this turn's `audio_out` -- same
-    # gap as before this PR, not introduced by it, but now a known one
-    # instead of a silently-skipped "fix".
+    # no join here before returning. #11 row 8's decision was to keep a
+    # bounded join "only on turns where the crisis tier fired" -- but
+    # `background_thread` is only ever set on NON-fast-path turns
+    # (`orchestrator.run_turn`: the background task is created iff
+    # `not fast.triggered`), so that condition can never be true alongside a
+    # real thread to join; implementing it literally was dead code (Codex
+    # review, PR #90). Flagged back on #11: if AUDIT flags a reply unsafe
+    # after this returns, its spoken disclosure is generated but has already
+    # missed this turn's `audio_out` -- same gap as before this PR, not
+    # introduced by it, but now a known one instead of a silently-skipped
+    # "fix". `_join_previous_turn` (called at the top of this function, on
+    # the NEXT turn) still bounds how long a stale thread can run before the
+    # next turn's MemoryStore write would otherwise race it.
+    _remember_background_thread(session_id, result.background_thread)
 
     if not result.is_fallback:
         new_history = history + [
@@ -671,5 +704,5 @@ def build_demo() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    hear._get_whisper_model()  # warm up now, not on the first judge's click (#81 B4)
+    hear.warm_up()  # (#81 B4)
     build_demo().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")))

@@ -15,14 +15,23 @@ rename `Unreleased` to the version and date, then tag it.
   `OpenAI(timeout=20, max_retries=1)` instead of the SDK's 600s/2-retry default, so a hung call
   surfaces as a fallback reply instead of a ten-minute spinner. The browser page shows "Companion
   is thinking..." the instant a turn starts (a generator handler yields the placeholder first).
-  The AUDIT + memory-extraction background thread is no longer joined on normal turns — it runs
-  fully async as `README.md` already claimed — and is joined (bounded, 10s) only on a turn where
-  the crisis tier fired, so the spoken disclosure follow-up still reaches the browser. Six
-  consecutive live turns measured 0.6-1.1s each after these changes, down from the red-team's
-  measured 3-41s. `faster-whisper`'s model now warms up at import (`app.py`, and `webapp.py` when
-  run directly) instead of on the first judge's click. `load_dotenv()` moved out of `webapp.py`'s
-  import scope (only `app.py`'s and `webapp.py`'s own `__main__` load it now), so importing
-  `webapp` for tests no longer has a side effect on process env.
+  The AUDIT + memory-extraction background thread is no longer joined before returning a turn —
+  it runs fully async as `README.md` already claimed. Each session's NEXT turn still joins that
+  session's previous background thread, bounded, before doing any work of its own, so sequential
+  memory writes for one session can't race each other (a stale-snapshot `_flush()` could otherwise
+  silently drop an earlier turn's saved fact — Codex review, PR #90); the current turn is never
+  blocked by its own background work. Known gap, not fixed here and flagged on #11: if AUDIT flags
+  a reply unsafe after the turn already returned, the spoken disclosure is generated but has
+  already missed that turn's `audio_out`. Six consecutive live turns measured 0.6-3.9s each after
+  these changes (a turn can still wait on the *previous* turn's background thread, bounded to
+  10s, rather than on its own), down from the red-team's measured 3-41s. `faster-whisper`'s model
+  now warms up at
+  startup (`pipeline/hear.warm_up()`, called from `app.py` and `webapp.py`'s own `__main__`) instead
+  of on the first judge's click — a no-op when `ASR_BACKEND=nebius`, and best-effort (never crashes
+  startup) when the local model fails to load. `load_dotenv()` moved out of unconditional module
+  scope in `webapp.py` to a `__main__`-guarded block at the top of the file (before the env-derived
+  module constants, not after — Codex review, PR #90), so importing `webapp` for tests no longer
+  has a side effect on process env, and `python webapp.py` still picks up `.env`.
 - The daily request cap (`MAX_DAILY_REQUESTS`) is now keyed per browser session (one session's
   own `rate_limit.json`, not a single counter shared by every visitor) and counts a turn only when
   it is actually about to spend a Nebius Token Factory call — never an empty send, a turn that is
