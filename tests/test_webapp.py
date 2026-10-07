@@ -78,6 +78,24 @@ class TestWebappSessions(unittest.TestCase):
 
 
 
+    def test_ai_reminder_fires_on_turn_count_not_truncated_history(self):
+        """#83 PR #85 Codex review: history is truncated to MAX_HISTORY_TURNS,
+        so the periodic AI/recording reminder must count real turns from a
+        persistent per-session counter, not len(history)."""
+        from types import SimpleNamespace
+        session_id, _ = webapp.init_session()
+        fake_result = SimpleNamespace(
+            reply_text="Good to hear from you.",
+            audio_paths=[],
+            caregiver_flag=False,
+            is_fallback=False,
+            background_thread=None,
+        )
+        with patch.object(webapp, "run_turn", return_value=fake_result):
+            results = [self._turn(f"turn {i}", session_id) for i in range(webapp.REMINDER_EVERY_N_TURNS)]
+        reminders = ["Reminder" in r[0] for r in results]
+        self.assertEqual(reminders, [False] * (webapp.REMINDER_EVERY_N_TURNS - 1) + [True])
+
     def test_expired_session_shows_reset_notice(self):
         """#83, #80 3.C7: a turn with no session_id (State expired mid-demo)
         gets a fresh household and says so, instead of silently looking like
@@ -453,6 +471,19 @@ class TestProactiveButtons(unittest.TestCase):
             self.assertEqual(len(out), 8)
             self.assertTrue(rt.call_args.kwargs["is_proactive"])
             self.assertEqual(out[5], session_id)
+
+
+class TestBuildDemoCss(unittest.TestCase):
+    def test_css_set_on_blocks_not_only_launch_kwargs(self):
+        """#83 PR #85 Codex review: app.py (the hosted/Spaces entrypoint) calls
+        build_demo() and never calls .launch(css=...) itself, so the mobile
+        alert strip and footer rules must be set on the Blocks object -- Gradio
+        stores a constructor-supplied css on `_deprecated_css` until a server
+        actually renders /config (verified live for both entrypoints in the
+        PR); checking it here catches a regression to launch()-only css."""
+        demo = webapp.build_demo()
+        self.assertIn(".mobile-alert-strip", demo._deprecated_css or "")
+        self.assertIn("footer", demo._deprecated_css or "")
 
 
 if __name__ == "__main__":

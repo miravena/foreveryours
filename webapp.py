@@ -124,6 +124,23 @@ def _session_dirs(session_id: str) -> tuple[Path, Path]:
     return root / "data", root / "audio"
 
 
+def _next_turn_count(data_dir: Path) -> int:
+    """Total turns this session, uncapped -- `history` is truncated to
+    MAX_HISTORY_TURNS for prompt size, so its length can't drive the
+    session-length AI/recording reminder (Codex review, #83 PR #85)."""
+    counter_file = data_dir / "turn_count.txt"
+    try:
+        count = int(counter_file.read_text("utf-8").strip()) + 1
+    except (OSError, ValueError):
+        count = 1
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        counter_file.write_text(str(count), "utf-8")
+    except OSError:
+        pass
+    return count
+
+
 def _sweep_stale_sessions() -> None:
     """Backstop for sessions whose delete_callback never ran (process
     restart, crashed tab): anything untouched for SESSION_TTL_S goes."""
@@ -416,8 +433,8 @@ def _run_demo_turn(
     transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
     if result.caregiver_flag:
         transcript_and_reply += "\n\n*(📢 Honest Safety Disclosure: Caregiver notified with Dad's knowledge)*"
-    turn_count = len(new_history) // 2
-    if turn_count and turn_count % REMINDER_EVERY_N_TURNS == 0:
+    turn_count = _next_turn_count(data_dir)
+    if turn_count % REMINDER_EVERY_N_TURNS == 0:
         transcript_and_reply += "\n\n*(🤖 Reminder: this is an AI companion, and this conversation is recorded and transcribed.)*"
 
     wpm = biomarkers.get("wpm", 0.0)
@@ -469,7 +486,15 @@ footer { display: none !important; }
 
 
 def build_demo() -> gr.Blocks:
-    with gr.Blocks(title="ForeverYours — talk, and the family that isn't there finds out", delete_cache=GRADIO_CACHE_SWEEP) as demo:
+    with gr.Blocks(
+        title="ForeverYours — talk, and the family that isn't there finds out",
+        delete_cache=GRADIO_CACHE_SWEEP,
+        # Set here, not in launch(): app.py (the Hugging Face / hosted entrypoint)
+        # calls build_demo() and never calls launch() with our kwargs, so css
+        # passed only to launch() never reaches the hosted page (Codex review,
+        # #83 PR #85).
+        css=PAGE_CSS,
+    ) as demo:
         gr.Markdown(
             "# ForeverYours\n"
             "Watch both sides at once: talk or type as the senior on the left, and watch the "
@@ -594,4 +619,4 @@ def build_demo() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    build_demo().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")), css=PAGE_CSS)
+    build_demo().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")))
