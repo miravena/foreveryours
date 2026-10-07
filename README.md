@@ -44,8 +44,12 @@ Latency is treated as a first-class judging risk: the fast-path skips the LLM en
 emergency/distress phrases, THINK streams tokens straight into sentence-sized TTS chunks, and the
 slower safety audit + memory-save step run in a background thread *after* the first sentence of
 audio is already on its way out. Target: under 2 seconds to first audio on the common path.
-**Measured:** 0.11s on the fast-path (no LLM); about 0.9s to first audio on a live Nemotron turn with
-reasoning off (was 4.22s before, PR #25 -> PR #29). Dated measurements are in
+**Measured:** 0.11s on the fast-path (no LLM); about 0.9s to first audio on the command-line beat
+on a live Nemotron turn with reasoning off (was 4.22s before, PR #25 -> PR #29). **The hosted
+browser demo is not this fast today:** six consecutive turns on the live page measured 3-41s to a
+reply appearing, mainly because AUDIT and memory extraction are joined onto the critical path
+before anything returns to the browser, not run async as above -- see #81's red-team finding (B1)
+for the breakdown and the fix in flight. Dated measurements are in
 [`docs/WORK_LOG.md`](docs/WORK_LOG.md). The CLI (`main.py`/`chat`) now plays each reply sentence
 as soon as it is synthesized (pipelined playback, [#17](../../issues/17)), so it reports both
 **time to first WAV written** (synthesis) and **time to first sound heard** (the number a judge
