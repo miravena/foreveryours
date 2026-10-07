@@ -159,6 +159,7 @@ def run_turn(
     simulated_hour: int | None = None,
     on_chunk=None,
     is_proactive: bool = False,
+    enable_perseveration_flag: bool = True,
 ) -> TurnResult:
     """`history` is session-scoped prior-turn context (see think.build_prompt's
     docstring for why this is kept separate from memory_store) -- pass None
@@ -181,8 +182,11 @@ def run_turn(
     t_now = time.time()
     intent = detect_intent(transcript)
     
-    # Cognitive Drift: Perseveration Tracking
-    if history and intent in (Intent.LOGISTICAL, Intent.MEMORY_REQUEST):
+    # Cognitive Drift: Perseveration Tracking -- off the public path (webapp.py's
+    # DEV_MODE) because the flag fires undisclosed (#80 3.C3): a judge asking
+    # three memory questions in a row, the natural thing to test, gets labelled
+    # with a cognitive symptom the senior is never told about.
+    if enable_perseveration_flag and history and intent in (Intent.LOGISTICAL, Intent.MEMORY_REQUEST):
         user_msgs = [msg["content"] for msg in history if msg.get("role") == "user"]
         if len(user_msgs) >= 2:
             if detect_intent(user_msgs[-1]) == intent and detect_intent(user_msgs[-2]) == intent:

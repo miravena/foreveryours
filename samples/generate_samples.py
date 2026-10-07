@@ -5,6 +5,9 @@ Generates:
   - samples/senior_jazz.wav (Beat 2 conversation turn with durable fact)
   - samples/senior_distress.wav (Beat 3 worrying remark tripping safety fast-path)
   - samples/senior_grandson.wav (Beat 4 day-2 recall check for Leo)
+  - samples/senior_schedule.wav (public webapp first sample chip: a schedule
+    question so beat 2 recalls the caregiver's groceries update, not a
+    generic chatbot reply -- see #83, #80 3.C4)
 """
 from pathlib import Path
 
@@ -21,6 +24,9 @@ SAMPLES = {
     ),
     "senior_grandson.wav": (
         "I forgot, what is my grandson's name?"
+    ),
+    "senior_schedule.wav": (
+        "Hi there. Is anyone coming by today?"
     ),
 }
 
