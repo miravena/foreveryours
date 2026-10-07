@@ -20,9 +20,9 @@ header our GitHub README shouldn't carry, and the key must go in as a
 secret. Doing either by hand at deadline time is where mistakes happen.
 
 Free CPU Spaces sleep after ~48h without traffic; the first click after that
-waits on a cold start (faster-whisper model download + espeak). Open the URL
-yourself shortly before judging starts, or upgrade the hardware for that
-window (see VENDOR_DECISIONS.md).
+waits on a cold start (faster-whisper model download + espeak). A daily
+keep-awake request from an always-on machine covers this through the end of
+judging -- see ADR-003 for the command and its schedule.
 """
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ SAMPLE_GLOB = "samples/*.wav"
 SPACE_VARIABLES = {
     "ASR_BACKEND": "whisper_local",  # Token Factory has no transcription endpoint (PR #25)
     "ASR_MODEL": "base.en",
-    "MAX_DAILY_REQUESTS": "200",
+    "MAX_DAILY_REQUESTS": "50",  # one number everywhere: README, this script, #11 (#81 A1)
     "SESSION_TTL_S": "3600",
 }
 

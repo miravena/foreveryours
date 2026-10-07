@@ -45,11 +45,14 @@ emergency/distress phrases, THINK streams tokens straight into sentence-sized TT
 slower safety audit + memory-save step run in a background thread *after* the first sentence of
 audio is already on its way out. Target: under 2 seconds to first audio on the common path.
 **Measured:** 0.11s on the fast-path (no LLM); about 0.9s to first audio on the command-line beat
-on a live Nemotron turn with reasoning off (was 4.22s before, PR #25 -> PR #29). **The hosted
-browser demo is not this fast today:** six consecutive turns on the live page measured 3-41s to a
-reply appearing, mainly because AUDIT and memory extraction are joined onto the critical path
-before anything returns to the browser, not run async as above -- see #81's red-team finding (B1)
-for the breakdown and the fix in flight. Dated measurements are in
+on a live Nemotron turn with reasoning off (was 4.22s before, PR #25 -> PR #29). **The browser
+demo was slower than this** because AUDIT and memory extraction were joined onto the critical
+path before anything returned to the browser (#81 red-team finding B1) -- fixed: that join now
+only happens on a turn where the crisis tier fired (so the spoken disclosure still reaches the
+browser), the Nebius client has a bounded 20s timeout instead of the SDK's 600s default, and the
+page shows "Companion is thinking..." the instant a turn starts. Six consecutive turns on the
+local page after the fix measured 0.6-1.1s each (was 3-41s before), run live against Token Factory.
+Dated measurements are in
 [`docs/WORK_LOG.md`](docs/WORK_LOG.md). The CLI (`main.py`/`chat`) now plays each reply sentence
 as soon as it is synthesized (pipelined playback, [#17](../../issues/17)), so it reports both
 **time to first WAV written** (synthesis) and **time to first sound heard** (the number a judge
@@ -69,8 +72,13 @@ surveillance, no medical claims, what's stored and why.
 ## Setup
 
 ```bash
-# pyttsx3 (local TTS) needs the espeak-ng system package on Linux:
-sudo apt-get install -y espeak-ng
+# pyttsx3 (local TTS) needs the espeak-ng system package:
+sudo apt-get install -y espeak-ng   # Linux (Debian/Ubuntu)
+# brew install espeak-ng            # macOS
+# Windows: espeak-ng isn't packaged for pip; install from
+#   https://github.com/espeak-ng/espeak-ng/releases, then add it to PATH.
+#   Also run with PYTHONUTF8=1 (PowerShell: $env:PYTHONUTF8=1; cmd: set PYTHONUTF8=1) --
+#   the suite's emoji assertions need UTF-8, which Windows consoles don't default to.
 
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env   # fill in NEBIUS_API_KEY — see "Nebius access" below
@@ -139,9 +147,12 @@ immediate fast-path reassurance (no LLM needed for that), it just can't continue
 conversation past it — same graceful-degradation behavior as `main.py beat3`. Record or upload
 a short clip and hit Send; the memory panel updates live underneath.
 
-`MAX_DAILY_REQUESTS` (default 50) caps how many turns the app will run per day once it's
-public, so a shared link can't burn through the whole Nebius credit balance — bump it locally
-with `MAX_DAILY_REQUESTS=1000 .venv/bin/python webapp.py` if you're iterating and hitting it.
+`MAX_DAILY_REQUESTS` (default **50**, keyed per browser session so one judge filling theirs up
+never blocks another judge's link) caps how many turns actually reach Nebius Token Factory per
+day once the app is public — an empty send, a turn that fails for lack of a key, and the offline
+safety fast-path never count against it. The deploy script and `docs/decisions/ADR-003-hosting.md`
+use this same number. Bump it locally with `MAX_DAILY_REQUESTS=1000 .venv/bin/python webapp.py`
+if you're iterating and hitting it.
 
 ### Nebius access
 

@@ -26,7 +26,16 @@ auto-deletion (PR #26) keep visitors isolated and honor the no-retention privacy
 
 ## Consequences
 
-- **Gotcha:** free Spaces sleep and a cold first click can hang. Keep it awake through judging.
+- **Gotcha:** free Spaces sleep after ~48h idle, and the sleep time cannot be configured
+  (Hugging Face [Spaces overview](https://huggingface.co/docs/hub/en/spaces-overview)); judging
+  runs 2026-12-01 to 2026-12-15, five weeks after the last commit, so an un-kept Space will have
+  slept long before the first judge arrives (#81 A2).
+  **Keep-awake:** a daily request from any always-on machine (oracle), from deploy through
+  2026-12-15:
+  ```bash
+  curl -s -o /dev/null -w '%{http_code}\n' https://<user>-<space>.hf.space/
+  ```
+  Scheduled once a day; a non-200 means the Space needs attention before the next judge hits it.
 - Needs a team Nebius key so deploying does not depend on one person's credits.
 
 ## When to revisit

@@ -45,18 +45,12 @@ from __future__ import annotations
 
 import datetime
 import os
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
 import re
 import shutil
 import tempfile
 import threading
 import time
 import uuid
-import os
 SENIOR_TIMEZONE = os.environ.get('SENIOR_TIMEZONE', 'Asia/Kuala_Lumpur')
 import wave
 from pathlib import Path
@@ -67,6 +61,7 @@ from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, Car
 from memory.store import MemoryScope, MemoryStore, PrivacyLevel
 from pipeline import hear
 from pipeline.orchestrator import run_turn
+from safety import fastpath
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
@@ -88,10 +83,13 @@ _lock = threading.Lock()
 _request_log: dict[str, int] = {}  # date string -> count; re-read from rate_limit.json on each call
 
 
-def _rate_limit_ok() -> bool:
+def _rate_limit_ok(data_dir: Path) -> bool:
+    """Cap is keyed per session (`data_dir` is this session's own directory,
+    see `_session_dirs`), so one judge filling theirs up never blocks another
+    judge's link (#81 A1)."""
     global _request_log
     today = datetime.date.today().isoformat()
-    rate_file = DATA_DIR / "rate_limit.json"
+    rate_file = data_dir / "rate_limit.json"
     with _lock:
         if rate_file.exists():
             try:
@@ -99,21 +97,33 @@ def _rate_limit_ok() -> bool:
                 _request_log = json.loads(rate_file.read_text("utf-8"))
             except Exception:
                 pass
-                
+
         count = _request_log.get(today, 0)
         if count >= MAX_DAILY_REQUESTS:
             return False
-            
+
         _request_log.clear() # Keep it small, only need today
         _request_log[today] = count + 1
-        
+
         try:
             import json
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            data_dir.mkdir(parents=True, exist_ok=True)
             rate_file.write_text(json.dumps(_request_log), "utf-8")
         except Exception:
             pass
         return True
+
+
+def _will_call_nebius(transcript: str, is_proactive: bool) -> bool:
+    """Whether this turn is actually about to spend a Nebius Token Factory
+    call -- the cap should count only that, never an empty send, a turn that
+    is about to fail for lack of a key, or the fully-offline safety fast-path
+    (#81 A1)."""
+    if not os.environ.get("NEBIUS_API_KEY", "").strip():
+        return False
+    if is_proactive:
+        return True
+    return not fastpath.check(transcript).triggered
 
 
 def _session_dirs(session_id: str) -> tuple[Path, Path]:
@@ -351,6 +361,24 @@ def run_proactive_turn(history, session, sim_time):
     return run_demo_turn(None, None, history, session, sim_time, is_proactive=True)
 
 
+def _stream_with_thinking_indicator(real_result_fn):
+    """Wrap a turn handler as a generator so the browser shows "thinking..."
+    the instant a turn starts, instead of a blank spinner for however long
+    Token Factory takes to answer (#81 B1, #11 row 8 decision). `gr.skip()`
+    leaves every other output untouched on the first yield."""
+    def gen(*args, **kwargs):
+        yield (
+            "_Companion is thinking..._",
+            gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(),
+        )
+        yield real_result_fn(*args, **kwargs)
+    return gen
+
+
+run_demo_turn_streaming = _stream_with_thinking_indicator(run_demo_turn)
+run_proactive_turn_streaming = _stream_with_thinking_indicator(run_proactive_turn)
+
+
 def _run_demo_turn(
     audio_in: str | None,
     text_in: str | None,
@@ -366,16 +394,6 @@ def _run_demo_turn(
 
     biomarkers = {"wpm": 0.0, "avg_pause_s": 0.0}
 
-    if not _rate_limit_ok():
-        return (
-            "This demo has hit its daily request cap -- please try again tomorrow "
-            "(protects the shared Nebius API credits). See CONTRIBUTING.md.",
-            None,
-            history,
-            panel(),
-            "### 📊 Acoustic Biomarkers\n_Rate limited_",
-        )
-
     if is_proactive:
         transcript = "[System: The senior is currently quiet. Please initiate a conversation based on the context above. BE BRIEF AND WARM.]"
     elif text_in and text_in.strip():
@@ -387,6 +405,18 @@ def _run_demo_turn(
 
     if not transcript.strip() and not is_proactive:
         return "Couldn't make out any speech or text -- try again.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_"
+
+    # Cap only what's actually about to spend a Nebius call -- not the empty
+    # sends and no-key misses handled above, and not the offline safety
+    # fast-path (#81 A1).
+    if _will_call_nebius(transcript, is_proactive) and not _rate_limit_ok(data_dir):
+        return (
+            "This demo has hit its daily request cap -- please try again tomorrow.",
+            None,
+            history,
+            panel(),
+            "### 📊 Acoustic Biomarkers\n_Rate limited_",
+        )
 
     _clear_session_audio(audio_dir)
     try:
@@ -416,7 +446,11 @@ def _run_demo_turn(
             "### 📊 Acoustic Biomarkers\n_Error_",
         )
 
-    if result.background_thread is not None:
+    # AUDIT + memory extraction run in a background thread, off the critical
+    # path, EXCEPT when the crisis tier already fired this turn (caregiver_flag
+    # set): then we join, bounded, so the spoken disclosure follow-up still
+    # reaches the browser before the page moves on (#81 B1, #11 row 8 decision).
+    if result.caregiver_flag and result.background_thread is not None:
         result.background_thread.join(timeout=10)
 
     if not result.is_fallback:
@@ -570,20 +604,20 @@ def build_demo() -> gr.Blocks:
                             save_audio_memo_btn = gr.Button("Save Voice Memo", variant="secondary")
 
         run_btn.click(
-            fn=run_demo_turn,
+            fn=run_demo_turn_streaming,
             inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
         )
 
         for btn in [proactive_btn_morning, proactive_btn_grocery, proactive_btn_hobby, proactive_btn_silence]:
             btn.click(
-                fn=run_proactive_turn,
+                fn=run_proactive_turn_streaming,
                 inputs=[history_state, session_state, simulated_time_in],
                 outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
             )
 
         text_in.submit(
-            fn=run_demo_turn,
+            fn=run_demo_turn_streaming,
             inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
         )
@@ -619,4 +653,10 @@ def build_demo() -> gr.Blocks:
 
 
 if __name__ == "__main__":
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+    hear._get_whisper_model()  # warm up now, not on the first judge's click (#81 B4)
     build_demo().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")))

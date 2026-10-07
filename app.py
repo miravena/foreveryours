@@ -10,7 +10,9 @@ except ImportError:
     pass
 
 try:
+    from pipeline import hear
     from webapp import build_demo
+    hear._get_whisper_model()  # warm up at import, not on the first judge's click (#81 B4)
     app = build_demo()
 except ModuleNotFoundError as exc:
     print(f"Error: {exc}. Run 'pip install -r requirements.txt' to install web dependencies.")
