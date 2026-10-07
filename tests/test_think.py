@@ -56,6 +56,40 @@ class TestExtractNewMemoryDispatch(unittest.TestCase):
             self.assertEqual(think.extract_new_memory(t, "", [], use_llm=False), f"ADD: {t}")
 
 
+class TestOfflineRevisionMarkers(unittest.TestCase):
+    """PR #69 review: markers must drop corrections/forgets, never plain facts."""
+
+    def test_plain_facts_with_revision_lookalikes_are_added(self):
+        for t in (
+            "I actually like jazz",
+            "My favorite color is blue, not red",
+            "My daughter, not my son, lives in Ohio",
+            "No, I never liked broccoli but my wife does",
+        ):
+            self.assertEqual(think.extract_new_memory(t, "", [], use_llm=False), f"ADD: {t}", t)
+
+    def test_unpunctuated_correction_not_stored(self):
+        self.assertIsNone(think.extract_new_memory("My daughter is Sarah not Susan", "", [], use_llm=False))
+
+    def test_do_not_remember_not_stored(self):
+        for t in (
+            "Do not remember my daughter's address",
+            "Don't remember my daughter's address",
+        ):
+            self.assertIsNone(think.extract_new_memory(t, "", [], use_llm=False), t)
+
+    def test_existing_passes_hold(self):
+        for t in (
+            "Actually, my grandson's name is Liam, not Leo",
+            "Please forget my grandson's name",
+        ):
+            self.assertIsNone(think.extract_new_memory(t, "", [], use_llm=False), t)
+        self.assertEqual(
+            think.extract_new_memory("My grandson Leo loves trains", "", [], use_llm=False),
+            "ADD: My grandson Leo loves trains",
+        )
+
+
 class TestThink(unittest.TestCase):
     def test_build_prompt_structure(self):
         transcript = "Can you play some music?"

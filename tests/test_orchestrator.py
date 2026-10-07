@@ -178,6 +178,29 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(res.audit_verdict, "skipped (fallback turn)")
         self.assertEqual(res.consecutive_errors, 1)
 
+    @patch("pipeline.orchestrator.fastpath.check")
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.orchestrator.think.stream_reply", return_value=["Reply"])
+    def test_none_extraction_leaves_store_unchanged(self, mock_stream, mock_speak, mock_fast):
+        # A correction/forget request offline yields None from extract_new_memory;
+        # the orchestrator must then write nothing to the store.
+        from safety.fastpath import FastPathResult
+        mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        self.store.add("His grandson is named Leo", source="caregiver_memo")
+        before = [(i.text, i.status) if hasattr(i, "status") else i.text for i in self.store.all()]
+        with patch("pipeline.orchestrator.think.extract_new_memory", return_value=None) as m:
+            res = run_turn(
+                "Please forget my grandson's name",
+                self.store, self.flags, self.audio_dir, caregiver_name="Sarah",
+            )
+            res.background_thread.join(timeout=10)
+        # Other tests' leaked background threads may also hit the patch; match ours.
+        self.assertIn("Please forget my grandson's name", [c.args[0] for c in m.call_args_list])
+        after = [(i.text, i.status) if hasattr(i, "status") else i.text for i in self.store.all()]
+        self.assertEqual(before, after)
+        self.assertEqual(len(after), 1)
+        self.assertIsNone(res.memory_saved)
+
     @patch("pipeline.think.stream_reply")
     def test_progressive_circuit_breaker_on_consecutive_errors(self, mock_stream):
         # On 2nd consecutive error, circuit breaker trips: does NOT ask Dad to repeat!
