@@ -2,7 +2,8 @@
 
 Context for AI coding assistants (Claude Code, OpenCode, Kiro) and for a new human.
 Process rules live in [`HOW_TO_WORK_HERE.md`](HOW_TO_WORK_HERE.md); style and
-attribution in [`CONTRIBUTING.md`](CONTRIBUTING.md). This file stays under a page —
+attribution in [`CONTRIBUTING.md`](CONTRIBUTING.md), which also has a table for which
+model and effort to use for what kind of work. This file stays under a page —
 it is read in full at the start of every session.
 
 ## Commands
