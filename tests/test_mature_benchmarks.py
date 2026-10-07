@@ -504,6 +504,30 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         print("\n[BENCHMARK 18] Certainty Escalation: 100.0% (Passed)")
 
+    def test_memory_lifecycle_temporal_anchoring(self):
+        """Benchmark 19: Temporal Anchoring Injection.
+        Target: AI explicitly formats the creation date into historical emotions to prevent chronological hallucinations.
+        """
+        import time
+        import datetime
+        
+        test_time = 1791331200.0 # Oct 04, 2026
+        date_str = datetime.datetime.fromtimestamp(test_time).strftime('%b %d, %Y')
+        
+        self.store.add("Sad about the rain", source="extract", scope="emotional", expires_at=test_time - 3600)
+        
+        # Override created_at for the test
+        for i in self.store._items:
+            if "Sad about the rain" in i.text:
+                i.created_at = test_time
+                break
+                
+        search_res = self.store.search("rain", now=test_time)
+        found = any(f"[PAST EMOTION - {date_str}]: Sad about the rain" in m.text for m in search_res)
+        self.assertTrue(found, f"Failed to find injected date string. Found: {[m.text for m in search_res]}")
+        
+        print("\n[BENCHMARK 19] Temporal Anchoring Injection: 100.0% (Passed)")
+
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
         from pipeline.think import stream_reply
