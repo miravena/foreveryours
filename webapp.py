@@ -45,18 +45,26 @@ from __future__ import annotations
 
 import datetime
 import os
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+
+if __name__ == "__main__":
+    # Only for `python webapp.py` (local dev). app.py (the hosted/Spaces
+    # entrypoint) already loads .env before importing this module; loading it
+    # unconditionally at import time made importing webapp for tests pick up
+    # a real key depending on process/import order (#81 D2). Must run before
+    # the os.environ.get() constants below, or they'd miss .env values
+    # (Codex review, PR #90) -- hence the guard sits here, not at EOF.
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+
 import re
 import shutil
 import tempfile
 import threading
 import time
 import uuid
-import os
 SENIOR_TIMEZONE = os.environ.get('SENIOR_TIMEZONE', 'Asia/Kuala_Lumpur')
 import wave
 from pathlib import Path
@@ -85,35 +93,75 @@ SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
 GRADIO_CACHE_SWEEP = (600, SESSION_TTL_S)  # (check every N s, delete files older than M s)
 
 _lock = threading.Lock()
-_request_log: dict[str, int] = {}  # date string -> count; re-read from rate_limit.json on each call
+_request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._request_log.clear() still resolves; _rate_limit_ok() keeps its own local dict now
+
+_bg_threads_lock = threading.Lock()
+_bg_threads: dict[str, threading.Thread] = {}  # session_id -> that session's in-flight AUDIT/memory-extraction thread, if any
 
 
-def _rate_limit_ok() -> bool:
-    global _request_log
+def _join_previous_turn(session_id: str) -> None:
+    """A turn's background AUDIT + memory-extraction thread is no longer
+    joined before returning to the browser (#81 B1 -- that's the whole point
+    of running it in the background). But NOT joining it at all let two
+    overlapping background threads for the same session race on
+    `MemoryStore`: turn B's store can load from disk before turn A's
+    background task calls `_flush()`, so B's own later `_flush()` writes a
+    stale snapshot that silently drops A's save (Codex review, PR #90). Join
+    the PREVIOUS turn's thread, bounded, before this turn does anything, so
+    writes stay ordered without blocking the turn that's actually in flight."""
+    with _bg_threads_lock:
+        prev = _bg_threads.pop(session_id, None)
+    if prev is not None and prev.is_alive():
+        prev.join(timeout=10)
+
+
+def _remember_background_thread(session_id: str, thread: threading.Thread | None) -> None:
+    if thread is not None:
+        with _bg_threads_lock:
+            _bg_threads[session_id] = thread
+
+
+def _rate_limit_ok(data_dir: Path) -> bool:
+    """Cap is keyed per session (`data_dir` is this session's own directory,
+    see `_session_dirs`), so one judge filling theirs up never blocks another
+    judge's link (#81 A1). Reads/writes that session's own `rate_limit.json`
+    directly -- NOT the `_request_log` module global, which would otherwise
+    leak one session's count into the next session's first check whenever
+    the next session's file doesn't exist yet (Codex review, PR #90)."""
     today = datetime.date.today().isoformat()
-    rate_file = DATA_DIR / "rate_limit.json"
+    rate_file = data_dir / "rate_limit.json"
     with _lock:
+        log: dict[str, int] = {}
         if rate_file.exists():
             try:
                 import json
-                _request_log = json.loads(rate_file.read_text("utf-8"))
+                log = json.loads(rate_file.read_text("utf-8"))
             except Exception:
-                pass
-                
-        count = _request_log.get(today, 0)
+                log = {}
+
+        count = log.get(today, 0)
         if count >= MAX_DAILY_REQUESTS:
             return False
-            
-        _request_log.clear() # Keep it small, only need today
-        _request_log[today] = count + 1
-        
+
+        log = {today: count + 1}  # keep it small, only need today
+
         try:
             import json
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-            rate_file.write_text(json.dumps(_request_log), "utf-8")
+            data_dir.mkdir(parents=True, exist_ok=True)
+            rate_file.write_text(json.dumps(log), "utf-8")
         except Exception:
             pass
         return True
+
+
+def _will_call_nebius() -> bool:
+    """Whether this turn is actually about to spend a Nebius Token Factory
+    call -- the cap should count only that, never an empty send or a turn
+    that's about to fail for lack of a key. With a key configured, THINK is
+    called for every turn, fast-path or not (the fast-path's immediate reply
+    is free, but its continuation isn't) -- so this is a key-presence check,
+    not a fast-path check (#81 A1, Codex review PR #90)."""
+    return bool(os.environ.get("NEBIUS_API_KEY", "").strip())
 
 
 def _session_dirs(session_id: str) -> tuple[Path, Path]:
@@ -170,6 +218,9 @@ def _new_session() -> str:
 
 
 def _end_session(session_id: str | None) -> None:
+    if session_id:
+        with _bg_threads_lock:
+            _bg_threads.pop(session_id, None)
     if session_id and not SHARED_PROFILE:
         shutil.rmtree(SESSIONS_DIR / session_id, ignore_errors=True)
 
@@ -351,6 +402,24 @@ def run_proactive_turn(history, session, sim_time):
     return run_demo_turn(None, None, history, session, sim_time, is_proactive=True)
 
 
+def _stream_with_thinking_indicator(real_result_fn):
+    """Wrap a turn handler as a generator so the browser shows "thinking..."
+    the instant a turn starts, instead of a blank spinner for however long
+    Token Factory takes to answer (#81 B1, #11 row 8 decision). `gr.skip()`
+    leaves every other output untouched on the first yield."""
+    def gen(*args, **kwargs):
+        yield (
+            "_Companion is thinking..._",
+            gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(),
+        )
+        yield real_result_fn(*args, **kwargs)
+    return gen
+
+
+run_demo_turn_streaming = _stream_with_thinking_indicator(run_demo_turn)
+run_proactive_turn_streaming = _stream_with_thinking_indicator(run_proactive_turn)
+
+
 def _run_demo_turn(
     audio_in: str | None,
     text_in: str | None,
@@ -360,21 +429,12 @@ def _run_demo_turn(
     is_proactive: bool = False,
 ) -> tuple[str, str | None, list[dict], str, str]:
     data_dir, audio_dir = _session_dirs(session_id)
+    _join_previous_turn(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
     panel = lambda: _format_caregiver_panel(session_id)  # noqa: E731
 
     biomarkers = {"wpm": 0.0, "avg_pause_s": 0.0}
-
-    if not _rate_limit_ok():
-        return (
-            "This demo has hit its daily request cap -- please try again tomorrow "
-            "(protects the shared Nebius API credits). See CONTRIBUTING.md.",
-            None,
-            history,
-            panel(),
-            "### 📊 Acoustic Biomarkers\n_Rate limited_",
-        )
 
     if is_proactive:
         transcript = "[System: The senior is currently quiet. Please initiate a conversation based on the context above. BE BRIEF AND WARM.]"
@@ -387,6 +447,18 @@ def _run_demo_turn(
 
     if not transcript.strip() and not is_proactive:
         return "Couldn't make out any speech or text -- try again.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_"
+
+    # Cap only what's actually about to spend a Nebius call -- not the empty
+    # sends and no-key misses handled above, and not the offline safety
+    # fast-path (#81 A1).
+    if _will_call_nebius() and not _rate_limit_ok(data_dir):
+        return (
+            "This demo has hit its daily request cap -- please try again tomorrow.",
+            None,
+            history,
+            panel(),
+            "### 📊 Acoustic Biomarkers\n_Rate limited_",
+        )
 
     _clear_session_audio(audio_dir)
     try:
@@ -416,8 +488,21 @@ def _run_demo_turn(
             "### 📊 Acoustic Biomarkers\n_Error_",
         )
 
-    if result.background_thread is not None:
-        result.background_thread.join(timeout=10)
+    # AUDIT + memory extraction now run fully off the critical path (#81 B1):
+    # no join here before returning. #11 row 8's decision was to keep a
+    # bounded join "only on turns where the crisis tier fired" -- but
+    # `background_thread` is only ever set on NON-fast-path turns
+    # (`orchestrator.run_turn`: the background task is created iff
+    # `not fast.triggered`), so that condition can never be true alongside a
+    # real thread to join; implementing it literally was dead code (Codex
+    # review, PR #90). Flagged back on #11: if AUDIT flags a reply unsafe
+    # after this returns, its spoken disclosure is generated but has already
+    # missed this turn's `audio_out` -- same gap as before this PR, not
+    # introduced by it, but now a known one instead of a silently-skipped
+    # "fix". `_join_previous_turn` (called at the top of this function, on
+    # the NEXT turn) still bounds how long a stale thread can run before the
+    # next turn's MemoryStore write would otherwise race it.
+    _remember_background_thread(session_id, result.background_thread)
 
     if not result.is_fallback:
         new_history = history + [
@@ -453,6 +538,10 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
     if not memo_text or not memo_text.strip():
         return _format_caregiver_panel(session_id), session_id, ""
     data_dir, _ = _session_dirs(session_id)
+    # A conversation turn's background extraction can still be writing this
+    # session's MemoryStore; join it first so this save doesn't get wiped by
+    # that thread's later _flush() of a now-stale snapshot (Codex review, PR #90).
+    _join_previous_turn(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     for raw_part in re.split(r"[.!?\n]+", memo_text):
         line = raw_part.strip()
@@ -468,6 +557,7 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
         return _format_caregiver_panel(session_id), session_id
     transcript = hear.transcribe(Path(memo_audio))
     data_dir, _ = _session_dirs(session_id)
+    _join_previous_turn(session_id)  # see save_caregiver_text_memo
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     for line in transcript.split(". "):
         line = line.strip().rstrip(".")
@@ -570,20 +660,20 @@ def build_demo() -> gr.Blocks:
                             save_audio_memo_btn = gr.Button("Save Voice Memo", variant="secondary")
 
         run_btn.click(
-            fn=run_demo_turn,
+            fn=run_demo_turn_streaming,
             inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
         )
 
         for btn in [proactive_btn_morning, proactive_btn_grocery, proactive_btn_hobby, proactive_btn_silence]:
             btn.click(
-                fn=run_proactive_turn,
+                fn=run_proactive_turn_streaming,
                 inputs=[history_state, session_state, simulated_time_in],
                 outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
             )
 
         text_in.submit(
-            fn=run_demo_turn,
+            fn=run_demo_turn_streaming,
             inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
         )
@@ -619,4 +709,5 @@ def build_demo() -> gr.Blocks:
 
 
 if __name__ == "__main__":
+    hear.warm_up()  # (#81 B4)
     build_demo().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")))

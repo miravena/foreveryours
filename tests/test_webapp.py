@@ -418,9 +418,14 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         self.assertIn("_No audio detected_", result[4])
 
     def test_rate_limited_path_preserved(self):
-        """Requirement 3.3: over the daily cap -> existing 5-tuple + rate-limit text."""
+        """Requirement 3.3: over the daily cap -> existing 5-tuple + rate-limit text.
+
+        #81 A1: the cap only counts turns about to spend a Nebius call, so this
+        needs a key present and a non-fast-path transcript to reach that check."""
         session_id, _ = webapp.init_session()
-        with patch.object(webapp, "_rate_limit_ok", return_value=False):
+        with patch.dict(os.environ, {"NEBIUS_API_KEY": "dummy-key-for-cap-test"}), \
+             patch.object(webapp.hear, "transcribe", return_value=("Hello there", {"wpm": 0.0, "avg_pause_s": 0.0})), \
+             patch.object(webapp, "_rate_limit_ok", return_value=False):
             result = webapp._run_demo_turn("fake.wav", None, [], session_id)
         self.assertEqual(len(result), 5)
         self.assertIn("daily request cap", result[0])
@@ -444,6 +449,29 @@ class TestProactiveButtons(unittest.TestCase):
     Runs the module-level handler the four buttons are wired to, offline, with
     run_turn stubbed so no API key is needed.
     """
+
+    def setUp(self):
+        # Issue #76: without this isolation, every run_demo_turn call in this
+        # class wrote to the live data/rate_limit.json (DATA_DIR default),
+        # tripping the real demo's daily cap on repeated suite runs -- same
+        # root cause as #53, fixed for the other two turn-test classes but
+        # missed here.
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.sessions_dir = Path(self.temp_dir.name) / "sessions"
+        self.patches = [
+            patch.object(webapp, "SESSIONS_DIR", self.sessions_dir),
+            patch.object(webapp, "SHARED_PROFILE", False),
+            patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"),
+            patch.dict(os.environ, {"NEBIUS_API_KEY": ""}),
+        ]
+        for p in self.patches:
+            p.start()
+        webapp._request_log.clear()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.temp_dir.cleanup()
 
     def _fake_result(self):
         from types import SimpleNamespace

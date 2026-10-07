@@ -281,22 +281,29 @@ if __name__ == "__main__":
         rest = rest[:idx] + rest[idx + 2:]
     text_in = rest[0] if rest else None
 
-    if beat == "beat1":
-        beat1_caregiver_memo(audio_in=audio_in)
-    elif beat == "beat2":
-        beat2_senior_turn(
-            text_in or "Hi, how's it going today? I've been listening to a lot of Miles Davis lately, I love him.",
-            audio_in=audio_in,
-            play=play,
-        )
-    elif beat == "beat3":
-        beat3_worrying_remark(text_in or "I fell down earlier and I'm scared", audio_in=audio_in, play=play)
-    elif beat == "beat4":
-        beat4_day2_recall(text_in or "I forgot, what is my grandson's name?", audio_in=audio_in, play=play)
-    elif beat == "day2":
-        day2_recall_check()
-    elif beat in ("chat", "interactive", "--chat"):
-        chat_loop(play=play)
-    else:
-        print(f"unknown beat: {beat}")
-        sys.exit(1)
+    from pipeline.nebius_client import NebiusNotConfigured
+
+    try:
+        if beat == "beat1":
+            beat1_caregiver_memo(audio_in=audio_in)
+        elif beat == "beat2":
+            beat2_senior_turn(
+                text_in or "Hi, how's it going today? I've been listening to a lot of Miles Davis lately, I love him.",
+                audio_in=audio_in,
+                play=play,
+            )
+        elif beat == "beat3":
+            beat3_worrying_remark(text_in or "I fell down earlier and I'm scared", audio_in=audio_in, play=play)
+        elif beat == "beat4":
+            beat4_day2_recall(text_in or "I forgot, what is my grandson's name?", audio_in=audio_in, play=play)
+        elif beat == "day2":
+            day2_recall_check()
+        elif beat in ("chat", "interactive", "--chat"):
+            chat_loop(play=play)
+        else:
+            print(f"unknown beat: {beat}")
+            sys.exit(1)
+    except NebiusNotConfigured as exc:
+        print(f"\n{exc}\n")
+        print("See README.md -> Setup -> Nebius access, or run `python main.py beat3` for the offline safety fast-path.")
+        sys.exit(2)

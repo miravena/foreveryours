@@ -11,6 +11,40 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Changed
+- Hosting hardening per the judge red-team (#81, #11 row 8): the per-turn Nebius call now uses
+  `OpenAI(timeout=20, max_retries=1)` instead of the SDK's 600s/2-retry default, so a hung call
+  surfaces as a fallback reply instead of a ten-minute spinner. The browser page shows "Companion
+  is thinking..." the instant a turn starts (a generator handler yields the placeholder first).
+  The AUDIT + memory-extraction background thread is no longer joined before returning a turn —
+  it runs fully async as `README.md` already claimed. Each session's NEXT turn still joins that
+  session's previous background thread, bounded, before doing any work of its own, so sequential
+  memory writes for one session can't race each other (a stale-snapshot `_flush()` could otherwise
+  silently drop an earlier turn's saved fact — Codex review, PR #90); the current turn is never
+  blocked by its own background work. Known gap, not fixed here and flagged on #11: if AUDIT flags
+  a reply unsafe after the turn already returned, the spoken disclosure is generated but has
+  already missed that turn's `audio_out`. Six consecutive live turns measured 0.6-3.9s each after
+  these changes (a turn can still wait on the *previous* turn's background thread, bounded to
+  10s, rather than on its own), down from the red-team's measured 3-41s. `faster-whisper`'s model
+  now warms up at
+  startup (`pipeline/hear.warm_up()`, called from `app.py` and `webapp.py`'s own `__main__`) instead
+  of on the first judge's click — a no-op when `ASR_BACKEND=nebius`, and best-effort (never crashes
+  startup) when the local model fails to load. `load_dotenv()` moved out of unconditional module
+  scope in `webapp.py` to a `__main__`-guarded block at the top of the file (before the env-derived
+  module constants, not after — Codex review, PR #90), so importing `webapp` for tests no longer
+  has a side effect on process env, and `python webapp.py` still picks up `.env`.
+- The daily request cap (`MAX_DAILY_REQUESTS`) is now keyed per browser session (one session's
+  own `rate_limit.json`, not a single counter shared by every visitor) and counts a turn only when
+  it is actually about to spend a Nebius Token Factory call — never an empty send, a turn that is
+  about to fail for lack of a key, or the fully-offline safety fast-path. One number (50) is now
+  used in `README.md`, `scripts/deploy_hf_space.py` and this Issue (previously 50 vs 200). The cap
+  refusal message no longer points a judge at `CONTRIBUTING.md`.
+- `main.py`'s CLI dispatch now catches `NebiusNotConfigured` around every beat, so `beat2`/`beat3`
+  with no key print one clear line and exit(2) instead of a traceback.
+- `requirements.txt` pins `gradio` and `openai` to the majors the Space was deployed with
+  (`gradio<7`, `openai<4`), and `README.md`'s Setup section now covers macOS (`brew install
+  espeak-ng`) and Windows (manual `espeak-ng` install, `PYTHONUTF8=1` for the test suite).
+- `docs/decisions/ADR-003-hosting.md` now names the keep-awake mechanism (a daily `curl` of the
+  Space URL from an always-on machine) and why it's needed through 2026-12-15 judging.
 - The public Gradio page is the product now, not a developer console (#83): above the fold on laptop and phone there's only the title, a two-line intro, and a persistent AI/recording disclosure (with a link to the privacy notice) before the microphone — no accordion to open first. The telemetry accordion, Clinical Configuration, the four proactive-trigger buttons and the Acoustic Biomarkers panel are behind `FY_DEV_MODE=1` (default off). Send sits directly under the textbox. The caregiver pledge was unintentionally rendering as a Markdown heading (a line of text immediately followed by `---` is a setext `<h2>`) as well as bold; both are fixed. On narrow screens a short alert strip now appears above the mic so a caregiver flag is visible without scrolling past the whole senior column. The first sample chip (`senior_schedule.wav`, new) asks a schedule question so it recalls the caregiver's groceries update instead of looking like a generic chatbot. The perseveration ("asked 3 times in a row") flag no longer fires on the public path — it fired undisclosed, which broke the product's own disclosure invariant on screen (`orchestrator.run_turn(..., enable_perseveration_flag=...)`, default on, off via `FY_DEV_MODE`). The "NEBIUS_API_KEY is pending approval" message is replaced with an honest "the live AI model isn't reachable right now" line. A session that expires mid-demo now says so instead of silently starting over, and `audio_in` is cleared after every turn so a loaded sample clip can't be silently re-sent. The browser tab title and the Gradio footer no longer say "judge demo" (`css` is set on the `gr.Blocks()` constructor, not only `launch()`, so `app.py`'s hosted/Spaces entrypoint carries it too). The periodic AI/recording reminder counts real turns from a persistent per-session counter rather than the truncated prompt history, so it actually fires.
 
 ### Docs
@@ -22,6 +56,9 @@ rename `Unreleased` to the version and date, then tag it.
   README.md, both copies in docs/Project_Description.md, video/generate_slides.py.
 
 ### Fixed
+- `tests/test_webapp.py::TestProactiveButtons` wasn't isolated from the live `data/` directory the
+  way the other turn-test classes are, so repeated suite runs wrote to the real demo's
+  `rate_limit.json` and could trip its daily cap (#76).
 - Memory scope: a memory whose text merely contained "am" as a substring (e.g. "Liam", "name") was
   wrongly auto-scoped TEMPORARY with a 24h expiry; the time-word check now matches whole words only (#82).
 - `extract_new_memory()`'s offline marker fallback now runs only when the LLM extraction call itself
