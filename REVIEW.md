@@ -45,3 +45,42 @@ At most five nits per review; summarize the rest as a count.
 
 Generated / cache dirs (`__pycache__/`, `.venv/`, `out/`), and anything the
 pre-commit hook or CI (`.github/workflows/`) already enforces.
+
+## When and how we review
+
+Reviews are optional and never block a merge ([ADR-006](docs/decisions/ADR-006-direct-commits.md):
+merge to `main`, fix forward). They are run by hand; there is no automation. A review is only
+worth doing if it leaves a trace, so every review ends in **a comment on the PR**.
+
+| Case | Reviewer | Why |
+|---|---|---|
+| Our own assistant-written PR (self-review) | OpenAI Codex: `scripts/openai_review.sh` | A different vendor has different blind spots; a second Claude shares the first one's. |
+| A partner's PR after it merges | Claude Sonnet 5.5, medium effort, runtime-checked (run the code, don't just read it) | It can run the change and comment; medium has been enough to catch real bugs. |
+| Safety-critical files (`safety/fastpath.py`, `memory/store.py`, `caregiver.py`, disclosure logic) | Both: Claude at high effort **and** Codex | A miss here has a real person on the other end. |
+
+Run each review in a **separate subagent** so the reviewer's reading never fills the author's
+context. Give it the PR number, this file, and a read-only brief: no edits, no commits, no
+pushes, never read `.env` or any key. Opus/Fable are not the default; ask for them only when
+Sonnet's review of a safety-critical change looks thin.
+
+### The review comment
+
+- One comment per PR (`gh pr comment`, not an approval or change-request).
+- Start with who and what ran it, e.g. `Review by Claude Sonnet 5.5 (medium effort), runtime-checked`.
+- Findings carry `file:line` and the exact input/output that proves them; say which you reproduced.
+- End with a verdict line. Tag the PR's author (`@SirTehTarik`) when a finding concerns their PR.
+- No fleet, host or session details: the repo is public.
+
+### Turning findings into Issues without sprawl
+
+1. **Search first.** `gh issue list --search "<keywords>"`. If an open Issue covers it, comment
+   there with the evidence instead of opening another.
+2. **New Issue = distinct defect.** It needs its own acceptance criteria and a fix that can land
+   alone. Group by root cause, not by symptom.
+3. **Edit the Issue body** when scope or acceptance criteria change (state lives in the body);
+   comments are for evidence and discussion.
+4. **Nits never become Issues.** Count them in the review comment (at most five).
+5. **At most three new Issues per review.** List the rest, grouped, in the comment.
+6. **Regressions reopen.** If something closed has broken again, reopen it with the evidence.
+7. **Every Issue** gets a milestone (or Backlog), a link to the review comment, and an `@` mention
+   of the PR's author.
