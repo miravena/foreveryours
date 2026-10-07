@@ -354,7 +354,8 @@ def run_turn(
 
             try:
                 active_facts = memory_store.senior_profile_facts()
-                saved_cmd = think.extract_new_memory(transcript, reply_text, active_facts)
+                # Pass filtered_schedule to allow extraction of Caregiver vs Senior conflicts
+                saved_cmd = think.extract_new_memory(transcript, reply_text, active_facts, caregiver_updates=filtered_schedule)
                 if saved_cmd:
                     if saved_cmd.startswith("ADD:"):
                         fact = saved_cmd[4:].strip()

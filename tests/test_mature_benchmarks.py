@@ -328,6 +328,23 @@ class TestMatureBenchmarks(unittest.TestCase):
         self.assertTrue(cmd.startswith("CONFLICT:"), f"Expected CONFLICT, got {cmd}")
         print("\n[BENCHMARK 10] Memory Conflict Resolution (Extraction): 100.0% (Passed)")
 
+    def test_caregiver_conflict_resolution_extraction(self):
+        """Benchmark 11: Caregiver vs Senior Conflict Resolution.
+        Target: The LLM flags a CONFLICT when the Senior's statement contradicts a Caregiver memo.
+        """
+        caregiver_updates = ["Doctor appointment is tomorrow at 10 AM"]
+        
+        transcript_ambiguous = "No, my doctor appointment is next Thursday."
+        reply_ambiguous = "Oh, I see."
+        
+        from pipeline.think import extract_memory_llm
+        cmd = extract_memory_llm(transcript_ambiguous, reply_ambiguous, self.store.senior_profile_facts(), caregiver_updates=caregiver_updates)
+        if cmd is None:
+            self.skipTest("API call failed (likely dummy key in CI)")
+            
+        self.assertTrue(cmd.startswith("CONFLICT:"), f"Expected CONFLICT due to Caregiver contradiction, got {cmd}")
+        print("\n[BENCHMARK 11] Caregiver vs Senior Conflict Resolution: 100.0% (Passed)")
+
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
         from pipeline.think import stream_reply

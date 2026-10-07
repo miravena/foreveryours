@@ -210,8 +210,8 @@ DURABLE_MARKERS = (
 )
 
 EXTRACTION_SYSTEM_PROMPT = """\
-You are an eldercare memory extractor. Analyze the senior's statement and companion reply, along with the ACTIVE PROFILE FACTS.
-If the senior disclosed a durable, personal fact (e.g. family member's name, past job, hometown), or explicitly corrected/deleted an active fact, output exactly one of the following commands:
+You are an eldercare memory extractor. Analyze the senior's statement and companion reply, along with the ACTIVE PROFILE FACTS and CAREGIVER NOTES.
+If the senior disclosed a durable, personal fact (e.g. family member's name, past job, hometown), explicitly corrected/deleted an active fact, or contradicted a caregiver note, output exactly one of the following commands:
 1. To add a new fact: `ADD: <fact>` (e.g. ADD: Loves Earl Grey tea)
 2. To correct an active fact: `SUPERSEDE: <exact_old_fact> | <new_fact>` (e.g. SUPERSEDE: His grandson is named Leo | His grandson is named Liam)
 3. To delete a fact because the senior asked you to forget it: `DELETE: <exact_old_fact>`
@@ -219,13 +219,14 @@ If the senior disclosed a durable, personal fact (e.g. family member's name, pas
 
 CRITICAL RULES:
 - Use CONFLICT instead of SUPERSEDE if the change is ambiguous and you are not 100% sure it's a direct correction.
+- If the senior's statement contradicts a CAREGIVER NOTE, always output a CONFLICT command (e.g. CONFLICT: Caregiver says doctor is Monday | Senior says doctor is Thursday | Source conflict).
 - The senior is the elder/parent. Do NOT invert family relationships.
 - Only SUPERSEDE or DELETE if the old fact is EXACTLY listed in the ACTIVE PROFILE FACTS.
 - If it is just small talk, or no durable facts are present, output NONE. Do not provide commentary.
 """
 
 
-def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | None = None) -> str | None:
+def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | None = None, caregiver_updates: list[str] | None = None) -> str | None:
     """Async background extraction via Nemotron. Off critical path, called
     from orchestrator's background thread."""
     try:
@@ -235,6 +236,10 @@ def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | No
         facts_context = "\n".join(f"- {f}" for f in (active_facts or []))
         if facts_context:
             facts_context = f"\n\nACTIVE PROFILE FACTS:\n{facts_context}"
+            
+        cg_context = "\n".join(f"- {u}" for u in (caregiver_updates or []))
+        if cg_context:
+            facts_context += f"\n\nCAREGIVER NOTES:\n{cg_context}"
             
         completion = client.chat.completions.create(
             model=model,
@@ -256,7 +261,7 @@ def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | No
         return None
 
 
-def extract_new_memory(transcript: str, reply: str, active_facts: list[str] | None = None, use_llm: bool = True) -> str | None:
+def extract_new_memory(transcript: str, reply: str, active_facts: list[str] | None = None, caregiver_updates: list[str] | None = None, use_llm: bool = True) -> str | None:
     """Background extraction: does this turn contain a durable fact worth
     saving (name, preference, event)? Fast regex heuristic first (for ADD),
     falling back to async LLM extraction when online."""
@@ -266,7 +271,7 @@ def extract_new_memory(transcript: str, reply: str, active_facts: list[str] | No
             return f"ADD: {transcript.strip()}"
 
     if use_llm:
-        extracted = extract_memory_llm(transcript, reply, active_facts)
+        extracted = extract_memory_llm(transcript, reply, active_facts, caregiver_updates=caregiver_updates)
         if extracted:
             return extracted
 
