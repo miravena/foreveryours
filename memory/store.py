@@ -165,6 +165,27 @@ class MemoryStore:
                     })
         return conflicts
 
+    def mark_conflicts_asked(self) -> None:
+        for i in self._items:
+            if i.status == "conflict":
+                i.status = "conflict_asked"
+        self._flush()
+
+    def resolve_asked_conflicts(self) -> None:
+        for i in self._items:
+            if i.status == "conflict_asked":
+                i.status = "deleted"
+        self._flush()
+
+    def escalate_asked_conflicts(self, flags) -> None:
+        for i in self._items:
+            if i.status == "conflict_asked":
+                parts = i.text.split("|", 2)
+                if len(parts) == 3:
+                    flags.add(f"Unresolved Memory Ambiguity: {parts[0].strip()} vs {parts[1].strip()}", severity="info", disclosed_to_senior=False)
+                i.status = "deleted"
+        self._flush()
+
     def clear_conflicts(self) -> None:
         for i in self._items:
             if i.status == "conflict":

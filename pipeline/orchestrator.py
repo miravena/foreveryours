@@ -248,7 +248,7 @@ def run_turn(
 
     pending_conflicts = memory_store.get_pending_conflicts()
     if pending_conflicts:
-        memory_store.clear_conflicts()
+        memory_store.mark_conflicts_asked()
 
     think_input = transcript if not continuation_note else f"{transcript}\n\n[{continuation_note}]"
     reply_text = ""
@@ -381,6 +381,12 @@ def run_turn(
                     else:
                         memory_store.add(saved_cmd, source="conversation_extract")
                         result.memory_saved = saved_cmd
+                    
+                    # If we got ANY command other than None or NONE, the senior engaged with the prompt.
+                    memory_store.resolve_asked_conflicts()
+                else:
+                    # If saved_cmd is None, the senior likely ignored the clarification question.
+                    memory_store.escalate_asked_conflicts(flags)
             except Exception:  # pragma: no cover - best-effort background extraction
                 pass
 

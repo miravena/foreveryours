@@ -345,6 +345,28 @@ class TestMatureBenchmarks(unittest.TestCase):
         self.assertTrue(cmd.startswith("CONFLICT:"), f"Expected CONFLICT due to Caregiver contradiction, got {cmd}")
         print("\n[BENCHMARK 11] Caregiver vs Senior Conflict Resolution: 100.0% (Passed)")
 
+    def test_fire_and_forget_escalation(self):
+        """Benchmark 12: Fire-and-Forget Escalation.
+        Target: If the senior ignores a conflict clarification, it is escalated to CaregiverFlags.
+        """
+        # 1. Manually add a pending conflict
+        self.store.add_conflict("Old Fact", "New Fact", "Reason")
+        
+        # 2. Emulate orchestrator popping it
+        self.store.mark_conflicts_asked()
+        
+        # 3. Emulate senior ignoring it (saved_cmd = None)
+        self.store.escalate_asked_conflicts(self.flags)
+        
+        # 4. Verify flag exists
+        flag_texts = [f.text for f in self.flags.all()]
+        self.assertTrue(any("Unresolved Memory Ambiguity" in t for t in flag_texts))
+        
+        # 5. Verify conflict is deleted from store
+        self.assertEqual(len(self.store.get_pending_conflicts()), 0)
+        
+        print("\n[BENCHMARK 12] Fire-and-Forget Escalation: 100.0% (Passed)")
+
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
         from pipeline.think import stream_reply
