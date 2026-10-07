@@ -367,6 +367,46 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         print("\n[BENCHMARK 12] Fire-and-Forget Escalation: 100.0% (Passed)")
 
+    def test_ai_restraint_quiet_mode(self):
+        """Benchmark 13: AI Restraint (Quiet Mode).
+        Target: Senior requests sleep; AI intercepts and blocks subsequent proactive check-ins.
+        """
+        import time
+        from pipeline.orchestrator import run_turn
+        
+        transcript = "I'm feeling really tired, I'm going to take a nap for a few hours."
+        
+        from pipeline.think import extract_memory_llm
+        cmd = extract_memory_llm(transcript, "Okay, have a good rest.", [])
+        if cmd is None:
+            self.skipTest("API call failed (likely dummy key in CI)")
+            
+        self.assertTrue(cmd.startswith("QUIET_MODE"), f"Expected QUIET_MODE, got {cmd}")
+        
+        self.store.set_quiet_mode(hours=4.0)
+        self.assertTrue(self.store.is_quiet_mode_active())
+        
+        real_time = time.time
+        time.time = lambda: real_time() + 3600
+        try:
+            result = run_turn(
+                transcript="[PROACTIVE_TRIGGER]",
+                memory_store=self.store,
+                flags=self.flags,
+                audio_out_dir=self.audio_dir,
+                simulated_hour=14,
+                is_proactive=True
+            )
+        finally:
+            time.time = real_time
+            
+        self.assertEqual(result.audit_verdict, "Blocked by Quiet Mode")
+        self.assertEqual(len(result.audio_paths), 0)
+        
+        self.assertFalse(self.store.is_quiet_mode_active(now=time.time() + 18000))
+        
+        print("\n[BENCHMARK 13] AI Restraint (Quiet Mode): 100.0% (Passed)")
+
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
         from pipeline.think import stream_reply

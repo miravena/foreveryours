@@ -192,6 +192,18 @@ def run_turn(
                     disclosed_to_senior=False,
                 )
 
+    # ---------------------------------------------------------
+    # AI RESTRAINT: QUIET MODE
+    # ---------------------------------------------------------
+    if is_proactive and memory_store.is_quiet_mode_active(now=t_now):
+        return TurnResult(
+            transcript=transcript,
+            reply_text="",
+            audio_paths=[],
+            audit_verdict="Blocked by Quiet Mode"
+        )
+    # ---------------------------------------------------------
+
     guardrails = memory_store.caregiver_guardrails()
     raw_schedule = memory_store.caregiver_schedule_updates(now=t_now)
     caregiver_updates = [_sanitize_caregiver_update(u, caregiver_name) for u in raw_schedule]
@@ -378,6 +390,9 @@ def run_turn(
                             reason = parts[2].strip() if len(parts) >= 3 else "Potential contradiction or multiple entities."
                             memory_store.add_conflict(old_fact, new_fact, reason)
                             result.memory_saved = f"Pending Conflict: {old_fact} vs {new_fact}"
+                    elif saved_cmd.startswith("QUIET_MODE"):
+                        memory_store.set_quiet_mode(hours=4.0)
+                        result.memory_saved = "Activated Quiet Mode (4 hours)"
                     else:
                         memory_store.add(saved_cmd, source="conversation_extract")
                         result.memory_saved = saved_cmd

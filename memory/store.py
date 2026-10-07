@@ -152,6 +152,24 @@ class MemoryStore:
         self._items.append(item)
         self._flush()
 
+    def set_quiet_mode(self, hours: float = 4.0) -> None:
+        import time
+        expires_at = time.time() + (hours * 3600)
+        self._items = [i for i in self._items if i.text != "[QUIET_MODE]"]
+        self.add("[QUIET_MODE]", source="system", scope=MemoryScope.TEMPORARY.value, expires_at=expires_at)
+
+    def is_quiet_mode_active(self, now: float | None = None) -> bool:
+        import time
+        current_time = now or time.time()
+        for i in self._items:
+            if i.text == "[QUIET_MODE]" and i.status == "active":
+                if i.expires_at and current_time > i.expires_at:
+                    i.status = "expired"
+                    self._flush()
+                    return False
+                return True
+        return False
+
     def get_pending_conflicts(self) -> list[dict]:
         conflicts = []
         for i in self._items:

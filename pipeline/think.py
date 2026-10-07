@@ -216,6 +216,7 @@ If the senior disclosed a durable, personal fact (e.g. family member's name, pas
 2. To correct an active fact: `SUPERSEDE: <exact_old_fact> | <new_fact>` (e.g. SUPERSEDE: His grandson is named Leo | His grandson is named Liam)
 3. To delete a fact because the senior asked you to forget it: `DELETE: <exact_old_fact>`
 4. To flag an ambiguous conflict where the new info contradicts the old, but might be a misunderstanding or a second entity: `CONFLICT: <exact_old_fact> | <new_fact> | <reason>` (e.g. CONFLICT: Grandson is Liam | My grandson Leo is coming | Might have two grandsons or misspoke)
+5. To activate a temporary quiet mode because the senior requested rest, sleep, or alone time: `QUIET_MODE`
 
 CRITICAL RULES:
 - Use CONFLICT instead of SUPERSEDE if the change is ambiguous and you are not 100% sure it's a direct correction.
@@ -249,6 +250,11 @@ ACTIVE PROFILE FACTS:
 - Used to work as a carpenter
 Senior: "Please forget that I told you about my carpentry job."
 Output: DELETE: Used to work as a carpenter
+
+[SCENARIO E]
+ACTIVE PROFILE FACTS:
+Senior: "I'm feeling really tired, I think I'm going to take a nap for a few hours."
+Output: QUIET_MODE
 """
 
 
