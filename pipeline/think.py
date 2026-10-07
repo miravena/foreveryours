@@ -313,10 +313,11 @@ def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | No
             temperature=0.2,
         )
         content = completion.choices[0].message.content if completion.choices else None
-        if not content:
-            # No usable content (e.g. a truncated/empty completion) is a
-            # failed call, not a deliberate "nothing to extract" verdict --
-            # only an explicit NONE response below counts as that.
+        if not content or not content.strip():
+            # No usable content (e.g. a truncated, empty or whitespace-only
+            # completion) is a failed call, not a deliberate "nothing to
+            # extract" verdict -- only an explicit NONE response below counts
+            # as that.
             return LLM_CALL_FAILED
         text = content.strip().strip('"')
         if text.strip('. \n"\'').upper() == "NONE" or len(text) < 4:
@@ -370,7 +371,7 @@ def extract_new_memory(transcript: str, reply: str, active_facts: list[str] | No
             # way its verdict is trusted and not second-guessed.
             return extracted
 
-    if transcript.strip().endswith("?"):
+    if "?" in transcript:
         return None
 
     lowered = transcript.lower()
