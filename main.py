@@ -74,7 +74,7 @@ def beat1_caregiver_memo(audio_in: Path | None = None) -> None:
     else:
         memo = DEMO_MEMO
 
-    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
+    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR, timezone_str=SENIOR_TIMEZONE)
     saved = 0
     for line in memo.split(". "):
         line = line.strip().rstrip(".")
@@ -89,7 +89,7 @@ def beat2_senior_turn(transcript: str | None, audio_in: Path | None = None, play
         transcript = hear.transcribe(audio_in)
         print(f'Heard from "{audio_in.name}": "{transcript}"')
 
-    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
+    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR, timezone_str=SENIOR_TIMEZONE)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR)
     # Pipelined playback (issue #17): the player plays each reply sentence on a
     # background thread the instant it is synthesized, so sentence 2 synthesizes
@@ -142,7 +142,7 @@ def day2_recall_check() -> None:
     import os
     import time
 
-    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
+    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR, timezone_str=SENIOR_TIMEZONE)
     items = store.all()
     if not items:
         print(f"No memory file found at {store.path.name} -- run `python main.py beat1` first.")
@@ -163,7 +163,7 @@ def beat4_day2_recall(transcript: str | None, audio_in: Path | None = None, play
     import os
     from pipeline.nebius_client import NebiusNotConfigured
 
-    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
+    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR, timezone_str=SENIOR_TIMEZONE)
     items = store.all()
     if not items:
         print(f"No memory file found at {store.path.name} -- run `python main.py beat1` first.")
@@ -186,7 +186,7 @@ def chat_loop(play: bool = True) -> None:
     Runs full voice synthesis and memory recall."""
     from pipeline.nebius_client import NebiusNotConfigured
 
-    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR)
+    store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR, timezone_str=SENIOR_TIMEZONE)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR)
     history: list[dict] = []
     max_history_turns = 4

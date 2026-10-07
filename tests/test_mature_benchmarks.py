@@ -559,6 +559,21 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         print("\n[BENCHMARK 20] Timezone Blindness Fix: 100.0% (Passed)")
 
+    def test_memory_lifecycle_invalid_timezone(self):
+        """Benchmark 21: Invalid Timezone Fallback.
+        Target: MemoryStore logs a warning and falls back to UTC if a bad timezone is injected.
+        """
+        import logging
+        from memory.store import MemoryStore
+        
+        with self.assertLogs(level='WARNING') as cm:
+            from pathlib import Path; bad_store = MemoryStore("dummy_id", Path(self.temp_dir.name), timezone_str="Invalid/Timezone")
+            
+        self.assertEqual(bad_store.timezone_str, "UTC")
+        self.assertTrue(any("Invalid timezone_str 'Invalid/Timezone'" in log for log in cm.output))
+        
+        print("\n[BENCHMARK 21] Invalid Timezone Fallback: 100.0% (Passed)")
+
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
         from pipeline.think import stream_reply

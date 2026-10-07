@@ -90,7 +90,14 @@ class MemoryStore:
         self.profile_id = profile_id
         self.path = data_dir / f"{profile_id}.json"
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.timezone_str = timezone_str
+        import zoneinfo
+        import logging
+        try:
+            zoneinfo.ZoneInfo(timezone_str)
+            self.timezone_str = timezone_str
+        except zoneinfo.ZoneInfoNotFoundError:
+            logging.warning(f"Invalid timezone_str '{timezone_str}'. Falling back to UTC.")
+            self.timezone_str = "UTC"
         self._items: list[MemoryItem] = self._load()
 
     def _load(self) -> list[MemoryItem]:

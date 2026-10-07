@@ -137,7 +137,7 @@ def _new_session() -> str:
     _sweep_stale_sessions()
     session_id = DEFAULT_PROFILE_ID if SHARED_PROFILE else uuid.uuid4().hex
     data_dir, _ = _session_dirs(session_id)
-    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     for line in DEMO_MEMO.split(". "):
         line = line.strip().rstrip(".")
         if line:
@@ -172,7 +172,7 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     if not session_id:
         return "_Setting up your demo household..._"
     data_dir, _ = _session_dirs(session_id)
-    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
 
     lines = [
@@ -297,7 +297,7 @@ def _run_demo_turn(
     is_proactive: bool = False,
 ) -> tuple[str, str | None, list[dict], str, str]:
     data_dir, audio_dir = _session_dirs(session_id)
-    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
     panel = lambda: _format_caregiver_panel(session_id)  # noqa: E731
 
@@ -386,7 +386,7 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
     if not memo_text or not memo_text.strip():
         return _format_caregiver_panel(session_id), session_id, ""
     data_dir, _ = _session_dirs(session_id)
-    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     for raw_part in re.split(r"[.!?\n]+", memo_text):
         line = raw_part.strip()
         if line:
@@ -401,7 +401,7 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
         return _format_caregiver_panel(session_id), session_id
     transcript = hear.transcribe(Path(memo_audio))
     data_dir, _ = _session_dirs(session_id)
-    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     for line in transcript.split(". "):
         line = line.strip().rstrip(".")
         if line:
