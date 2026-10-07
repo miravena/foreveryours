@@ -31,6 +31,9 @@ This creates a gap between **what the family knows** and **what the AI knows**.
 
 # Our Idea
 
+> ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
+> there, and never tells the senior anything it hasn't already told him.
+
 **ForeverYours is a voice-first Personal AI for older adults that can be deliberately briefed by family members, remember relevant personal context, and carry that context across conversations.**
 
 The central idea is simple:
