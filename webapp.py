@@ -56,6 +56,8 @@ import tempfile
 import threading
 import time
 import uuid
+import os
+SENIOR_TIMEZONE = os.environ.get('SENIOR_TIMEZONE', 'Asia/Kuala_Lumpur')
 import wave
 from pathlib import Path
 

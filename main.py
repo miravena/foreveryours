@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import os
+SENIOR_TIMEZONE = os.environ.get('SENIOR_TIMEZONE', 'Asia/Kuala_Lumpur')
 from pathlib import Path
 
 if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):

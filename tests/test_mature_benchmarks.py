@@ -486,7 +486,7 @@ class TestMatureBenchmarks(unittest.TestCase):
         self.assertFalse(any("EMOTIONAL STATE" in f for f in facts))
         
         search_res = self.store.search("angry")
-        self.assertTrue(any("[PAST EMOTION]" in m.text for m in search_res))
+        self.assertTrue(any("[PAST EMOTION -" in m.text for m in search_res))
         
         print("\n[BENCHMARK 17] Historical Archiving: 100.0% (Passed)")
 
