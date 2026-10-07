@@ -11,6 +11,7 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Fixed
+- Every live turn returned the canned fallback reply because `think.stream_reply()` rejected the `pending_conflicts` kwarg the orchestrator passes; it now accepts and forwards it, the orchestrator logs the exception type and message to stderr whenever it falls back, and keyless tests guard the signature and the live path (#78).
 - Memory control: `extract_new_memory()` now asks the model first when online, so corrections ("my daughter is Sarah, not Susan") become `SUPERSEDE:` and forget-requests become `DELETE:` instead of being stored as new facts by the family-marker heuristic. Offline, the marker heuristic remains the fallback and no longer stores correction or forget phrasings as facts. Benchmark 8 now calls `extract_new_memory()` (#54).
 
 ### Added

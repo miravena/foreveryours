@@ -111,6 +111,7 @@ def stream_reply(
     intent: str | None = None,
     current_hour: int | None = None,
     is_proactive: bool = False,
+    pending_conflicts: list[dict] | None = None,
 ) -> Iterator[str]:
     client = get_client()
     # nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B: compact MoE, better latency fit for our
@@ -129,6 +130,7 @@ def stream_reply(
             intent=intent,
             current_hour=current_hour,
             is_proactive=is_proactive,
+            pending_conflicts=pending_conflicts,
         ),
         "stream": True,
         "max_tokens": 1024,
