@@ -78,6 +78,15 @@ class TestWebappSessions(unittest.TestCase):
 
 
 
+    def test_expired_session_shows_reset_notice(self):
+        """#83, #80 3.C7: a turn with no session_id (State expired mid-demo)
+        gets a fresh household and says so, instead of silently looking like
+        a reset conversation."""
+        with patch.object(webapp.hear, "transcribe", return_value=("Hello", {"wpm": 0.0, "avg_pause_s": 0.0})):
+            result = webapp.run_demo_turn("fake.wav", [], None)
+        self.assertIn("reset after a period of inactivity", result[0])
+        self.assertIsNotNone(result[5])  # a new session_id was minted
+
     def test_new_session_is_prebriefed(self):
 
         session_id, panel = webapp.init_session()
@@ -234,7 +243,7 @@ class TestWebappSessions(unittest.TestCase):
 
         )
 
-        transcript_and_reply, reply_audio, new_history, panel, biomarkers, sess, cleared_text = out
+        transcript_and_reply, reply_audio, new_history, panel, biomarkers, sess, cleared_text, cleared_audio = out
 
         self.assertIn("Dad said:** \"I fell down earlier and I'm scared\"", transcript_and_reply)
 
@@ -302,7 +311,7 @@ class TestWebappSessions(unittest.TestCase):
 
             # When both text and audio are provided, text_in takes precedence
 
-            transcript_out, audio_out, history_state, panel, biomarkers, out_sess_id, out_text_in = webapp.run_demo_turn(
+            transcript_out, audio_out, history_state, panel, biomarkers, out_sess_id, out_text_in, out_audio_in = webapp.run_demo_turn(
 
                 audio_in="fake.wav",
 
@@ -370,13 +379,15 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         self.assertIn("try again", result[0])
         self.assertIn("Acoustic Biomarkers", result[4])
 
-    def test_empty_transcript_end_to_end_returns_7_tuple(self):
-        """Requirement 2.2/2.3: run_demo_turn yields exactly 7 outputs (no Gradio mismatch)."""
+    def test_empty_transcript_end_to_end_returns_8_tuple(self):
+        """Requirement 2.2/2.3: run_demo_turn yields exactly 8 outputs (no Gradio mismatch),
+        the 8th clearing audio_in so a stale sample clip isn't re-sent (#83, #80 2.B3)."""
         session_id, _ = webapp.init_session()
         with patch.object(webapp.hear, "transcribe", return_value=("", {"wpm": 0.0, "avg_pause_s": 0.0})):
             result = webapp.run_demo_turn("fake.wav", [], session_id)
-        self.assertEqual(len(result), 7)
+        self.assertEqual(len(result), 8)
         self.assertIn("try again", result[0])
+        self.assertIsNone(result[7])
 
     # --- Property 2: Preservation (non-buggy paths unchanged) ---
 
@@ -430,16 +441,16 @@ class TestProactiveButtons(unittest.TestCase):
         session_id, _ = webapp.init_session()
         with patch.object(webapp, "run_turn", return_value=self._fake_result()) as rt:
             out = webapp.run_demo_turn(None, None, [], session_id, "Morning (Default)", is_proactive=True)
-        self.assertEqual(len(out), 7)
+        self.assertEqual(len(out), 8)
         self.assertTrue(rt.call_args.kwargs["is_proactive"])
         self.assertIn("Good morning, Dad.", out[0])
 
-    def test_button_handler_returns_seven_outputs_for_each_time(self):
+    def test_button_handler_returns_eight_outputs_for_each_time(self):
         for sim_time in ("Morning (Default)", "Sundowning (6 PM)", "Night (11 PM)"):
             session_id, _ = webapp.init_session()
             with patch.object(webapp, "run_turn", return_value=self._fake_result()) as rt:
                 out = webapp.run_proactive_turn([], session_id, sim_time)
-            self.assertEqual(len(out), 7)
+            self.assertEqual(len(out), 8)
             self.assertTrue(rt.call_args.kwargs["is_proactive"])
             self.assertEqual(out[5], session_id)
 

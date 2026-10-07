@@ -5,6 +5,7 @@ $samples = @{
     "senior_jazz.wav" = "Hi, how's it going today? I've been listening to a lot of Miles Davis lately, I love him."
     "senior_distress.wav" = "I fell down earlier and I'm scared."
     "senior_grandson.wav" = "I forgot, what is my grandson's name?"
+    "senior_schedule.wav" = "Hi there. Is anyone coming by today?"
 }
 
 $sampleDir = Split-Path -Parent $MyInvocation.MyCommand.Path

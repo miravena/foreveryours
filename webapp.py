@@ -71,9 +71,14 @@ from pipeline.orchestrator import run_turn
 DATA_DIR = Path(__file__).resolve().parent / "data"
 AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
 SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
-SAMPLE_CLIPS = ("senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav")
+SAMPLE_CLIPS = ("senior_schedule.wav", "senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav")
 MAX_DAILY_REQUESTS = int(os.environ.get("MAX_DAILY_REQUESTS", "50"))
 MAX_HISTORY_TURNS = 4  # (user, assistant) pairs kept -- bounds prompt growth, not a product limit
+REMINDER_EVERY_N_TURNS = 6  # session-length-based "this is an AI" reminder (#83 AC)
+# Developer-only surface (telemetry, clinical sim, proactive triggers, biomarkers,
+# the perseveration flag) stays out of the public page by default (#83, #80 3.C3).
+DEV_MODE = os.environ.get("FY_DEV_MODE") == "1"
+PRIVACY_NOTICE_URL = "https://github.com/miravena/foreveryours/blob/main/docs/SAFETY_AND_PRIVACY.md"
 SESSIONS_DIR = Path(os.environ.get("FY_SESSIONS_DIR", Path(tempfile.gettempdir()) / "foreveryours-sessions"))
 SHARED_PROFILE = os.environ.get("FY_SHARED_PROFILE") == "1"
 SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
@@ -178,8 +183,12 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
 
     lines = [
-        "🛡️ **Peace of mind without surveillance.** ForeverYours summarizes important updates and medical/safety flags. Verbatim conversations are kept strictly private to preserve dignity.",
-        "---"
+        # A blank line before "---" matters: text immediately followed by "---"
+        # is a Markdown setext heading (renders <h2>), which is how the pledge
+        # became the largest text on the page (#83, #80 2.B2) even un-bolded.
+        "🛡️ Peace of mind without surveillance. ForeverYours summarizes important updates and medical/safety flags. Verbatim conversations are kept strictly private to preserve dignity.",
+        "",
+        "---",
     ]
     flag_items = flags.all()
     distress_flags = [f for f in flag_items if f.severity in ("distress", "confusion")]
@@ -237,6 +246,23 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     return "\n".join(lines)
 
 
+def _format_mobile_alert_strip(session_id: str | None) -> str:
+    """Short version of the caregiver panel's top alert, shown above the mic
+    only on narrow screens (CSS below) -- on a phone the caregiver column is
+    stacked below the whole senior column, so without this a flag is invisible
+    until the judge scrolls past everything (#83, #80 2.B2)."""
+    if not session_id:
+        return ""
+    data_dir, _ = _session_dirs(session_id)
+    flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
+    distress_flags = [f for f in flags.all() if f.severity in ("distress", "confusion")]
+    if not distress_flags:
+        return ""
+    latest = distress_flags[-1]
+    disclosed = "told Dad already" if latest.disclosed_to_senior else "not yet disclosed to Dad"
+    return f"🚨 **Caregiver alert:** {latest.text} ({disclosed})"
+
+
 def _combine_audio_chunks(audio_paths: list[Path], out_dir: Path) -> Path | None:
     """Concatenate sentence-level audio WAV chunks into one unified audio file
     so the user hears the entire companion response."""
@@ -267,7 +293,7 @@ def run_demo_turn(
     session_id: str | None = None,
     simulated_time_in: str | None = None,
     is_proactive: bool = False,
-) -> tuple[str, str | None, list[dict], str, str, str, str]:
+) -> tuple[str, str | None, list[dict], str, str, str, str, None]:
     if isinstance(text_in_or_history, list):
         history = text_in_or_history
         session_id_val = history_or_session if isinstance(history_or_session, str) else session_id
@@ -279,20 +305,32 @@ def run_demo_turn(
         session_id_val = session_id
         simulated_time_str = simulated_time_in or "Morning (Default)"
 
+    # A missing session_id here means the Gradio State expired mid-demo (#83,
+    # #80 3.C7): a fresh, unbriefed household is about to answer, so say so
+    # rather than silently looking like a reset conversation.
+    session_expired = session_id_val is None
     session_id_val = session_id_val or _new_session()
-    
+
     simulated_hour = 10
     if "Sundowning" in simulated_time_str:
         simulated_hour = 18
     elif "Night" in simulated_time_str:
         simulated_hour = 23
-        
+
     out = _run_demo_turn(audio_in, actual_text, history, session_id_val, simulated_hour, is_proactive=is_proactive)
-    return (*out, session_id_val, "")
+    if session_expired:
+        out = (
+            "_Your demo household was reset after a period of inactivity._\n\n" + out[0],
+            *out[1:],
+        )
+    # Clear audio_in on every turn: otherwise a loaded sample clip stays in the
+    # recorder and a later Send with an empty textbox silently re-transcribes
+    # the old clip (#83, #80 2.B3).
+    return (*out, session_id_val, "", None)
 
 
 def run_proactive_turn(history, session, sim_time):
-    """Handler for the four proactive buttons: same 7 outputs as run_demo_turn."""
+    """Handler for the four proactive buttons: same 8 outputs as run_demo_turn."""
     return run_demo_turn(None, None, history, session, sim_time, is_proactive=True)
 
 
@@ -336,14 +374,15 @@ def _run_demo_turn(
     _clear_session_audio(audio_dir)
     try:
         result = run_turn(
-            transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour, is_proactive=is_proactive
+            transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour, is_proactive=is_proactive,
+            enable_perseveration_flag=DEV_MODE,
         )
     except Exception as exc:
         err = str(exc)
         if "NEBIUS_API_KEY" in err or "NebiusNotConfigured" in type(exc).__name__:
             return (
                 f'**Dad said:** "{transcript}"\n\n'
-                f"⚠️ *Companion reply paused: NEBIUS_API_KEY is pending approval.*\n\n"
+                f"⚠️ *The live AI model isn't reachable right now -- the offline safety fast-path still works.*\n\n"
                 f"👉 **Try an emergency phrase:** Say or type *\"I fell down earlier and I'm scared\"* — the safety fast-path runs completely offline with real spoken voice!",
                 None,
                 history,
@@ -377,7 +416,10 @@ def _run_demo_turn(
     transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
     if result.caregiver_flag:
         transcript_and_reply += "\n\n*(📢 Honest Safety Disclosure: Caregiver notified with Dad's knowledge)*"
-        
+    turn_count = len(new_history) // 2
+    if turn_count and turn_count % REMINDER_EVERY_N_TURNS == 0:
+        transcript_and_reply += "\n\n*(🤖 Reminder: this is an AI companion, and this conversation is recorded and transcribed.)*"
+
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
     if wpm > 0:
@@ -417,52 +459,65 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
     return _format_caregiver_panel(session_id), session_id
 
 
+PAGE_CSS = """
+.mobile-alert-strip { display: none; }
+@media (max-width: 768px) {
+    .mobile-alert-strip:not(:empty) { display: block !important; margin-bottom: 0.75em; }
+}
+footer { display: none !important; }
+"""
+
+
 def build_demo() -> gr.Blocks:
-    with gr.Blocks(title="ForeverYours — judge demo", delete_cache=GRADIO_CACHE_SWEEP) as demo:
+    with gr.Blocks(title="ForeverYours — talk, and the family that isn't there finds out", delete_cache=GRADIO_CACHE_SWEEP) as demo:
         gr.Markdown(
             "# ForeverYours\n"
-            "Watch both sides at once: talk or type as the senior on the left, watch the caregiver side "
-            "on the right update live. Try an ordinary remark first, then try something like "
-            "\"I fell down earlier\" -- the right side updates within a couple seconds, "
-            "and the reply on the left tells Dad, out loud, that it's doing that.\n\n"
-            "Your tab is its own private demo household, already briefed by Dad's daughter "
-            "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
-            "this link sees it, and its memory, flags and audio are deleted when you close "
-            "the tab or after an hour."
+            "Watch both sides at once: talk or type as the senior on the left, and watch the "
+            "caregiver side on the right update live, the moment something worth knowing happens."
         )
-        with gr.Accordion("Live Telemetry (Powered by Nebius AI)", open=True):
-            gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
-                        "**Audio Perception (HEAR):** `faster-whisper` (Local CPU offline fallback)\n\n"
-                        "*Background memory extraction & safety audit run asynchronously via Nebius API.*")
+        gr.Markdown(
+            "🤖 **This is an AI companion, not a person.** Everything you say here is recorded and "
+            f"transcribed to generate a reply. Read the [privacy notice]({PRIVACY_NOTICE_URL}) before you speak."
+        )
         history_state = gr.State([])
         session_state = gr.State(None, time_to_live=SESSION_TTL_S, delete_callback=_end_session)
+
+        if DEV_MODE:
+            with gr.Accordion("Live Telemetry (Powered by Nebius AI)", open=True):
+                gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
+                            "**Audio Perception (HEAR):** `faster-whisper` (Local CPU offline fallback)\n\n"
+                            "*Background memory extraction & safety audit run asynchronously via Nebius API.*")
 
         with gr.Row():
             with gr.Column():
                 gr.Markdown("## 🧑 Senior side")
+                mobile_alert = gr.Markdown("", elem_classes=["mobile-alert-strip"])
                 audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Speak (as the senior)")
                 text_in = gr.Textbox(
                     placeholder="Or type what Dad says (e.g. 'I fell down earlier' or 'Who is Sarah?')...",
                     label="Type (as the senior)",
                     lines=1,
                 )
+                run_btn = gr.Button("Send", variant="primary")
                 # Judges without a mic (or who'd rather not record their own voice)
-                # can still drive every beat with one click.
+                # can still drive every beat with one click. First chip asks a
+                # schedule question so the reply recalls a caregiver fact,
+                # rather than looking like a generic chatbot (#83, #80 3.C4).
                 gr.Examples(
                     examples=[[str(SAMPLES_DIR / name)] for name in SAMPLE_CLIPS],
                     inputs=[audio_in],
                     label="No mic? Try a sample clip",
                     cache_examples=False,
                 )
-                
-                with gr.Accordion("Clinical Configuration", open=False):
+
+                with gr.Accordion("Clinical Configuration", open=False, visible=DEV_MODE):
                     simulated_time_in = gr.Dropdown(
-                        choices=["Morning (Default)", "Evening (Sundowning)", "Night"], 
-                        value="Morning (Default)", 
+                        choices=["Morning (Default)", "Evening (Sundowning)", "Night"],
+                        value="Morning (Default)",
                         label="Simulated Time of Day"
                     )
 
-                with gr.Accordion("🛠️ Simulate Proactive Triggers", open=False):
+                with gr.Accordion("🛠️ Simulate Proactive Triggers", open=False, visible=DEV_MODE):
                     gr.Markdown("Clicking these simulates the background agent initiating conversation without a microphone prompt.")
                     with gr.Row():
                         proactive_btn_morning = gr.Button("Morning Greeting")
@@ -470,13 +525,12 @@ def build_demo() -> gr.Blocks:
                         proactive_btn_hobby = gr.Button("Hobby Engagement")
                         proactive_btn_silence = gr.Button("Silence Check-in")
 
-                run_btn = gr.Button("Send", variant="primary")
                 transcript_out = gr.Markdown(label="Conversation")
                 audio_out = gr.Audio(label="Companion's reply", autoplay=True)
             with gr.Column():
                 gr.Markdown("## 👩 Caregiver side (live)")
                 caregiver_panel = gr.Markdown(_format_caregiver_panel(None))
-                biomarkers_panel = gr.Markdown("### 📊 Acoustic Biomarkers\n_Awaiting voice input..._")
+                biomarkers_panel = gr.Markdown("### 📊 Acoustic Biomarkers\n_Awaiting voice input..._", visible=DEV_MODE)
                 with gr.Accordion("📝 Submit Caregiver Memo (Beat 1 Onboarding)", open=False):
                     with gr.Tabs():
                         with gr.TabItem("Type Note"):
@@ -493,20 +547,20 @@ def build_demo() -> gr.Blocks:
         run_btn.click(
             fn=run_demo_turn,
             inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
-            outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
         )
 
         for btn in [proactive_btn_morning, proactive_btn_grocery, proactive_btn_hobby, proactive_btn_silence]:
             btn.click(
                 fn=run_proactive_turn,
                 inputs=[history_state, session_state, simulated_time_in],
-                outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in],
+                outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
             )
 
         text_in.submit(
             fn=run_demo_turn,
             inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
-            outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
         )
 
         save_text_memo_btn.click(
@@ -529,12 +583,15 @@ def build_demo() -> gr.Blocks:
 
         # Independent of the click above -- this is what makes the caregiver
         # side feel "live" rather than only updating when the senior side
-        # does. See the module docstring for why polling, not push.
+        # does. See the module docstring for why polling, not push. The mobile
+        # alert strip rides the same poll so a phone sees it within one tick too.
         timer = gr.Timer(2)
         timer.tick(fn=_format_caregiver_panel, inputs=[session_state], outputs=[caregiver_panel])
+        timer.tick(fn=_format_mobile_alert_strip, inputs=[session_state], outputs=[mobile_alert])
         demo.load(fn=init_session, outputs=[session_state, caregiver_panel])
+        demo.load(fn=_format_mobile_alert_strip, inputs=[session_state], outputs=[mobile_alert])
     return demo
 
 
 if __name__ == "__main__":
-    build_demo().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")))
+    build_demo().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")), css=PAGE_CSS)
