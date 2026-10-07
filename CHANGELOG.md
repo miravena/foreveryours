@@ -20,6 +20,7 @@ rename `Unreleased` to the version and date, then tag it.
 - One source of truth: GitHub (milestones, Issues, blocked-by) records all work state; `docs/ROADMAP.md`, `IMPLEMENTATION_PLAN.md` and `WORK_LOG.md` no longer carry status or dates (#38).
 
 ### Fixed
+- The four proactive buttons no longer crash with `TypeError: unexpected keyword argument 'is_proactive'`: `run_demo_turn` now accepts and forwards `is_proactive`, and the button handler is a module-level function covered by tests (#70).
 - Memory retrieval now correctly matches plurals/inflections on short words (e.g., 'dog' matches 'dogs') (#32).
 - Updating a caregiver schedule (supersession) now preserves the original memory's temporal expiration and privacy scope instead of silently making it permanent (#34).
 
