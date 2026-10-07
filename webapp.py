@@ -266,6 +266,7 @@ def run_demo_turn(
     history_or_session: list[dict] | str | None = None,
     session_id: str | None = None,
     simulated_time_in: str | None = None,
+    is_proactive: bool = False,
 ) -> tuple[str, str | None, list[dict], str, str, str, str]:
     if isinstance(text_in_or_history, list):
         history = text_in_or_history
@@ -286,8 +287,13 @@ def run_demo_turn(
     elif "Night" in simulated_time_str:
         simulated_hour = 23
         
-    out = _run_demo_turn(audio_in, actual_text, history, session_id_val, simulated_hour)
+    out = _run_demo_turn(audio_in, actual_text, history, session_id_val, simulated_hour, is_proactive=is_proactive)
     return (*out, session_id_val, "")
+
+
+def run_proactive_turn(history, session, sim_time):
+    """Handler for the four proactive buttons: same 7 outputs as run_demo_turn."""
+    return run_demo_turn(None, None, history, session, sim_time, is_proactive=True)
 
 
 def _run_demo_turn(
@@ -489,11 +495,6 @@ def build_demo() -> gr.Blocks:
             inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in],
         )
-
-        def run_proactive_turn(history, session, sim_time):
-            # Wrapper to pass is_proactive=True and clear text_in output
-            res = run_demo_turn(None, None, history, session, sim_time, is_proactive=True)
-            return res
 
         for btn in [proactive_btn_morning, proactive_btn_grocery, proactive_btn_hobby, proactive_btn_silence]:
             btn.click(

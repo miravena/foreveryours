@@ -409,6 +409,41 @@ class TestEmptyTranscriptArity(unittest.TestCase):
 
 
 
+class TestProactiveButtons(unittest.TestCase):
+    """Issue #70: the proactive buttons call run_demo_turn(..., is_proactive=True).
+
+    Runs the module-level handler the four buttons are wired to, offline, with
+    run_turn stubbed so no API key is needed.
+    """
+
+    def _fake_result(self):
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            reply_text="Good morning, Dad.",
+            audio_paths=[],
+            caregiver_flag=False,
+            is_fallback=False,
+            background_thread=None,
+        )
+
+    def test_run_demo_turn_accepts_is_proactive(self):
+        session_id, _ = webapp.init_session()
+        with patch.object(webapp, "run_turn", return_value=self._fake_result()) as rt:
+            out = webapp.run_demo_turn(None, None, [], session_id, "Morning (Default)", is_proactive=True)
+        self.assertEqual(len(out), 7)
+        self.assertTrue(rt.call_args.kwargs["is_proactive"])
+        self.assertIn("Good morning, Dad.", out[0])
+
+    def test_button_handler_returns_seven_outputs_for_each_time(self):
+        for sim_time in ("Morning (Default)", "Sundowning (6 PM)", "Night (11 PM)"):
+            session_id, _ = webapp.init_session()
+            with patch.object(webapp, "run_turn", return_value=self._fake_result()) as rt:
+                out = webapp.run_proactive_turn([], session_id, sim_time)
+            self.assertEqual(len(out), 7)
+            self.assertTrue(rt.call_args.kwargs["is_proactive"])
+            self.assertEqual(out[5], session_id)
+
+
 if __name__ == "__main__":
 
     unittest.main()

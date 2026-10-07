@@ -14,6 +14,7 @@ rename `Unreleased` to the version and date, then tag it.
 - Memory control: `extract_new_memory()` now asks the model first when online, so corrections ("my daughter is Sarah, not Susan") become `SUPERSEDE:` and forget-requests become `DELETE:` instead of being stored as new facts by the family-marker heuristic. Offline, the marker heuristic remains the fallback and no longer stores correction or forget phrasings as facts. Benchmark 8 now calls `extract_new_memory()` (#54).
 
 ### Added
+- Secret-handling guardrails (#67): `.claude/settings.json` and `opencode.jsonc` deny assistant reads of `.env` and `*.key`; `scripts/key_status.sh` verifies a key by printing only an HTTP status code.
 - Memory control in conversation: THINK now emits `ADD:` / `SUPERSEDE:` / `DELETE:` commands that the memory store applies. Additions work; corrections and forget-requests phrased with a family marker are fixed under Fixed below (#54).
 - Anti-dependency prompting: rule 17 of the THINK system prompt now actively redirects the senior toward their human family ("Sarah would love to hear your voice — why not give her a call?") rather than only declining to claim exclusivity.
 - GitHub Actions workflow running the test suite on every push to `main` and every PR; `SECURITY.md` with private vulnerability reporting (#39).
@@ -23,6 +24,7 @@ rename `Unreleased` to the version and date, then tag it.
 - One source of truth: GitHub (milestones, Issues, blocked-by) records all work state; `docs/ROADMAP.md`, `IMPLEMENTATION_PLAN.md` and `WORK_LOG.md` no longer carry status or dates (#38).
 
 ### Fixed
+- The four proactive buttons no longer crash with `TypeError: unexpected keyword argument 'is_proactive'`: `run_demo_turn` now accepts and forwards `is_proactive`, and the button handler is a module-level function covered by tests (#70).
 - Memory retrieval now correctly matches plurals/inflections on short words (e.g., 'dog' matches 'dogs') (#32).
 - Updating a caregiver schedule (supersession) now preserves the original memory's temporal expiration and privacy scope instead of silently making it permanent (#34).
 
