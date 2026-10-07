@@ -4,6 +4,58 @@ import unittest
 from pipeline import think
 
 
+class TestExtractNewMemoryDispatch(unittest.TestCase):
+    """Goes through extract_new_memory(), the entry point the orchestrator calls."""
+
+    SUPERSEDE = "SUPERSEDE: His grandson is named Leo | His grandson is named Liam"
+    DELETE = "DELETE: His grandson is named Leo"
+
+    def _with_llm(self, llm_result, transcript):
+        from unittest.mock import patch
+        with patch("pipeline.think.extract_memory_llm", return_value=llm_result) as m:
+            out = think.extract_new_memory(
+                transcript, "", ["His grandson is named Leo"], use_llm=True
+            )
+        return out, m
+
+    def test_llm_supersede_beats_family_marker(self):
+        out, m = self._with_llm(self.SUPERSEDE, "Actually, my grandson's name is Liam, not Leo.")
+        self.assertEqual(out, self.SUPERSEDE)
+        m.assert_called_once()
+
+    def test_llm_delete_beats_family_marker(self):
+        out, _ = self._with_llm(self.DELETE, "Please forget my grandson's name.")
+        self.assertEqual(out, self.DELETE)
+
+    def test_llm_supersede_daughter_correction(self):
+        cmd = "SUPERSEDE: His daughter is named Susan | His daughter is named Sarah"
+        out, _ = self._with_llm(cmd, "Actually, my daughter is Sarah, not Susan.")
+        self.assertEqual(out, cmd)
+
+    def test_marker_fallback_when_llm_returns_nothing(self):
+        out, _ = self._with_llm(None, "My grandson will visit on Sunday")
+        self.assertEqual(out, "ADD: My grandson will visit on Sunday")
+
+    def test_offline_never_stores_forget_or_correction_as_fact(self):
+        for t in (
+            "Please forget my grandson's name.",
+            "Could you forget that my son lives in Ohio?",
+            "Actually, my grandson's name is Liam, not Leo.",
+            "Actually, my daughter is Sarah, not Susan.",
+            "I was wrong, my wife is called Ann.",
+        ):
+            self.assertIsNone(think.extract_new_memory(t, "", [], use_llm=False), t)
+
+    def test_offline_benign_facts_still_added(self):
+        for t in (
+            "My grandson will visit on Sunday",
+            "My favorite flavor is strawberry",
+            "I used to work as a teacher in Boston",
+            "My daughter is Sarah and she lives in Ohio",
+        ):
+            self.assertEqual(think.extract_new_memory(t, "", [], use_llm=False), f"ADD: {t}")
+
+
 class TestThink(unittest.TestCase):
     def test_build_prompt_structure(self):
         transcript = "Can you play some music?"

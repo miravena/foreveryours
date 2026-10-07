@@ -10,8 +10,11 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Fixed
+- Memory control: `extract_new_memory()` now asks the model first when online, so corrections ("my daughter is Sarah, not Susan") become `SUPERSEDE:` and forget-requests become `DELETE:` instead of being stored as new facts by the family-marker heuristic. Offline, the marker heuristic remains the fallback and no longer stores correction or forget phrasings as facts. Benchmark 8 now calls `extract_new_memory()` (#54).
+
 ### Added
-- Memory control in conversation: THINK now emits `ADD:` / `SUPERSEDE:` / `DELETE:` commands that the memory store applies. Additions work; **corrections and forget-requests phrased with a family marker are currently stored as new facts instead** — the marker heuristic returns before the model can supersede or delete, so the request to forget gets remembered. Tracked in #54.
+- Memory control in conversation: THINK now emits `ADD:` / `SUPERSEDE:` / `DELETE:` commands that the memory store applies. Additions work; corrections and forget-requests phrased with a family marker are fixed under Fixed below (#54).
 - Anti-dependency prompting: rule 17 of the THINK system prompt now actively redirects the senior toward their human family ("Sarah would love to hear your voice — why not give her a call?") rather than only declining to claim exclusivity.
 - GitHub Actions workflow running the test suite on every push to `main` and every PR; `SECURITY.md` with private vulnerability reporting (#39).
 

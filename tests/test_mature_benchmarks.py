@@ -277,9 +277,13 @@ class TestMatureBenchmarks(unittest.TestCase):
         transcript_correction = "Actually, my grandson's name is Liam, not Leo."
         reply_correction = "I'm so sorry, I'll remember Liam from now on."
         
-        from pipeline.think import extract_memory_llm
-        # Manually invoke the extractor like orchestrator does
-        cmd1 = extract_memory_llm(transcript_correction, reply_correction, self.store.senior_profile_facts())
+        from pipeline.think import extract_new_memory
+        # Call the real entry point the orchestrator calls, not the LLM helper:
+        # the family-marker heuristic must not pre-empt SUPERSEDE/DELETE.
+        # Offline, a correction must never be stored as a new fact.
+        self.assertIsNone(extract_new_memory(transcript_correction, "", self.store.senior_profile_facts(), use_llm=False))
+        self.assertIsNone(extract_new_memory("Please forget my grandson's name.", "", self.store.senior_profile_facts(), use_llm=False))
+        cmd1 = extract_new_memory(transcript_correction, reply_correction, self.store.senior_profile_facts())
         if cmd1 is None:
             self.skipTest("API call failed (likely dummy key in CI)")
         self.assertTrue(cmd1.startswith("SUPERSEDE:") or cmd1.startswith("SUPERSESE:"), f"Expected SUPERSEDE, got {cmd1}")
@@ -297,7 +301,7 @@ class TestMatureBenchmarks(unittest.TestCase):
         transcript_delete = "Please forget what I said about Liam."
         reply_delete = "Of course, I've forgotten it."
         
-        cmd2 = extract_memory_llm(transcript_delete, reply_delete, self.store.senior_profile_facts())
+        cmd2 = extract_new_memory(transcript_delete, reply_delete, self.store.senior_profile_facts())
         if cmd2 is None:
             self.skipTest("API call failed (likely dummy key in CI)")
         self.assertTrue(cmd2.startswith("DELETE:"), f"Expected DELETE, got {cmd2}")
