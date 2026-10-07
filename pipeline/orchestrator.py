@@ -302,7 +302,9 @@ def run_turn(
             raise
         think_unavailable = True
     except Exception as exc:
-        # Unexpected network / provider error during conversation stream
+        # Unexpected network / provider error during conversation stream.
+        # Log type + message only (never headers or keys) so a fallback is never silent (#78).
+        print(f"[orchestrator] THINK stream failed, using fallback reply: {type(exc).__name__}: {exc}", file=sys.stderr)
         if not fast.triggered:
             is_fallback = True
             consecutive_errors += 1
