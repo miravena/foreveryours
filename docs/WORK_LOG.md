@@ -9,6 +9,14 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-07
+- Session opened after a machine restart with local `main` **15 commits behind** — nothing of our own to merge, so a plain `git pull --ff-only` to `69b612c`. Suite after the fast-forward: `Ran 97 tests in 4.079s … OK (skipped=2)` (was 94/1 skip; the extra skip is Benchmark 9 auto-skipping when no API key is present).
+- **Reviewed the nine commits that went straight to `main` on 10-06** — the first review any of them had, since none carried a PR. `safety/fastpath.py` untouched (no ADR-005 trigger), no benchmark regressed. Three Important findings filed: #64 (`docs/specs/qa/FINAL_QA_REPORT.md` ticks *"100.0% Pass"* for Test 5-11 … 53-55, IDs that exist nowhere in the repo, and cites a "36-point test plan" the repo does not contain), #65 (proactive agency's committed `plan.md` promises a policy gate, a no-surveillance output test and four distinct triggers; the code has none — the `[System: …]` turn is stored into history as if the senior had typed it), #63 (`1adbe25` wraps Benchmark 9 in `except Exception: skipTest`, so a real failure reports green, and the benchmark calls the live API on every suite run).
+- Filed #62 (prompt observability): nothing OTel/OpenLIT-shaped exists in the repo. The design recorded there is *metrics + stage spans always, raw prompt bodies off by default* — redacted, self-hosted, never audio, never `CAREGIVER_ONLY` memory — because the caregiver pledge added in `64f9144` and the #47 logging audit both promise verbatim transcripts stay private.
+- Filed #66 after checking what the rules actually require rather than assuming: no crisis/self-harm pattern and no 988 referral exist anywhere (`grep -riE "suicid|self.harm|988|crisis|hotline"` over `safety/`, `pipeline/`, `webapp.py`, `docs/` → zero hits), and the webapp shows no "you are not talking to a human" notice. Both are in force under NY GBL Art. 47 (2025-11-05), CA SB 243 (2026-01-01) and EU AI Act Art. 50(1) (2026-08-02). Recording consent and truth-in-advertising are in the same Issue — the dashboard pledge is now an FTC §5 representation, so it must be literally true.
+- Filed #67 (secret policy) and enforced it on the assistant itself: `opencode.jsonc` now denies reading `.env`, `.dev.vars`, `*.key`, `*.pem`. A key that reaches a chat is compromised, so verification is a status code (`HTTP 200` from `GET /v1/models`), never a printout.
+- Checked the hackathon rules for an observability mandate — there is none: one NVIDIA open-source model in use (Nemotron via Token Factory, ADR-002) plus the feedback submission (#41) is the whole requirement. The observability work is our own quality bar, which is why #62 optimises for not breaking privacy over for feature count.
+
 ### 2026-10-05
 - Fixed #32 (memory recall for short words like dog/dogs) and #34 (memory supersession preserving temporal/privacy properties).
 - Merged `miravena/work` -> `main` (review script, pre-push hook, AGENTS.md review rule; one AGENTS.md conflict resolved as a union). Closed #49.
@@ -47,6 +55,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
 | Real voice round trip | Works | 10-01 | audio -> ASR -> model -> TTS -> play |
 | Hosted isolation (dry run) | Sessions independent | 10-02 | `--dry-run --keep-stage` |
 | TTS endurance, 200 sentences in one process | 0 empty WAVs, min 123 KB, 12.5s | 10-05 | #28 evidence; regression test runs 60 in-suite (~3s) |
+| Full suite after the 10-06 fast-forward | `Ran 97 tests in 4.079s … OK (skipped=2)` | 10-07 | 94 → 97 tests; the second skip is Benchmark 9 with no API key present |
 
 ## Known gotchas
 
@@ -56,6 +65,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
 - **Free HF Spaces sleep:** keep the Space awake before judging; a cold first click can hang.
 - **A worktree needs its own `.venv`:** `.githooks/pre-push` runs `$ROOT/.venv/bin/python`, so a fresh worktree silently falls back to system `python3`, which lacks gradio — the hook then reports "unit tests fail" when really the runner has no dependencies. Build one per worktree (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`).
 - **Tests spend the demo's quota:** the suite increments the live daily counter 11x per run (see #53). A day of local testing will make webapp tests fail with a message about the daily cap, and can deny a real judge their turn.
+- **Direct commits to `main` bypass `REVIEW.md`:** ADR-006 permits them, but the review passes only ever run on PRs — nine landed in one day with no review anywhere (found by diffing `main..origin/main` after a fast-forward). Review the commit log between PR merges, not just `gh pr list`.
 
 ## Decisions logged
 
