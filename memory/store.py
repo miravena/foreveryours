@@ -86,10 +86,11 @@ DOMAIN_SYNONYMS: dict[str, set[str]] = {
 
 
 class MemoryStore:
-    def __init__(self, profile_id: str, data_dir: Path):
+    def __init__(self, profile_id: str, data_dir: Path, timezone_str: str = "UTC"):
         self.profile_id = profile_id
         self.path = data_dir / f"{profile_id}.json"
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.timezone_str = timezone_str
         self._items: list[MemoryItem] = self._load()
 
     def _load(self) -> list[MemoryItem]:
@@ -327,13 +328,19 @@ class MemoryStore:
     def _decay_emotions(self, now: float | None = None):
         import time
         import datetime
+        import zoneinfo
         current_time = now or time.time()
         mutated = False
         for i in self._items:
             if i.scope == MemoryScope.EMOTIONAL.value and i.status == "active" and i.expires_at:
                 if current_time >= i.expires_at:
                     i.scope = MemoryScope.HISTORICAL.value
-                    date_str = datetime.datetime.fromtimestamp(i.created_at).strftime('%b %d, %Y')
+                    dt_utc = datetime.datetime.fromtimestamp(i.created_at, tz=datetime.timezone.utc)
+                    try:
+                        dt_local = dt_utc.astimezone(zoneinfo.ZoneInfo(self.timezone_str))
+                    except Exception:
+                        dt_local = dt_utc
+                    date_str = dt_local.strftime('%b %d, %Y')
                     i.text = f"[PAST EMOTION - {date_str}]: {i.text}"
                     i.expires_at = None
                     mutated = True

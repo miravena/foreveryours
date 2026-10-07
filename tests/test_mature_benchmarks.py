@@ -528,6 +528,37 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         print("\n[BENCHMARK 19] Temporal Anchoring Injection: 100.0% (Passed)")
 
+    def test_memory_lifecycle_timezone_blindness(self):
+        """Benchmark 20: Timezone Blindness Fix.
+        Target: AI explicitly formats the creation date using the senior's timezone, not the host machine's timezone.
+        """
+        import time
+        import datetime
+        import zoneinfo
+        
+        # Override the store's timezone for the test
+        self.store.timezone_str = "Asia/Kuala_Lumpur"
+        
+        # Test time: Oct 04, 2026 22:00:00 UTC (Which is Oct 05, 2026 06:00:00 in KL)
+        test_time = 1791199200.0
+        
+        self.store.add("Excited for breakfast", source="extract", scope="emotional", expires_at=test_time - 3600)
+        
+        # Override created_at for the test
+        for i in self.store._items:
+            if "Excited for breakfast" in i.text:
+                i.created_at = test_time
+                break
+                
+        search_res = self.store.search("breakfast", now=test_time)
+        
+        # In KL, this should be formatted as Oct 05
+        expected_str = "[PAST EMOTION - Oct 05, 2026]: Excited for breakfast"
+        found = any(expected_str in m.text for m in search_res)
+        self.assertTrue(found, f"Failed to find timezone-aware date string. Found: {[m.text for m in search_res]}")
+        
+        print("\n[BENCHMARK 20] Timezone Blindness Fix: 100.0% (Passed)")
+
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
         from pipeline.think import stream_reply
