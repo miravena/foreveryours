@@ -310,6 +310,24 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         print("\n[BENCHMARK 8] Memory Correction & Deletion (End-to-End): 100.0% (Passed)")
 
+    def test_memory_conflict_resolution_extraction(self):
+        """Benchmark 10: Memory Conflict Resolution (Liam vs Leo).
+        Target: The LLM flags ambiguous memory changes as CONFLICT instead of blindly SUPERSEDE.
+        """
+        self.store.add("His grandson is named Liam", source="conversation_extract")
+        
+        transcript_ambiguous = "My grandson Leo is coming to visit tomorrow!"
+        reply_ambiguous = "That's wonderful, I hope you have a great time."
+        
+        from pipeline.think import extract_memory_llm
+        cmd = extract_memory_llm(transcript_ambiguous, reply_ambiguous, self.store.senior_profile_facts())
+        if cmd is None:
+            self.skipTest("API call failed (likely dummy key in CI)")
+            
+        # We expect a CONFLICT command because we don't know if Leo replaces Liam or if there's a second grandson.
+        self.assertTrue(cmd.startswith("CONFLICT:"), f"Expected CONFLICT, got {cmd}")
+        print("\n[BENCHMARK 10] Memory Conflict Resolution (Extraction): 100.0% (Passed)")
+
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
         from pipeline.think import stream_reply

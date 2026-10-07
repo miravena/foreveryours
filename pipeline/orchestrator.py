@@ -246,6 +246,10 @@ def run_turn(
     # Deduplicate facts and remove guardrails
     filtered_profile = [f for f in filtered_profile if f not in filtered_schedule and f not in guardrails]
 
+    pending_conflicts = memory_store.get_pending_conflicts()
+    if pending_conflicts:
+        memory_store.clear_conflicts()
+
     think_input = transcript if not continuation_note else f"{transcript}\n\n[{continuation_note}]"
     reply_text = ""
     think_audio_paths: list[Path] = []
@@ -261,6 +265,7 @@ def run_turn(
             intent=intent.value,
             current_hour=simulated_hour,
             is_proactive=is_proactive,
+            pending_conflicts=pending_conflicts,
         )
         sentences = think.sentence_chunks(token_stream)
         
@@ -365,6 +370,13 @@ def run_turn(
                         old_fact = saved_cmd[7:].strip()
                         memory_store.delete(old_fact)
                         result.memory_saved = f"Forgot: {old_fact}"
+                    elif saved_cmd.startswith("CONFLICT:"):
+                        parts = saved_cmd.split(":", 1)[-1].split("|")
+                        if len(parts) >= 2:
+                            old_fact, new_fact = parts[0].strip(), parts[1].strip()
+                            reason = parts[2].strip() if len(parts) >= 3 else "Potential contradiction or multiple entities."
+                            memory_store.add_conflict(old_fact, new_fact, reason)
+                            result.memory_saved = f"Pending Conflict: {old_fact} vs {new_fact}"
                     else:
                         memory_store.add(saved_cmd, source="conversation_extract")
                         result.memory_saved = saved_cmd

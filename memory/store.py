@@ -142,6 +142,35 @@ class MemoryStore:
         self._flush()
         return item
 
+    def add_conflict(self, old_fact: str, new_fact: str, reason: str) -> None:
+        """Stores a pending memory conflict to be resolved on the next turn."""
+        item = MemoryItem(
+            text=f"{old_fact}|{new_fact}|{reason}",
+            source="conversation_extract",
+            status="conflict"
+        )
+        self._items.append(item)
+        self._flush()
+
+    def get_pending_conflicts(self) -> list[dict]:
+        conflicts = []
+        for i in self._items:
+            if i.status == "conflict":
+                parts = i.text.split("|", 2)
+                if len(parts) == 3:
+                    conflicts.append({
+                        "old_fact": parts[0].strip(),
+                        "new_fact": parts[1].strip(),
+                        "reason": parts[2].strip()
+                    })
+        return conflicts
+
+    def clear_conflicts(self) -> None:
+        for i in self._items:
+            if i.status == "conflict":
+                i.status = "deleted"
+        self._flush()
+
     def delete(self, text: str) -> None:
         """Marks an active memory as deleted (e.g. per user request)."""
         for item in self._items:

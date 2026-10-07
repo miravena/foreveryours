@@ -47,6 +47,7 @@ def build_prompt(
     intent: str | None = None,
     current_hour: int | None = None,
     is_proactive: bool = False,
+    pending_conflicts: list[dict] | None = None,
 ) -> list[dict]:
     """Builds a structured eldercare prompt partitioned into semantic categories:
     senior profile anchors, family schedule updates, safety guardrails, and detected intent."""
@@ -60,6 +61,13 @@ def build_prompt(
             blocks.append("CIRCADIAN DYNAMICS (SUNDOWNING SYNDROME ACTIVE): It is late afternoon/evening. The senior may be experiencing sundowning anxiety, disorientation, or fatigue. Keep your sentences extremely short, highly soothing, and avoid asking complex questions, making them recall schedules, or introducing new information.")
         elif 22 <= current_hour or current_hour <= 6:
             blocks.append("CIRCADIAN DYNAMICS (NIGHT MODE): It is nighttime. Speak softly and concisely. You may gently encourage rest, but if the senior wants to stay awake and talk, you MUST respect their choice, be a warm companion, and do NOT force them to sleep or sound controlling/patronizing.")
+
+    if pending_conflicts:
+        conflict_blocks = []
+        for c in pending_conflicts:
+            conflict_blocks.append(f"Old fact: '{c['old_fact']}' vs New statement: '{c['new_fact']}'. Reason: {c['reason']}")
+        conflict_str = "\n".join(conflict_blocks)
+        blocks.append(f"[PENDING MEMORY CONFLICT]:\n{conflict_str}\n\nINSTRUCTION: Before continuing the conversation normally, gently ask the senior to clarify this discrepancy. For example: 'By the way, I remember you mentioning Liam, but you just said Leo. Do you have two grandsons?'")
 
     if intent:
         blocks.append(f"CURRENT CONVERSATIONAL INTENT: {intent}")
@@ -207,8 +215,10 @@ If the senior disclosed a durable, personal fact (e.g. family member's name, pas
 1. To add a new fact: `ADD: <fact>` (e.g. ADD: Loves Earl Grey tea)
 2. To correct an active fact: `SUPERSEDE: <exact_old_fact> | <new_fact>` (e.g. SUPERSEDE: His grandson is named Leo | His grandson is named Liam)
 3. To delete a fact because the senior asked you to forget it: `DELETE: <exact_old_fact>`
+4. To flag an ambiguous conflict where the new info contradicts the old, but might be a misunderstanding or a second entity: `CONFLICT: <exact_old_fact> | <new_fact> | <reason>` (e.g. CONFLICT: Grandson is Liam | My grandson Leo is coming | Might have two grandsons or misspoke)
 
 CRITICAL RULES:
+- Use CONFLICT instead of SUPERSEDE if the change is ambiguous and you are not 100% sure it's a direct correction.
 - The senior is the elder/parent. Do NOT invert family relationships.
 - Only SUPERSEDE or DELETE if the old fact is EXACTLY listed in the ACTIVE PROFILE FACTS.
 - If it is just small talk, or no durable facts are present, output NONE. Do not provide commentary.
