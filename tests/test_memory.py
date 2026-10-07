@@ -126,6 +126,31 @@ class TestMemoryStore(unittest.TestCase):
         hits_after = store.search("baseball", now=1200.0)
         self.assertEqual(len(hits_after), 0)
 
+    def test_substring_time_words_do_not_force_temporary_scope(self):
+        """Regression: 'am' matched as a substring of 'Liam'/'name' turned a
+        permanent fact into a 24h-TTL one. Only whole time words should."""
+        from memory.store import MemoryScope
+        store = MemoryStore(self.profile_id, self.data_dir)
+        store.add("His grandson's name is Liam", source="conversation_extract")
+        store.add("Dad's family name is Amherst", source="conversation_extract")
+        for item in store._items:
+            self.assertEqual(item.scope, MemoryScope.PERMANENT.value, item.text)
+            self.assertIsNone(item.expires_at, item.text)
+
+        # Whole time words still trigger the TEMPORARY auto-scope.
+        store.add("Sarah is visiting tomorrow", source="conversation_extract")
+        tomorrow_item = next(i for i in store._items if "tomorrow" in i.text)
+        self.assertEqual(tomorrow_item.scope, MemoryScope.TEMPORARY.value)
+        self.assertIsNotNone(tomorrow_item.expires_at)
+
+        # Regression (Codex review of #82): "4pm"/"10am" glued to a digit,
+        # with no space, must still be caught as a clock marker.
+        for t in ("Sarah is dropping by at 4pm", "Dad's appointment is at 10am"):
+            store.add(t, source="conversation_extract")
+            item = next(i for i in store._items if i.text == t)
+            self.assertEqual(item.scope, MemoryScope.TEMPORARY.value, t)
+            self.assertIsNotNone(item.expires_at, t)
+
     def test_caregiver_privacy_firewall(self):
         from memory.store import PrivacyLevel
         store = MemoryStore(self.profile_id, self.data_dir)

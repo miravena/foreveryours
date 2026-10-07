@@ -1,5 +1,11 @@
 # Proactive Companion Agency: Implementation Plan
 
+**Status: not built.** This plan describes a policy gate, a no-surveillance output test, and four
+distinct trigger types; the shipped code has one shared function, no output test, and stores a
+fabricated `[System: ...]` turn into history as if the senior had said it. The four-button
+developer panel described in Step 3 is out of the public demo UI. See #65 for the audit and
+decision not to build this before submission.
+
 ## 1. Analysis of the Gap
 The critique provided is profoundly accurate for the eldercare domain. The gap between a "chatbot" and a "Companion" is agency. However, the gap between "Companion" and "Surveillance State" is entirely defined by the *Policy Gate and LLM Framing*.
 

@@ -323,9 +323,9 @@ class TestMatureBenchmarks(unittest.TestCase):
         transcript_ambiguous = "My grandson Leo is coming to visit tomorrow!"
         reply_ambiguous = "That's wonderful, I hope you have a great time."
         
-        from pipeline.think import extract_memory_llm
+        from pipeline.think import extract_memory_llm, LLM_CALL_FAILED
         cmd = extract_memory_llm(transcript_ambiguous, reply_ambiguous, self.store.senior_profile_facts())
-        if cmd is None:
+        if cmd is None or cmd is LLM_CALL_FAILED:
             self.skipTest("API call failed (likely dummy key in CI)")
             
         # We expect a CONFLICT command because we don't know if Leo replaces Liam or if there's a second grandson.
@@ -341,9 +341,9 @@ class TestMatureBenchmarks(unittest.TestCase):
         transcript_ambiguous = "No, my doctor appointment is next Thursday."
         reply_ambiguous = "Oh, I see."
         
-        from pipeline.think import extract_memory_llm
+        from pipeline.think import extract_memory_llm, LLM_CALL_FAILED
         cmd = extract_memory_llm(transcript_ambiguous, reply_ambiguous, self.store.senior_profile_facts(), caregiver_updates=caregiver_updates)
-        if cmd is None:
+        if cmd is None or cmd is LLM_CALL_FAILED:
             self.skipTest("API call failed (likely dummy key in CI)")
             
         self.assertTrue(cmd.startswith("CONFLICT:"), f"Expected CONFLICT due to Caregiver contradiction, got {cmd}")
@@ -380,9 +380,9 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         transcript = "I'm feeling really tired, I'm going to take a nap for a few hours."
         
-        from pipeline.think import extract_memory_llm
+        from pipeline.think import extract_memory_llm, LLM_CALL_FAILED
         cmd = extract_memory_llm(transcript, "Okay, have a good rest.", [])
-        if cmd is None:
+        if cmd is None or cmd is LLM_CALL_FAILED:
             self.skipTest("API call failed (likely dummy key in CI)")
             
         self.assertTrue(cmd.startswith("QUIET_MODE"), f"Expected QUIET_MODE, got {cmd}")
@@ -416,11 +416,11 @@ class TestMatureBenchmarks(unittest.TestCase):
         Target: AI stores fleeting emotions but mathematically expires them within 24 hours.
         """
         import time
-        from pipeline.think import extract_memory_llm
+        from pipeline.think import extract_memory_llm, LLM_CALL_FAILED
         
         transcript = "I am so incredibly angry with Sarah today."
         cmd = extract_memory_llm(transcript, "I'm sorry you feel that way.", [])
-        if cmd is None:
+        if cmd is None or cmd is LLM_CALL_FAILED:
             self.skipTest("API call failed (likely dummy key in CI)")
             
         self.assertTrue(cmd.startswith("EMOTION:"), f"Expected EMOTION, got {cmd}")
@@ -444,12 +444,12 @@ class TestMatureBenchmarks(unittest.TestCase):
         Target: AI correctly tags speculative facts as UNCERTAIN so the conversational LLM won't hallucinate them.
         """
         import time
-        from pipeline.think import extract_memory_llm
+        from pipeline.think import extract_memory_llm, LLM_CALL_FAILED
         from pipeline.orchestrator import run_turn
         
         transcript = "I think my grandson might be moving to Penang next year, but I'm not really sure."
         cmd = extract_memory_llm(transcript, "Oh, that would be a big change.", [])
-        if cmd is None:
+        if cmd is None or cmd is LLM_CALL_FAILED:
             self.skipTest("API call failed (likely dummy key in CI)")
             
         self.assertTrue(cmd.startswith("UNCERTAIN:"), f"Expected UNCERTAIN, got {cmd}")
@@ -468,10 +468,10 @@ class TestMatureBenchmarks(unittest.TestCase):
         """Benchmark 16: Profound Grief handling.
         Target: AI correctly extracts profound life events (death) as permanent facts, not fleeting emotions.
         """
-        from pipeline.think import extract_memory_llm
+        from pipeline.think import extract_memory_llm, LLM_CALL_FAILED
         transcript = "My dog Buddy passed away today."
         cmd = extract_memory_llm(transcript, "I am so incredibly sorry to hear that.", [])
-        if cmd is None:
+        if cmd is None or cmd is LLM_CALL_FAILED:
             self.skipTest("API call failed (likely dummy key in CI)")
             
         self.assertFalse(cmd.startswith("EMOTION:"), f"Profound grief should not be EMOTION: {cmd}")

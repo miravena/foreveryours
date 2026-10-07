@@ -135,9 +135,10 @@ This makes the safety mechanism explicit rather than presenting hidden monitorin
 
 # Why Voice First?
 
-ForeverYours follows a **Zero-Screen philosophy**.
-
-The senior does not need to learn how to operate an AI application.
+ForeverYours is moving toward a **Zero-Screen philosophy**: the long-term direction is that the
+senior should not need to learn how to operate an AI application. The current demo runs through a
+browser page (mic button, text boxes, accordions), so that direction is not yet what a judge sees;
+voice is already the core interaction once a conversation starts.
 
 The core interaction is:
 
@@ -201,7 +202,8 @@ ForeverYours uses a multi-stage architecture designed around persistent memory a
 
 ### 1. HEAR
 
-The senior's speech is converted into text using the selected NVIDIA speech technology.
+The senior's speech is converted into text using a local `faster-whisper` model. No NVIDIA or
+Nebius speech service is involved; speech-to-text runs entirely offline.
 
 ### 2. RECALL
 
@@ -229,7 +231,9 @@ Rather than positioning this as medical diagnosis, ForeverYours uses the system 
 
 ### 6. SPEAK
 
-The response is converted into speech and streamed back to the senior.
+The response is converted into speech by a local text-to-speech engine. The browser demo plays
+the finished reply as one combined audio clip; sentence-level streaming to the browser is not
+yet built (tracked separately).
 
 The architecture is designed with a target of **under two seconds to first audio**, because a voice conversation should feel conversational rather than like waiting for a conventional application request to complete.
 
@@ -294,21 +298,17 @@ ForeverYours is designed specifically around the infrastructure required by the 
 
 Used as the inference layer for the NVIDIA open-source model powering the conversational reasoning and contextual response generation.
 
-**Nebius AI Cloud**
-
-Provides the cloud infrastructure required to run the application and supporting services.
-
 ### NVIDIA
 
 **NVIDIA Nemotron**
 
 Used as the primary open-source foundation model for conversational reasoning and personal-context processing.
 
-**NVIDIA speech technology**
-
-Used as part of the voice interaction pipeline.
-
-The hackathon requires projects in this track to use at least one NVIDIA open-source model and run on Nebius Token Factory or Nebius AI Cloud.
+The hackathon requires projects in this track to use at least one NVIDIA open-source model and run
+on Nebius Token Factory or Nebius AI Cloud. ForeverYours satisfies this through Nebius Token
+Factory; it does not use Nebius AI Cloud or any NVIDIA speech (ASR/TTS) model -- hosting is Hugging
+Face Spaces (see [`VENDOR_DECISIONS.md`](../VENDOR_DECISIONS.md)), and speech is handled locally by
+`faster-whisper` and `espeak-ng`.
 
 ### Application Stack
 
@@ -441,6 +441,9 @@ The architecture distinguishes between current conversation context, temporary c
 
 A common question is: *"Why can't an older adult simply use ChatGPT Advanced Voice Mode?"*
 
+> ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
+> there, and never tells the senior anything it hasn't already told him.
+
 General-purpose conversational voice bots are capable of engaging conversation, but they fail critically in eldercare for three structural reasons:
 
 ### 1. The Isolation Failure Mode (ChatGPT Sympathizes, But Tells Nobody)
@@ -456,7 +459,7 @@ ForeverYours operates with a **dual-column synchronized architecture**:
 ChatGPT attempts to remember fragments from conversational history, resulting in context dumping (mentioning unrelated memories during simple greetings). ForeverYours has a **3-tier person-centered memory engine**:
 * **Permanent Anchors:** Enduring biographical truths (*"Margaret loves jazz"*).
 * **Temporal Events:** Auto-expiring logistics (*"Sarah dropping groceries at 4 PM"* expires after the event, leaving no stale ghosts tomorrow).
-* **Caregiver Privacy Firewall:** Private family notes (*"Planning surprise birthday party"*) are visible on the family dashboard but strictly partitioned away from Dad's ears.
+* **Caregiver Privacy Firewall:** Private family notes (*"Planning surprise birthday party"*) are visible in the caregiver column of the demo page but strictly partitioned away from Dad's ears.
 
 ---
 

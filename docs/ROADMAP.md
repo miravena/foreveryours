@@ -130,8 +130,9 @@ it — pick them up only after the critical path is solid, and drop them without
 deadline gets close:
 
 - A better TTS voice than espeak, if it isn't cheap enough to ride along with [#28](../../issues/28)
-- NVIDIA NemoGuard as the AUDIT model (a second NVIDIA model for the tech score), if Token
-  Factory lists it
+- ~~NVIDIA NemoGuard as the AUDIT model~~ -- not served on Token Factory (checked 2026-10-07,
+  see `VENDOR_DECISIONS.md`); the tech-score second-model goal instead points `AUDIT_MODEL` at a
+  different, larger Nemotron model
 - Hosting on a Nebius AI Cloud VM instead of / in addition to Spaces
 - A caregiver-facing UI beyond the web page's caregiver column (see `PRD.md`'s non-goals — a
   full dashboard was deliberately cut once already; don't re-add it under time pressure)

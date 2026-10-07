@@ -277,9 +277,20 @@ Output: His dog Buddy passed away recently
 """
 
 
-def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | None = None, caregiver_updates: list[str] | None = None) -> str | None:
+# Sentinel distinguishing "the LLM call failed" from "the LLM call succeeded
+# and found nothing to extract" (both of which extract_memory_llm used to
+# return as plain None, which let the offline marker heuristic second-guess
+# a deliberate LLM "no fact here" verdict).
+LLM_CALL_FAILED = object()
+
+
+def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | None = None, caregiver_updates: list[str] | None = None):
     """Async background extraction via Nemotron. Off critical path, called
-    from orchestrator's background thread."""
+    from orchestrator's background thread.
+
+    Returns the extracted fact string, or None if the call succeeded but
+    found nothing worth extracting, or LLM_CALL_FAILED if the call itself
+    failed."""
     try:
         client = get_client()
         model = os.environ.get("THINK_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
@@ -302,14 +313,21 @@ def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | No
             temperature=0.2,
         )
         content = completion.choices[0].message.content if completion.choices else None
-        if not content:
-            return None
+        if not content or not content.strip():
+            # No usable content (e.g. a truncated, empty or whitespace-only
+            # completion) is a failed call, not a deliberate "nothing to
+            # extract" verdict -- only an explicit NONE response below counts
+            # as that.
+            return LLM_CALL_FAILED
         text = content.strip().strip('"')
         if text.strip('. \n"\'').upper() == "NONE" or len(text) < 4:
             return None
         return text
     except Exception:
-        return None
+        # The call itself failed (network, auth, rate limit, ...). Signalled
+        # distinctly from a successful "nothing to extract" (None) so the
+        # offline marker heuristic only runs as a fallback for a real failure.
+        return LLM_CALL_FAILED
 
 
 # Phrasings that revise or retract an earlier fact. Offline there is no way to
@@ -341,13 +359,20 @@ def extract_new_memory(transcript: str, reply: str, active_facts: list[str] | No
     saving (name, preference, event), or a correction/forget request?
 
     The LLM runs first when online, because only it sees the active facts and
-    can return SUPERSEDE/DELETE. The marker heuristic is the offline fallback
-    (and catches genuine facts the LLM returns nothing for); it never stores a
-    correction or forget request as a new fact."""
+    can return SUPERSEDE/DELETE. The marker heuristic is only a fallback for
+    when the LLM call itself fails -- a successful LLM verdict of "nothing to
+    extract" is trusted and not second-guessed. The heuristic never stores a
+    correction or forget request, or a question, as a new fact."""
     if use_llm:
         extracted = extract_memory_llm(transcript, reply, active_facts, caregiver_updates=caregiver_updates)
-        if extracted:
+        if extracted is not LLM_CALL_FAILED:
+            # The LLM call succeeded, whether it found a fact (truthy
+            # string) or decided there was nothing to store (None). Either
+            # way its verdict is trusted and not second-guessed.
             return extracted
+
+    if "?" in transcript:
+        return None
 
     lowered = transcript.lower()
     if any(re.search(p, lowered) for p in REVISION_MARKERS):

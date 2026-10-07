@@ -49,7 +49,7 @@ Facts that don't fit an ADR:
   `NEBIUS_API_KEY` mid-review, which is unrealistic at judging volume, so we host it ourselves
   with our key configured. README setup steps remain for collaborators and local runs.
 - **Conversation history:** `webapp.py` and `main.py chat` keep per-session history
-  (`MAX_HISTORY_TURNS = 6`), isolated from the durable cross-session `MemoryStore`.
+  (`MAX_HISTORY_TURNS = 4`), isolated from the durable cross-session `MemoryStore`.
 
 ## Out of scope
 
