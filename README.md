@@ -3,7 +3,7 @@
 **The companion the family briefs — your voice in Dad's day when you can't be there.**
 
 ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
-there, and never tells the senior anything it hasn't already told him.
+there, and never reports anything to the family that it hasn't first said to him out loud.
 
 A voice-first AI companion for older adults. A caregiver gives it context once (a voice memo:
 names, preferences, daily updates), and the senior gets a warm, low-friction voice conversation

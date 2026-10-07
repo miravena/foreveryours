@@ -13,6 +13,14 @@ rename `Unreleased` to the version and date, then tag it.
 ### Changed
 - The public Gradio page is the product now, not a developer console (#83): above the fold on laptop and phone there's only the title, a two-line intro, and a persistent AI/recording disclosure (with a link to the privacy notice) before the microphone — no accordion to open first. The telemetry accordion, Clinical Configuration, the four proactive-trigger buttons and the Acoustic Biomarkers panel are behind `FY_DEV_MODE=1` (default off). Send sits directly under the textbox. The caregiver pledge was unintentionally rendering as a Markdown heading (a line of text immediately followed by `---` is a setext `<h2>`) as well as bold; both are fixed. On narrow screens a short alert strip now appears above the mic so a caregiver flag is visible without scrolling past the whole senior column. The first sample chip (`senior_schedule.wav`, new) asks a schedule question so it recalls the caregiver's groceries update instead of looking like a generic chatbot. The perseveration ("asked 3 times in a row") flag no longer fires on the public path — it fired undisclosed, which broke the product's own disclosure invariant on screen (`orchestrator.run_turn(..., enable_perseveration_flag=...)`, default on, off via `FY_DEV_MODE`). The "NEBIUS_API_KEY is pending approval" message is replaced with an honest "the live AI model isn't reachable right now" line. A session that expires mid-demo now says so instead of silently starting over, and `audio_in` is cleared after every turn so a loaded sample clip can't be silently re-sent. The browser tab title and the Gradio footer no longer say "judge demo" (`css` is set on the `gr.Blocks()` constructor, not only `launch()`, so `app.py`'s hosted/Spaces entrypoint carries it too). The periodic AI/recording reminder counts real turns from a persistent per-session counter rather than the truncated prompt history, so it actually fires.
 
+### Docs
+- The #14 pitch sentence's second half was fixed for subject accuracy: "never tells the senior
+  anything it hasn't already told him" read as a promise that replies never introduce new
+  information (false — beat 2 surfaces a caregiver update the senior hasn't heard before). It now
+  reads "never reports anything to the family that it hasn't first said to him out loud," which
+  states the actual invariant (disclosure, not information novelty). Fixed everywhere it appeared:
+  README.md, both copies in docs/Project_Description.md, video/generate_slides.py.
+
 ### Fixed
 - Memory scope: a memory whose text merely contained "am" as a substring (e.g. "Liam", "name") was
   wrongly auto-scoped TEMPORARY with a 24h expiry; the time-word check now matches whole words only (#82).

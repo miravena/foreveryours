@@ -60,8 +60,8 @@ lines = [
     "A general chatbot remembers for whoever's talking to it --",
     "it has no concept of the person who ISN'T there.",
     "",
-    "ForeverYours is briefed by the caregiver, and never tells the",
-    "senior anything it hasn't already told him, out loud.",
+    "ForeverYours is briefed by the caregiver, and never reports",
+    "anything to the family it hasn't first said to him out loud.",
 ]
 ly = box_y0 + 74
 for line in lines:
