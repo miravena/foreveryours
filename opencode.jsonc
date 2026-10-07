@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Assistants must never open secrets. Verify a key with scripts/key_status.sh (prints an HTTP code only).
+  "permission": {
+    "read": {
+      "*": "allow",
+      "**/.env": "deny",
+      "**/.env.local": "deny",
+      "**/.env.production": "deny",
+      "**/*.key": "deny",
+      "**/.env.example": "allow"
+    }
+  }
+}
