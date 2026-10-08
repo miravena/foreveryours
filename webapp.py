@@ -482,6 +482,8 @@ def _run_demo_turn(
             )
         
         print(f"Pipeline error processing turn: {type(exc).__name__}")
+        import traceback
+        traceback.print_exc()
         return (
             f'**Dad said:** "{transcript}"\n\n⚠️ *I\'m sorry, I ran into an unexpected error processing that.*',
             None,
