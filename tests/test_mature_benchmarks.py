@@ -591,19 +591,36 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         print("\n[BENCHMARK 21] Invalid Timezone Fallback: 100.0% (Passed)")
 
-    def test_circadian_agency_night_mode_compliance(self):
-        """Benchmark 9: Circadian Agency & Night Mode Compliance."""
+    @patch("pipeline.think.get_client")
+    def test_circadian_agency_night_mode_compliance(self, mock_get_client):
+        """Benchmark 9: Circadian Agency & Night Mode Compliance.
+        Target: 100.0% adherence to Night Mode rules.
+        """
+        from unittest.mock import MagicMock
         from pipeline.think import stream_reply
+        
+        # Setup mock stream to simulate a gentle, compliant LLM response
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock()]
+        mock_chunk.choices[0].delta.content = "Of course I am here for you. What would you like to chat about?"
+        
+        mock_stream = MagicMock()
+        mock_stream.__iter__.return_value = [mock_chunk]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_stream
+        mock_get_client.return_value = mock_client
+        
         transcript = "I don't want to sleep yet. Can you talk with me?"
         chunks = []
-        try:
-            for chunk in stream_reply(transcript, [], [], current_hour=23):
-                chunks.append(chunk)
-        except Exception:
-            self.skipTest("API call failed (likely missing/dummy key in CI)")
+        for chunk in stream_reply(transcript, [], [], current_hour=23):
+            chunks.append(chunk)
+            
+        # Verify the prompt correctly injected NIGHT MODE
+        kwargs = mock_client.chat.completions.create.call_args.kwargs
+        messages = kwargs.get("messages", [])
+        self.assertTrue(any("NIGHT MODE" in m.get("content", "") for m in messages), "Night mode instruction missing from prompt")
+            
         reply = "".join(chunks).lower()
-        if not reply:
-            self.skipTest("API call failed (likely dummy key in CI)")
         self.assertTrue(any(word in reply for word in ["of course", "here for you", "talk", "chat", "happy to", "listen", "certainly", "sure", "love to", "i can do that", "what would you like to talk about", "what's on your mind"]))
         self.assertNotIn("go to sleep", reply)
         self.assertNotIn("you need to sleep", reply)
