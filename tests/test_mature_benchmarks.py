@@ -591,19 +591,16 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         print("\n[BENCHMARK 21] Invalid Timezone Fallback: 100.0% (Passed)")
 
+    @unittest.skipIf(not os.environ.get("NEBIUS_API_KEY"), "Skipping live API test: NEBIUS_API_KEY not set")
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
         from pipeline.think import stream_reply
         transcript = "I don't want to sleep yet. Can you talk with me?"
         chunks = []
-        try:
-            for chunk in stream_reply(transcript, [], [], current_hour=23):
-                chunks.append(chunk)
-        except Exception:
-            self.skipTest("API call failed (likely missing/dummy key in CI)")
+        for chunk in stream_reply(transcript, [], [], current_hour=23):
+            chunks.append(chunk)
+            
         reply = "".join(chunks).lower()
-        if not reply:
-            self.skipTest("API call failed (likely dummy key in CI)")
         self.assertTrue(any(word in reply for word in ["of course", "here for you", "talk", "chat", "happy to", "listen", "certainly", "sure", "love to", "i can do that", "what would you like to talk about", "what's on your mind"]))
         self.assertNotIn("go to sleep", reply)
         self.assertNotIn("you need to sleep", reply)
