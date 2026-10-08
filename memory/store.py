@@ -24,6 +24,7 @@ class MemoryScope(str, Enum):
     HISTORICAL = "historical"   # Superseded preferences, past events
     EMOTIONAL = "emotional"
     UNCERTAIN = "uncertain"
+    LIFESTYLE = "lifestyle"
 
 
 class PrivacyLevel(str, Enum):
@@ -380,6 +381,8 @@ class MemoryStore:
                 facts.append(f"[UNVERIFIED/UNCERTAIN]: {item.text}")
             elif item.scope == MemoryScope.EMOTIONAL.value:
                 facts.append(f"[EMOTIONAL STATE]: {item.text}")
+            elif item.scope == MemoryScope.LIFESTYLE.value:
+                facts.append(f"[LIFESTYLE LOG]: {item.text}")
             elif item.text == "[QUIET_MODE]":
                 pass
             else:
@@ -388,3 +391,26 @@ class MemoryStore:
 
     def all(self) -> list[MemoryItem]:
         return list(self._items)
+
+    def caregiver_lifestyle_logs(self, now: float | None = None) -> list[str]:
+        import time
+        import datetime
+        import zoneinfo
+        current_time = now or time.time()
+        logs = []
+        for i in self._items:
+            if i.scope == MemoryScope.LIFESTYLE.value and i.status == "active":
+                # Expire after 7 days
+                if i.expires_at and current_time >= i.expires_at:
+                    i.status = "expired"
+                    self._flush()
+                    continue
+                
+                dt_utc = datetime.datetime.fromtimestamp(i.created_at, tz=datetime.timezone.utc)
+                try:
+                    dt_local = dt_utc.astimezone(zoneinfo.ZoneInfo(self.timezone_str))
+                except Exception:
+                    dt_local = dt_utc
+                date_str = dt_local.strftime("%Y-%m-%d")
+                logs.append(f"[{date_str}] {i.text}")
+        return logs
