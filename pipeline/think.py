@@ -219,7 +219,7 @@ If the senior disclosed a durable, personal fact (e.g. family member's name, pas
 2. To correct an active fact: `SUPERSEDE: <exact_old_fact> | <new_fact>` (e.g. SUPERSEDE: His grandson is named Leo | His grandson is named Liam)
 3. To delete a fact because the senior asked you to forget it: `DELETE: <exact_old_fact>`
 4. To flag an ambiguous conflict where the new info contradicts the old, but might be a misunderstanding or a second entity: `CONFLICT: <exact_old_fact> | <new_fact> | <reason>` (e.g. CONFLICT: Grandson is Liam | My grandson Leo is coming | Might have two grandsons or misspoke)
-5. To activate a temporary quiet mode because the senior requested rest, sleep, or alone time: `QUIET_MODE`
+5. To activate a temporary quiet mode because the senior requested rest, sleep, or alone time: `QUIET_MODE: <hours>` (e.g. `QUIET_MODE: 8`)
 6. To record a fleeting emotion or mood (e.g. feeling lonely, angry at someone): `EMOTION: <fact>`. NOTE: For profound life events (death, trauma, major diagnosis), do NOT use EMOTION. Just extract it as a standard permanent fact (e.g., `<fact>`).
 7. To record something the senior says they are unsure about or speculating on: `UNCERTAIN: <fact>`
 
@@ -259,7 +259,7 @@ Output: DELETE: Used to work as a carpenter
 [SCENARIO E]
 ACTIVE PROFILE FACTS:
 Senior: "I'm feeling really tired, I think I'm going to take a nap for a few hours."
-Output: QUIET_MODE
+Output: QUIET_MODE: 2
 
 [SCENARIO F]
 ACTIVE PROFILE FACTS:

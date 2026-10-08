@@ -216,12 +216,15 @@ def run_turn(
     # AI RESTRAINT: QUIET MODE
     # ---------------------------------------------------------
     if is_proactive and memory_store.is_quiet_mode_active(now=t_now):
-        return TurnResult(
-            transcript=transcript,
-            reply_text="",
-            audio_paths=[],
-            audit_verdict="Blocked by Quiet Mode"
-        )
+        # Allow Breakthroughs for urgent caregiver schedule updates
+        breakthrough = any(word in u.upper() for u in raw_schedule for word in ["NOW", "URGENT", "EMERGENCY", "CRITICAL", "IMPORTANT"])
+        if not breakthrough:
+            return TurnResult(
+                transcript=transcript,
+                reply_text="",
+                audio_paths=[],
+                audit_verdict="Blocked by Quiet Mode"
+            )
     # ---------------------------------------------------------
 
     guardrails = memory_store.caregiver_guardrails()
@@ -413,8 +416,17 @@ def run_turn(
                             memory_store.add_conflict(old_fact, new_fact, reason)
                             result.memory_saved = f"Pending Conflict: {old_fact} vs {new_fact}"
                     elif saved_cmd.startswith("QUIET_MODE"):
-                        memory_store.set_quiet_mode(hours=4.0)
-                        result.memory_saved = "Activated Quiet Mode (4 hours)"
+                        parts = saved_cmd.split(":")
+                        hours = 4.0
+                        if len(parts) > 1:
+                            try:
+                                import re
+                                hours_str = re.sub(r"[^\d\.]", "", parts[1])
+                                hours = float(hours_str)
+                            except ValueError:
+                                pass
+                        memory_store.set_quiet_mode(hours=hours)
+                        result.memory_saved = f"Activated Quiet Mode ({hours} hours)"
                     elif saved_cmd.startswith("EMOTION:"):
                         fact = saved_cmd.split(":", 1)[1].strip()
                         import time
