@@ -29,3 +29,11 @@ If a 'Hobby' trigger fires, but the senior has zero permanent facts in their mem
 
 ### 3. Asymmetric History Bloat
 If the system triggers proactively 3 times in a row (e.g. morning, afternoon, evening) and the senior never replies, the chat history will fill up with assistant messages. This breaks conversational flow. We need a 'maximum consecutive proactive turns' limit.
+
+## Loophole Solutions Implemented
+
+1. **Pre-Flight Context Verification:** `run_turn` in `orchestrator.py` now explicitly verifies if the memory store contains permanent facts (for 'hobby' triggers) or schedule updates (for 'reminder' triggers). If the context is missing, it skips the LLM call entirely, mathematically eliminating the hallucination risk.
+
+2. **Two-Strike Suppression Rule:** The orchestrator checks the active session history. If the last two turns were assistant-initiated (proactive), it silently aborts to prevent spamming the senior and bloating the history.
+
+3. **Daemon/Poller Framework:** Created `pipeline/daemon.py` which provides a `tick()` function. This acts as the logic engine for a background daemon, ensuring proactive triggers only fire after a 4-hour silence period, and dynamically selecting the correct trigger type based on the time of day and available context.

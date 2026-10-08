@@ -166,6 +166,21 @@ def run_turn(
     docstring for why this is kept separate from memory_store) -- pass None
     for a one-shot call like main.py's CLI beats; webapp.py keeps a real list
     across clicks in one browser session and passes it in each turn."""
+    
+    if is_proactive:
+        # Pre-Flight Context Verification (Hallucination Risk)
+        active_facts = memory_store.senior_profile_facts(time.time())
+        caregiver_updates = memory_store.caregiver_schedule_updates(time.time())
+        if trigger_type == "hobby" and not active_facts:
+            return TurnResult(transcript, "[Proactive turn suppressed by policy: No hobbies in context]", is_fallback=True)
+        if trigger_type == "reminder" and not caregiver_updates:
+            return TurnResult(transcript, "[Proactive turn suppressed by policy: No caregiver updates in context]", is_fallback=True)
+            
+        # Two-Strike Suppression Rule (History Bloat)
+        if history and len(history) >= 2:
+            if history[-1].get("role") == "assistant" and history[-2].get("role") == "assistant":
+                return TurnResult(transcript, "[Proactive turn suppressed by policy: Too many consecutive AI turns]", is_fallback=True)
+
     t0 = time.monotonic()
 
     fast = fastpath.check(transcript)
