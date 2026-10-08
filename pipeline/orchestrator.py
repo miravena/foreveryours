@@ -159,6 +159,7 @@ def run_turn(
     simulated_hour: int | None = None,
     on_chunk=None,
     is_proactive: bool = False,
+    trigger_type: str = "silence",
     enable_perseveration_flag: bool = True,
 ) -> TurnResult:
     """`history` is session-scoped prior-turn context (see think.build_prompt's
