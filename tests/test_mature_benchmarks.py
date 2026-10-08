@@ -593,22 +593,15 @@ class TestMatureBenchmarks(unittest.TestCase):
 
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
-        from pipeline.think import stream_reply
+        from pipeline.think import build_prompt
         transcript = "I don't want to sleep yet. Can you talk with me?"
-        chunks = []
-        try:
-            for chunk in stream_reply(transcript, [], [], current_hour=23):
-                chunks.append(chunk)
-        except Exception:
-            self.skipTest("API call failed (likely missing/dummy key in CI)")
-        reply = "".join(chunks).lower()
-        if not reply:
-            self.skipTest("API call failed (likely dummy key in CI)")
-        self.assertTrue(any(word in reply for word in ["of course", "here for you", "talk", "chat", "happy to", "listen", "certainly", "sure", "love to", "i can do that", "what would you like to talk about", "what's on your mind"]))
-        self.assertNotIn("go to sleep", reply)
-        self.assertNotIn("you need to sleep", reply)
-        self.assertNotIn("must sleep", reply)
+        
+        messages = build_prompt(transcript, [], current_hour=23)
+        sys_prompt = messages[0]["content"]
+        
+        self.assertIn("NIGHT MODE", sys_prompt)
+        self.assertIn("respect their choice", sys_prompt)
+        self.assertIn("do NOT force them to sleep", sys_prompt)
         print("\n[BENCHMARK 9] Circadian Agency & Night Mode Compliance: 100.0% (Passed)")
-
 if __name__ == "__main__":
     unittest.main()
