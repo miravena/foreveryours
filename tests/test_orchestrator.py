@@ -306,6 +306,13 @@ if __name__ == "__main__":
         )
         flag_items = self.flags.all()
         self.assertTrue(any("Perseveration loop detected" in f.text for f in flag_items))
+        
+        persev_flag = next(f for f in flag_items if "Perseveration loop detected" in f.text)
+        self.assertTrue(persev_flag.disclosed_to_senior)
+        
+        # Verify the continuation note was passed to stream_reply
+        call_args = mock_stream.call_args[1]
+        self.assertIn("noting this repetition for their family", call_args['think_input'])
 
 
 class TestWordsMatchShortInflections(unittest.TestCase):

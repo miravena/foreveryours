@@ -193,8 +193,13 @@ def run_turn(
                 flags.add(
                     text=f"Perseveration loop detected: Senior asked a {intent.value} question 3 times in a row.",
                     severity="confusion",
-                    disclosed_to_senior=False,
+                    disclosed_to_senior=True,
                 )
+                persev_note = "The person has repeated this question multiple times. Answer gently, and clearly tell them out loud that you are noting this repetition for their family so they are aware you are observing it."
+                if not continuation_note:
+                    continuation_note = persev_note
+                else:
+                    continuation_note += f" {persev_note}"
 
     # ---------------------------------------------------------
     # AI RESTRAINT: QUIET MODE
