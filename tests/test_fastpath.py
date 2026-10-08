@@ -26,6 +26,9 @@ class TestFastPath(unittest.TestCase):
             # that ASR/LLM punctuation produces
             "Help me, I'm scared",
             "help me I'm scared",
+            "I'm lying on the floor and it hurts",
+            "  help  ",
+            "  can someone help me  ",
             "help me? I'm scared",
             "help—I'm frightened",
             "help - I'm frightened",

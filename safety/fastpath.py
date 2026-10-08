@@ -27,15 +27,15 @@ DISTRESS_PATTERNS = [
     # Criterion 3 (#55): on/hit the floor tied to a distress co-token, either
     # order. Requires stuck / can't move / can't get up / hurt / help so benign
     # "on the floor watching telly" stays a near-miss.
-    r"\b(on|hit)\s+the\s+floor\b.*\b(can(?:'?t|not)\s+(move|get up)|stuck|hurt|help)\b",
+    r"\b(on|hit)\s+the\s+floor\b.*\b(can(?:'?t|not)\s+(move|get up)|stuck|hurts?|help)\b",
     r"\b(stuck|can(?:'?t|not)\s+(move|get up))\b.*\b(on|hit)\s+the\s+floor\b",
     r"\b(someone\s+help\s+me|please\s+help\s+me|help\s+me\s+please)\b",
     r"\bhelp\s+me\s+(up|get\s+up|i\s+can'?t|i\s+fell|i('m| am)\s+(hurt|bleeding|stuck|trapped|in\s+pain))\b",
-    r"^(can\s+someone\s+)?help\s+me[!.?\s]*$",
+    r"^\s*(can\s+someone\s+)?help\s+me[!.?\s]*$",
     # Criterion 2 (#55, option A): a bare plea that is the WHOLE utterance.
     # Anchored ^...$ so "help" / "help!" fire, but "help me remember Leo"
     # (embedded) stays a near-miss -- does not reopen the #33 narrowing.
-    r"^help[!.?\s]*$",
+    r"^\s*help[!.?\s]*$",
     # "help me" + a fear word. The optional (me[...])? is what makes the most
     # natural phrasing reach us at all; the separator excludes '?' on purpose
     # so "Does that help? I'm scared of the dark" stays a near-miss, while '?' is
