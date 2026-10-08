@@ -1,31 +1,35 @@
 import unittest
-from unittest.mock import patch
-
-from pipeline import think
+from pipeline.think import build_proactive_prompt
 
 class TestProactiveAgency(unittest.TestCase):
-    def test_proactive_prompt_injection(self):
-        # When is_proactive is True, the system prompt should contain the proactive block
-        messages = think.build_prompt(
-            transcript="[System: Initiate conversation]",
+    def test_proactive_policy_gate(self):
+        """Verify the proactive prompt includes the strict anti-surveillance rule."""
+        prompt_list = build_proactive_prompt(
+            trigger_type="silence",
             facts=[],
-            is_proactive=True
+            caregiver_updates=[]
         )
+        prompt = prompt_list[0]["content"]
+        self.assertIn("CRITICAL RULE: DO NOT tell the user that you are checking on them", prompt)
+        self.assertIn("Never say 'you haven't spoken' or 'I am monitoring you'", prompt)
+
+    def test_proactive_triggers(self):
+        """Verify different triggers inject the correct instruction."""
+        # Morning
+        prompt = build_proactive_prompt("morning", [], [])[0]["content"]
+        self.assertIn("Give a warm morning greeting", prompt)
         
-        system_msg = messages[0]["content"]
-        self.assertIn("[PROACTIVE INITIATION MODE]", system_msg)
-        self.assertIn("CRITICAL RULE: DO NOT tell the user that you are checking on them", system_msg)
+        # Reminder
+        prompt = build_proactive_prompt("reminder", [], [])[0]["content"]
+        self.assertIn("Gently remind them of one of the caregiver updates", prompt)
         
-    def test_proactive_prompt_not_injected_normally(self):
-        # When is_proactive is False, it should not be in the prompt
-        messages = think.build_prompt(
-            transcript="Hello",
-            facts=[],
-            is_proactive=False
-        )
+        # Hobby
+        prompt = build_proactive_prompt("hobby", [], [])[0]["content"]
+        self.assertIn("Pick one of their permanent hobbies", prompt)
         
-        system_msg = messages[0]["content"]
-        self.assertNotIn("[PROACTIVE INITIATION MODE]", system_msg)
+        # Silence
+        prompt = build_proactive_prompt("silence", [], [])[0]["content"]
+        self.assertIn("Give a generic, warm check-in", prompt)
 
 if __name__ == '__main__':
     unittest.main()

@@ -361,6 +361,7 @@ def run_demo_turn(
     session_id: str | None = None,
     simulated_time_in: str | None = None,
     is_proactive: bool = False,
+    trigger_type: str = "silence",
 ) -> tuple[str, str | None, list[dict], str, str, str, str, None]:
     if isinstance(text_in_or_history, list):
         history = text_in_or_history
@@ -385,7 +386,7 @@ def run_demo_turn(
     elif "Night" in simulated_time_str:
         simulated_hour = 23
 
-    out = _run_demo_turn(audio_in, actual_text, history, session_id_val, simulated_hour, is_proactive=is_proactive)
+    out = _run_demo_turn(audio_in, actual_text, history, session_id_val, simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type)
     if session_expired:
         out = (
             "_Your demo household was reset after a period of inactivity._\n\n" + out[0],
@@ -397,9 +398,9 @@ def run_demo_turn(
     return (*out, session_id_val, "", None)
 
 
-def run_proactive_turn(history, session, sim_time):
+def run_proactive_turn(history, session, sim_time, trigger_type):
     """Handler for the four proactive buttons: same 8 outputs as run_demo_turn."""
-    return run_demo_turn(None, None, history, session, sim_time, is_proactive=True)
+    return run_demo_turn(None, None, history, session, sim_time, is_proactive=True, trigger_type=trigger_type)
 
 
 def _stream_with_thinking_indicator(real_result_fn):
@@ -427,6 +428,7 @@ def _run_demo_turn(
     session_id: str,
     simulated_hour: int = 10,
     is_proactive: bool = False,
+    trigger_type: str = "silence",
 ) -> tuple[str, str | None, list[dict], str, str]:
     data_dir, audio_dir = _session_dirs(session_id)
     _join_previous_turn(session_id)
@@ -437,7 +439,7 @@ def _run_demo_turn(
     biomarkers = {"wpm": 0.0, "avg_pause_s": 0.0}
 
     if is_proactive:
-        transcript = "[System: The senior is currently quiet. Please initiate a conversation based on the context above. BE BRIEF AND WARM.]"
+        transcript = "[PROACTIVE_TRIGGER]"
     elif text_in and text_in.strip():
         transcript = text_in.strip()
     elif audio_in:
@@ -463,7 +465,7 @@ def _run_demo_turn(
     _clear_session_audio(audio_dir)
     try:
         result = run_turn(
-            transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour, is_proactive=is_proactive,
+            transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type,
             enable_perseveration_flag=DEV_MODE,
         )
     except Exception as exc:
@@ -505,10 +507,14 @@ def _run_demo_turn(
     _remember_background_thread(session_id, result.background_thread)
 
     if not result.is_fallback:
-        new_history = history + [
-            {"role": "user", "content": transcript},
-            {"role": "assistant", "content": result.reply_text},
-        ]
+        if is_proactive:
+            new_history = history + [{"role": "assistant", "content": result.reply_text}]
+            transcript_and_reply = f"**ForeverYours initiated:**\n\n{result.reply_text}"
+        else:
+            new_history = history + [
+                {"role": "user", "content": transcript},
+                {"role": "assistant", "content": result.reply_text},
+            ]
         new_history = new_history[-(MAX_HISTORY_TURNS * 2) :]
     else:
         new_history = history
@@ -672,12 +678,26 @@ def build_demo() -> gr.Blocks:
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
         )
 
-        for btn in [proactive_btn_morning, proactive_btn_grocery, proactive_btn_hobby, proactive_btn_silence]:
-            btn.click(
-                fn=run_proactive_turn_streaming,
-                inputs=[history_state, session_state, simulated_time_in],
-                outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
-            )
+        proactive_btn_morning.click(
+            fn=lambda h, s, t: run_proactive_turn_streaming(h, s, t, "morning"),
+            inputs=[history_state, session_state, simulated_time_in],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+        )
+        proactive_btn_grocery.click(
+            fn=lambda h, s, t: run_proactive_turn_streaming(h, s, t, "reminder"),
+            inputs=[history_state, session_state, simulated_time_in],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+        )
+        proactive_btn_hobby.click(
+            fn=lambda h, s, t: run_proactive_turn_streaming(h, s, t, "hobby"),
+            inputs=[history_state, session_state, simulated_time_in],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+        )
+        proactive_btn_silence.click(
+            fn=lambda h, s, t: run_proactive_turn_streaming(h, s, t, "silence"),
+            inputs=[history_state, session_state, simulated_time_in],
+            outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+        )
 
         text_in.submit(
             fn=run_demo_turn_streaming,

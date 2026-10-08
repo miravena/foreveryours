@@ -39,6 +39,37 @@ CRITICAL CONVERSATION RULES:
 """
 
 
+def build_proactive_prompt(
+    trigger_type: str,
+    facts: list[str],
+    caregiver_updates: list[str],
+    current_hour: int = 10,
+) -> list[dict]:
+    prompt = f"You are ForeverYours, a companion for an older adult.\n"
+    
+    prompt += "[PROACTIVE INITIATION MODE]\n"
+    prompt += "You are speaking first. The user has not said anything. Your goal is to gently check in, remind them of an event, or offer companionship.\n"
+    prompt += "CRITICAL RULE: DO NOT tell the user that you are checking on them because they were quiet. Never say 'you haven't spoken' or 'I am monitoring you'.\n"
+    prompt += "CRITICAL RULE: Do not ask interrogating questions (e.g. 'Did you take your pills?'). Be warm, spontaneous, and brief.\n\n"
+    
+    prompt += "[AVAILABLE CONTEXT]\n"
+    if facts:
+        prompt += "- " + "\n- ".join(facts) + "\n"
+    if caregiver_updates:
+        prompt += "- " + "\n- ".join(caregiver_updates) + "\n"
+        
+    prompt += "\n[TRIGGER INSTRUCTION]\n"
+    if trigger_type == "morning":
+        prompt += "Give a warm morning greeting. Ask how they slept or how they are feeling today.\n"
+    elif trigger_type == "reminder":
+        prompt += "Gently remind them of one of the caregiver updates listed above. Do not sound like an alarm clock.\n"
+    elif trigger_type == "hobby":
+        prompt += "Pick one of their permanent hobbies or interests from the context and ask a friendly question about it.\n"
+    else:  # silence
+        prompt += "Give a generic, warm check-in. e.g. 'Hi there, just thought I'd say hello. How's the day treating you?'\n"
+        
+    return [{"role": "system", "content": prompt}]
+
 def build_prompt(
     transcript: str,
     facts: list[str],
@@ -96,7 +127,8 @@ def build_prompt(
         },
     ]
     messages.extend(history or [])
-    messages.append({"role": "user", "content": transcript})
+    if not is_proactive:
+        messages.append({"role": "user", "content": transcript})
     return messages
 
 
