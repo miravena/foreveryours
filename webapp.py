@@ -587,12 +587,26 @@ def build_demo() -> gr.Blocks:
     ) as demo:
         gr.Markdown(
             "# ForeverYours\n"
+        gr.Markdown(
+            "# ForeverYours
+"
             "Watch both sides at once: talk or type as the senior on the left, and watch the "
             "caregiver side on the right update live, the moment something worth knowing happens."
         )
         gr.Markdown(
-            "🤖 **This is an AI companion, not a person.** Everything you say here is recorded and "
+            "dY - **This is an AI companion, not a person.** Everything you say here is recorded and "
             f"transcribed to generate a reply. Read the [privacy notice]({PRIVACY_NOTICE_URL}) before you speak."
+        )
+            "**⚠️ TRANSPARENCY NOTICE: You are interacting with an Artificial Intelligence (AI) companion, not a human.**\n\n"
+            "Watch both sides at once: talk or type as the senior on the left, watch the caregiver side "
+            "on the right update live. Try an ordinary remark first, then try something like "
+            "\"I fell down earlier\" -- the right side updates within a couple seconds, "
+            "and the reply on the left tells Dad, out loud, that it's doing that.\n\n"
+            "Your tab is its own private demo household, already briefed by Dad's daughter "
+            "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
+            "this link sees it, and its memory, flags and audio are deleted when you close "
+            "the tab or after an hour."
+
         )
         history_state = gr.State([])
         session_state = gr.State(None, time_to_live=SESSION_TTL_S, delete_callback=_end_session)
