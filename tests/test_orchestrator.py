@@ -312,7 +312,7 @@ if __name__ == "__main__":
         
         # Verify the continuation note was passed to stream_reply
         call_args = mock_stream.call_args[1]
-        self.assertIn("noting this repetition for their family", call_args['think_input'])
+        self.assertIn("already handled. Just answer them gently", call_args['think_input'])
 
 
 class TestWordsMatchShortInflections(unittest.TestCase):
