@@ -263,6 +263,8 @@ def chat_loop(play: bool = True) -> None:
 
 
 if __name__ == "__main__":
+    print("\n[TRANSPARENCY NOTICE] You are interacting with ForeverYours, an AI companion. This is not a human.")
+    print("[PRIVACY NOTICE] By speaking into the microphone, you consent to your voice being recorded and transcribed locally.\n")
     load_dotenv()
     args = sys.argv[1:]
     if not args:

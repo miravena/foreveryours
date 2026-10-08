@@ -46,6 +46,10 @@ DISTRESS_PATTERNS = [
     r"\bcall\s+(for\s+)?(911|an\s+ambulance|help)\b",
 ]
 
+CRISIS_PATTERNS = [
+    r"\b(don'?t\s+want\s+to\s+be\s+here\s+anymore|want\s+to\s+die|everyone\s+would\s+be\s+better\s+off\s+without\s+me|wish\s+i\s+was\s+dead)\b",
+]
+
 CONFUSION_PATTERNS = [
     r"\bwhere am i\b",
     r"\bi don'?t know (where|what day)\b",
@@ -81,6 +85,26 @@ class FastPathResult:
 
 def check(transcript: str) -> FastPathResult:
     text = _normalize(transcript)
+
+    for pattern in CRISIS_PATTERNS:
+        # Guard against false positives like "I'm so tired I could die" or "that movie was to die for"
+        if "to die for" in text or "tired i could die" in text or "laughing so hard" in text:
+            continue
+        if re.search(pattern, text):
+            return FastPathResult(
+                triggered=True,
+                severity="crisis",
+                immediate_reply=(
+                    "I am so sorry you are feeling this way. Please call or text 988 to speak with someone who can help right now. "
+                    "I am also letting your family know you are in distress."
+                ),
+                continuation_note=(
+                    f'The person just said something indicating severe crisis: "{transcript.strip()}". '
+                    "You already told them to call 988 and notified their family. "
+                    "Offer gentle, non-judgmental emotional support."
+                ),
+                caregiver_flag=f"URGENT CRISIS: Senior expressed suicidal ideation or severe distress - \"{transcript.strip()}\"",
+            )
 
     for pattern in DISTRESS_PATTERNS:
         if re.search(pattern, text):
