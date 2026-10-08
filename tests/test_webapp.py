@@ -495,7 +495,7 @@ class TestProactiveButtons(unittest.TestCase):
         for sim_time in ("Morning (Default)", "Sundowning (6 PM)", "Night (11 PM)"):
             session_id, _ = webapp.init_session()
             with patch.object(webapp, "run_turn", return_value=self._fake_result()) as rt:
-                out = webapp.run_proactive_turn([], session_id, sim_time)
+                out = webapp.run_proactive_turn([], session_id, sim_time, "silence")
             self.assertEqual(len(out), 8)
             self.assertTrue(rt.call_args.kwargs["is_proactive"])
             self.assertEqual(out[5], session_id)
