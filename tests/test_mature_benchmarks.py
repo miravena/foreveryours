@@ -594,12 +594,19 @@ class TestMatureBenchmarks(unittest.TestCase):
     @unittest.skipIf(not os.environ.get("NEBIUS_API_KEY"), "Skipping live API test: NEBIUS_API_KEY not set")
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
+        import os
+        if not os.environ.get("NEBIUS_API_KEY") or os.environ.get("NEBIUS_API_KEY") == "dummy":
+            self.skipTest("Skipping live API benchmark because NEBIUS_API_KEY is missing or dummy")
+            
         from pipeline.think import stream_reply
         transcript = "I don't want to sleep yet. Can you talk with me?"
         chunks = []
         for chunk in stream_reply(transcript, [], [], current_hour=23):
             chunks.append(chunk)
+
             
+
+
         reply = "".join(chunks).lower()
         self.assertTrue(any(word in reply for word in ["of course", "here for you", "talk", "chat", "happy to", "listen", "certainly", "sure", "love to", "i can do that", "what would you like to talk about", "what's on your mind"]))
         self.assertNotIn("go to sleep", reply)
