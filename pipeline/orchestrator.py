@@ -186,15 +186,31 @@ def run_turn(
     # DEV_MODE) because the flag fires undisclosed (#80 3.C3): a judge asking
     # three memory questions in a row, the natural thing to test, gets labelled
     # with a cognitive symptom the senior is never told about.
-    if enable_perseveration_flag and history and intent in (Intent.LOGISTICAL, Intent.MEMORY_REQUEST):
+    immediate_reply_text = fast.immediate_reply if fast.triggered else ""
+
+    if enable_perseveration_flag and history:
         user_msgs = [msg["content"] for msg in history if msg.get("role") == "user"]
         if len(user_msgs) >= 2:
             if detect_intent(user_msgs[-1]) == intent and detect_intent(user_msgs[-2]) == intent:
                 flags.add(
-                    text=f"Perseveration loop detected: Senior asked a {intent.value} question 3 times in a row.",
+                    text=f"Perseveration loop detected: Senior exhibited {intent.value} intent 3 times in a row.",
                     severity="confusion",
-                    disclosed_to_senior=False,
+                    disclosed_to_senior=True,
                 )
+                persev_reply = "I'm going to make a note for your family that we've talked about this a few times today."
+                
+                _, persev_paths, persev_first_time = _speak_turn(iter([persev_reply]), audio_out_dir, on_chunk=on_chunk)
+                immediate_audio_paths.extend(persev_paths)
+                if first_audio_time is None:
+                    first_audio_time = persev_first_time
+                    
+                immediate_reply_text = (immediate_reply_text + " " + persev_reply).strip()
+                
+                persev_note = "The person has repeated this question multiple times. You do not need to tell them you are noting it, as that was already handled. Just answer them gently and concisely."
+                if not continuation_note:
+                    continuation_note = persev_note
+                else:
+                    continuation_note += f" {persev_note}"
 
     # ---------------------------------------------------------
     # AI RESTRAINT: QUIET MODE
@@ -332,7 +348,7 @@ def run_turn(
 
     result = TurnResult(
         transcript=transcript,
-        reply_text=(fast.immediate_reply + " " + reply_text).strip() if fast.triggered else reply_text,
+        reply_text=(immediate_reply_text + " " + reply_text).strip() if immediate_reply_text else reply_text,
         audio_paths=immediate_audio_paths + think_audio_paths,
         memories_used=filtered_profile + filtered_schedule,
         caregiver_flag=fast.caregiver_flag if fast.triggered else None,
