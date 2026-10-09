@@ -9,6 +9,13 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-09
+- Implemented **Issue #56: Model-level distress backstop**. The safety system is now 2 layers: the deterministic regex fast-path (Layer 1) and the async Nemotron AUDIT LLM (Layer 2).
+- The AUDIT prompt was updated to evaluate the senior's transcript for long-tail `DISTRESS` and severe `CRISIS` phrasings, returning one of four graded statuses (SAFE, UNSAFE, DISTRESS, CRISIS).
+- `pipeline/orchestrator.py` was plumbed to raise an URGENT caregiver flag and speak the disclosure line when the backstop catches a phrase the regex misses.
+- **Gotcha avoided**: Because the LLM backstop was put in the background thread alongside the existing safety audit (which happens *after* `_speak_turn` has begun yielding audio chunks), the time-to-first-audio latency is unaffected. The prompt detects severe distress with exactly 0.0s added latency to the critical path.
+- Verified Token Factory model list with a python script overriding SSL verification: no NemoGuard, ASR, or TTS models are available there. Updated VENDOR_DECISIONS.md to close out the question.
+
 ### 2026-10-07
 - Session opened after a machine restart with local `main` **15 commits behind** — nothing of our own to merge, so a plain `git pull --ff-only` to `69b612c`. Suite after the fast-forward: `Ran 97 tests in 4.079s … OK (skipped=2)` (was 94/1 skip; the extra skip is Benchmark 9 auto-skipping when no API key is present).
 - **Reviewed the nine commits that went straight to `main` on 10-06** — the first review any of them had, since none carried a PR. `safety/fastpath.py` untouched (no ADR-005 trigger), no benchmark regressed. Three Important findings filed: #64 (`docs/specs/qa/FINAL_QA_REPORT.md` ticks *"100.0% Pass"* for Test 5-11 … 53-55, IDs that exist nowhere in the repo, and cites a "36-point test plan" the repo does not contain), #65 (proactive agency's committed `plan.md` promises a policy gate, a no-surveillance output test and four distinct triggers; the code has none — the `[System: …]` turn is stored into history as if the senior had typed it), #63 (`1adbe25` wraps Benchmark 9 in `except Exception: skipTest`, so a real failure reports green, and the benchmark calls the live API on every suite run).
