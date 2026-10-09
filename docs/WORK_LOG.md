@@ -88,6 +88,7 @@ One line each; the reasoning is in the ADR.
 | Safety fast-path | Rule-based regex | 10-01 | [005](decisions/ADR-005-safety-fastpath.md) |
 | Working agreement | Direct commits to `main`; pvjthomas keeps write access | 10-04 | [006](decisions/ADR-006-working-agreement.md) |
 | Attribution | Human = author, AI = `Co-Authored-By` trailer; warn-only guardrails | 10-05 | [007](decisions/ADR-007-attribution.md) |
+| Build vs reuse | Keep privacy layer, fast-path, voice loop; trial Kokoro TTS and embedding retrieval (Proposed, review #114) | 10-09 | [008](decisions/ADR-008-build-vs-reuse.md) |
 
 ## How to update this
 

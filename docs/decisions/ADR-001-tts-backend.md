@@ -47,6 +47,6 @@ Better voices are a nice-to-have after launch.
 
 ## When to revisit
 
-- A drop-in offline neural TTS with clearly better quality and small size appears.
+- A drop-in offline neural TTS with clearly better quality and small size appears. ([ADR-008](ADR-008-build-vs-reuse.md) proposes a measured Kokoro trial, with a licence check first; tracked in [#52](../../issues/52).)
 - The silence bug ([#28](../../issues/28)) recurs on the hosted instance.
 - Design-score feedback names voice quality as the reason we lost points.
