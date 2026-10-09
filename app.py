@@ -3,11 +3,9 @@ Auto-detected by Hugging Face Spaces (as app.py) and cloud hosts.
 """
 import os
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+from envload import load_repo_env
+
+load_repo_env()
 
 try:
     from pipeline import hear
