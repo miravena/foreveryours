@@ -5,6 +5,13 @@ out/
 __pycache__/
 *.pyc
 
+# Piper offline neural voice models (large binaries) — fetched once via
+# scripts/get_piper_voice.sh; never committed (ADR-008). The demo falls back
+# to espeak-ng/System.Speech when they are absent.
+models/piper/
+*.onnx
+*.onnx.json
+
 # Demo-video build output — regenerable via video/run_pipeline.py (see
 # video/README.md). The final MP4 is force-added despite living in this
 # ignored dir; everything else here (narration mp3s, slide pngs, per-beat

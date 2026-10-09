@@ -509,7 +509,6 @@ def _run_demo_turn(
     if not result.is_fallback:
         if is_proactive:
             new_history = history + [{"role": "assistant", "content": result.reply_text}]
-            transcript_and_reply = f"**ForeverYours initiated:**\n\n{result.reply_text}"
         else:
             new_history = history + [
                 {"role": "user", "content": transcript},
@@ -521,7 +520,14 @@ def _run_demo_turn(
 
     combined_audio = _combine_audio_chunks(result.audio_paths, audio_dir)
     reply_audio = str(combined_audio) if combined_audio else None
-    transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
+    # A proactive turn has no senior utterance, so the panel must NOT print a
+    # `Dad said:` line attributing the internal trigger token to the senior
+    # (#65). Render it as an assistant/system-initiated message instead; a
+    # normal turn keeps the senior-then-companion transcript as before.
+    if is_proactive:
+        transcript_and_reply = f'**ForeverYours initiated:**\n\n"{result.reply_text}"'
+    else:
+        transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
     if result.caregiver_flag:
         transcript_and_reply += "\n\n*(📢 Honest Safety Disclosure: Caregiver notified with Dad's knowledge)*"
     turn_count = _next_turn_count(data_dir)
@@ -594,32 +600,30 @@ def build_demo() -> gr.Blocks:
         gr.Markdown(
             "# ForeverYours\n"
             "**⚠️ TRANSPARENCY NOTICE: You are interacting with an Artificial Intelligence (AI) companion, not a human.**\n\n"
-            "Watch both sides at once: talk or type as the senior on the left, watch the caregiver side "
-            "on the right update live. Try an ordinary remark first, then try something like "
-            "\"I fell down earlier\" -- the right side updates within a couple seconds, "
-            "and the reply on the left tells Dad, out loud, that it's doing that.\n\n"
-            "Your tab is its own private demo household, already briefed by Dad's daughter "
-            "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
-            "this link sees it, and its memory, flags and audio are deleted when you close "
-            "the tab or after an hour."
+            "Talk or type as the senior on the left; the caregiver side on the right updates live. "
+            "No mic? Use a sample clip below. Try \"I fell down earlier\" to see the honest-disclosure moment."
         )
         gr.Markdown(
-            "🤖 **This is an AI companion, not a person.** Everything you say here is recorded and "
-            f"transcribed to generate a reply. Read the [privacy notice]({PRIVACY_NOTICE_URL}) before you speak."
+            "🤖 **This is an AI companion, not a person.** "
+            f"Read the [privacy notice]({PRIVACY_NOTICE_URL}) before you speak."
         )
         history_state = gr.State([])
         session_state = gr.State(None, time_to_live=SESSION_TTL_S, delete_callback=_end_session)
-
-        if DEV_MODE:
-            with gr.Accordion("Model & Pipeline Info", open=True):
-                gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
-                            "**Audio Perception (HEAR):** `faster-whisper` (local CPU)\n\n"
-                            "*Background memory extraction & safety audit run asynchronously via Nebius Token Factory.*")
 
         with gr.Row():
             with gr.Column():
                 gr.Markdown("## 🧑 Senior side")
                 mobile_alert = gr.Markdown("", elem_classes=["mobile-alert-strip"])
+                # Recording/processing notice sits next to the input the user
+                # acts on and states only what the pipeline actually does: the
+                # transcript (not the audio) leaves the device by default
+                # (ASR is local faster-whisper), mirroring the caregiver panel's
+                # already-vetted wording so both sides agree (#66 B/C).
+                gr.Markdown(
+                    "🎙️ *When you speak or type here, it is recorded and turned into text. "
+                    "That text (not your voice recording) is sent to Nebius Token Factory to write a "
+                    "reply and run a safety check, then deleted when you close this tab.*"
+                )
                 audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Speak (as the senior)")
                 text_in = gr.Textbox(
                     placeholder="Or type what Dad says (e.g. 'I fell down earlier' or 'Who is Sarah?')...",
@@ -671,6 +675,23 @@ def build_demo() -> gr.Blocks:
                         with gr.TabItem("Record Voice Memo"):
                             memo_audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Record context memo")
                             save_audio_memo_btn = gr.Button("Save Voice Memo", variant="secondary")
+
+        # Below the product on purpose (#21 / Design review): the split-screen
+        # above is the hero, so the longer context and the dev telemetry sit
+        # under it, collapsed, rather than pushing the demo below the fold.
+        with gr.Accordion("About this demo household", open=False):
+            gr.Markdown(
+                "Your tab is its own private demo household, already briefed by Dad's daughter "
+                "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
+                "this link sees it, and its memory, flags and audio are deleted when you close "
+                "the tab or after an hour."
+            )
+
+        if DEV_MODE:
+            with gr.Accordion("Model & Pipeline Info", open=False):
+                gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
+                            "**Audio Perception (HEAR):** `faster-whisper` (local CPU)\n\n"
+                            "*Background memory extraction & safety audit run asynchronously via Nebius Token Factory.*")
 
         run_btn.click(
             fn=run_demo_turn_streaming,

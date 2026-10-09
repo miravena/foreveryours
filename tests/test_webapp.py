@@ -503,6 +503,18 @@ class TestProactiveButtons(unittest.TestCase):
         self.assertTrue(rt.call_args.kwargs["is_proactive"])
         self.assertIn("Good morning, Dad.", out[0])
 
+    def test_proactive_turn_not_attributed_to_senior(self):
+        """Issue #65: a proactive turn must render as assistant-initiated and
+        must NOT print the internal trigger token as if Dad had said it."""
+        session_id, _ = webapp.init_session()
+        with patch.object(webapp, "run_turn", return_value=self._fake_result()):
+            out = webapp.run_proactive_turn([], session_id, "Morning (Default)", "morning")
+        panel = out[0]
+        self.assertIn("Good morning, Dad.", panel)
+        self.assertIn("ForeverYours initiated:", panel)
+        self.assertNotIn("Dad said:", panel)
+        self.assertNotIn("[PROACTIVE_TRIGGER]", panel)
+
     def test_button_handler_returns_eight_outputs_for_each_time(self):
         for sim_time in ("Morning (Default)", "Sundowning (6 PM)", "Night (11 PM)"):
             session_id, _ = webapp.init_session()

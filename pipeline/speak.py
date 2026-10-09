@@ -1,19 +1,28 @@
 """SPEAK: text-to-speech, streamed sentence-by-sentence.
 
-pyttsx3 runs fully offline (no API key, no network) and produces real audio
-on this box -- good enough for the thin-slice demo and for the <2s-to-
-first-audio measurement, since it has no network round-trip latency of its
-own. Swap for a Nebius-hosted open-weight TTS model once voice quality
-matters more than latency-proving.
+Preference order per sentence (all fully offline, no API key, no network):
+  0. Piper neural TTS (if the `piper` CLI AND its voice model are both present)
+     -- a warm, natural offline neural voice (ADR-008, supersedes ADR-001's
+     "accepted robotic-voice tradeoff" once a drop-in neural voice exists).
+  1. Windows PowerShell System.Speech.
+  2. espeak-ng / espeak CLI on Linux/macOS.
+  3. pyttsx3 in-process engine (last resort).
 
-Needs the `espeak-ng` system package on Linux (`apt install espeak-ng`) --
-pyttsx3.init() raises OSError without it.
+Every tier is a clean subprocess (or the unchanged pyttsx3 last resort) per
+sentence, so none re-introduces the long-lived-engine C-buffer silence bug
+(#28). Piper is OPTIONAL and auto-detected: when the binary or the model file
+is missing the code falls through to exactly the prior behavior, so `main`
+stays demo-able with no extra install.
+
+Needs the `espeak-ng` system package on Linux (`apt install espeak-ng`) when
+Piper is not used -- pyttsx3.init() raises OSError without it.
 """
 from __future__ import annotations
 
 import contextlib
 import io
 import itertools
+import os
 import shutil
 import subprocess
 import sys
@@ -23,6 +32,21 @@ from pathlib import Path
 
 _turn_counter = itertools.count()
 
+# Repo root (two levels up from this file: pipeline/speak.py -> repo root).
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Default offline neural voice: small, warm, eldercare-appropriate.
+_DEFAULT_PIPER_MODEL = "models/piper/en_US-lessac-medium.onnx"
+
+
+def _strip_smart_quotes(sentence: str) -> str:
+    """Replace curly/smart quotes LLMs love to emit with plain spaces so they
+    don't choke a downstream shell/synthesizer. Mirrors the Windows branch."""
+    safe = sentence
+    for ch in "\u2018\u2019\u201a\u201b\u201c\u201d\u201e\u201f":
+        safe = safe.replace(ch, " ")
+    return safe
+
 
 def _get_espeak_cli() -> str | None:
     """Finds native espeak-ng or espeak CLI binary if installed."""
@@ -31,6 +55,36 @@ def _get_espeak_cli() -> str | None:
         if found:
             return found
     return None
+
+
+def _get_piper_cli() -> str | None:
+    """Finds the offline Piper neural-TTS CLI binary if installed."""
+    return shutil.which("piper")
+
+
+def _get_piper_model() -> Path | None:
+    """Resolve the Piper voice model path from env (``TTS_PIPER_MODEL``,
+    default ``models/piper/en_US-lessac-medium.onnx``), relative to the repo
+    root when not absolute. Return it only if BOTH the ``.onnx`` and its
+    sibling ``.onnx.json`` config exist, else ``None`` (so a half-present
+    model never half-starts Piper)."""
+    raw = os.environ.get("TTS_PIPER_MODEL", _DEFAULT_PIPER_MODEL)
+    model = Path(raw)
+    if not model.is_absolute():
+        model = _REPO_ROOT / model
+    config = model.with_suffix(model.suffix + ".json")
+    if model.is_file() and config.is_file():
+        return model
+    return None
+
+
+def _piper_available() -> bool:
+    """Gate honoring ``TTS_BACKEND``: ``espeak`` forces the legacy path off
+    Piper (used to keep CI/tests deterministic); otherwise Piper is used only
+    when both its CLI and a complete voice model resolve."""
+    if os.environ.get("TTS_BACKEND", "auto").strip().lower() == "espeak":
+        return False
+    return _get_piper_cli() is not None and _get_piper_model() is not None
 
 
 def _get_tts_engine():
@@ -47,12 +101,30 @@ def _get_tts_engine():
 
 
 def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
+    # 0. PREFERRED: Piper offline neural voice (ADR-008). Tried first on every
+    # platform, but ONLY when both the CLI and a complete voice model resolve;
+    # one clean subprocess per sentence (reads text on stdin, writes a WAV to
+    # -f), so it inherits the #28 isolation. On any failure, log one line and
+    # fall through to the exact existing branches -- never hard-fail.
+    if _piper_available():
+        piper_cli = _get_piper_cli()
+        model = _get_piper_model()
+        try:
+            subprocess.run(
+                [piper_cli, "-m", str(model), "-f", str(out_path)],
+                input=_strip_smart_quotes(sentence),
+                text=True,
+                check=True,
+                capture_output=True,
+            )
+            return
+        except (subprocess.CalledProcessError, OSError) as exc:  # pragma: no cover - env specific
+            print(f"  (piper synthesis failed, falling back: {exc})")
+            # fall through to the legacy tiers below
+
     # 1. On Windows: PowerShell System.Speech (avoids pyttsx3 SAPI5 deadlock)
     if sys.platform == "win32":
-        safe_sentence = sentence.replace("'", "''").replace('"', ' ')
-        # Also strip curly/smart quotes and apostrophes that LLMs love to produce
-        for ch in "\u2018\u2019\u201a\u201b\u201c\u201d\u201e\u201f":
-            safe_sentence = safe_sentence.replace(ch, " ")
+        safe_sentence = _strip_smart_quotes(sentence).replace("'", "''").replace('"', ' ')
         ps_cmd = (
             f"Add-Type -AssemblyName System.Speech; "
             f"$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "

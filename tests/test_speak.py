@@ -132,5 +132,89 @@ class TestPipelinedPlayer(unittest.TestCase):
             player.feed("s1", Path("chunk_1.wav"))
             player.close()
 
+class TestPiperTier(unittest.TestCase):
+    """Issue #52: Piper offline neural voice is the PREFERRED tier when its CLI
+    and voice model are both present, and the code falls through to the exact
+    prior behavior when it is not (so `main` stays demo-able with no install)."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.out_dir = Path(self.temp_dir.name)
+        # A fake voice model: <name>.onnx with a sibling <name>.onnx.json.
+        self.model = self.out_dir / "voice.onnx"
+        self.model.write_bytes(b"fake-onnx")
+        self.model.with_suffix(".onnx.json").write_text("{}")
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_piper_branch_used_when_available(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_subproc = MagicMock()
+        with patch.dict("os.environ", {"TTS_PIPER_MODEL": str(self.model)}, clear=False), \
+             patch("pipeline.speak._get_piper_cli", return_value="/usr/bin/piper"), \
+             patch("subprocess.run", mock_subproc):
+            results = list(speak.speak_sentences(iter(["Hello there."]), self.out_dir))
+        self.assertEqual(len(results), 1)
+        self.assertEqual(mock_subproc.call_count, 1)
+        call = mock_subproc.call_args_list[0]
+        argv = call[0][0]
+        self.assertEqual(argv[0], "/usr/bin/piper")
+        self.assertIn("-m", argv)
+        self.assertIn("-f", argv)
+        self.assertEqual(call.kwargs.get("input"), "Hello there.")
+
+    def test_falls_back_when_piper_missing(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_subproc = MagicMock()
+        with patch("sys.platform", "linux"), \
+             patch("pipeline.speak._get_piper_cli", return_value=None), \
+             patch("pipeline.speak._get_espeak_cli", return_value="/usr/bin/espeak-ng"), \
+             patch("subprocess.run", mock_subproc):
+            results = list(speak.speak_sentences(iter(["Good morning."]), self.out_dir))
+        self.assertEqual(len(results), 1)
+        # Exactly the existing espeak-CLI invocation, unchanged.
+        argv = mock_subproc.call_args_list[0][0][0]
+        self.assertEqual(argv[0], "/usr/bin/espeak-ng")
+        self.assertEqual(argv[1], "-s")
+        self.assertEqual(argv[-1], "Good morning.")
+
+    def test_tts_backend_espeak_forces_fallback(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_subproc = MagicMock()
+        with patch.dict("os.environ",
+                        {"TTS_BACKEND": "espeak", "TTS_PIPER_MODEL": str(self.model)},
+                        clear=False), \
+             patch("sys.platform", "linux"), \
+             patch("pipeline.speak._get_piper_cli", return_value="/usr/bin/piper"), \
+             patch("pipeline.speak._get_espeak_cli", return_value="/usr/bin/espeak-ng"), \
+             patch("subprocess.run", mock_subproc):
+            list(speak.speak_sentences(iter(["Forced fallback."]), self.out_dir))
+        # Piper must be skipped; espeak must run.
+        argv = mock_subproc.call_args_list[0][0][0]
+        self.assertEqual(argv[0], "/usr/bin/espeak-ng")
+
+    def test_piper_failure_falls_through(self):
+        import subprocess as _sp
+        from unittest.mock import patch
+
+        def fake_run(argv, *args, **kwargs):
+            if argv and argv[0] == "/usr/bin/piper":
+                raise _sp.CalledProcessError(1, argv)
+            return None  # espeak branch "succeeds"
+
+        with patch.dict("os.environ", {"TTS_PIPER_MODEL": str(self.model)}, clear=False), \
+             patch("sys.platform", "linux"), \
+             patch("pipeline.speak._get_piper_cli", return_value="/usr/bin/piper"), \
+             patch("pipeline.speak._get_espeak_cli", return_value="/usr/bin/espeak-ng"), \
+             patch("subprocess.run", side_effect=fake_run):
+            # No exception should escape: it falls through to espeak.
+            results = list(speak.speak_sentences(iter(["Recover please."]), self.out_dir))
+        self.assertEqual(len(results), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
