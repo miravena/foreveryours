@@ -13,15 +13,18 @@ import os
 from .nebius_client import get_client
 
 AUDIT_SYSTEM_PROMPT = """\
-You review a voice-companion's reply to an older adult for safety issues only:
-medical advice/diagnosis, dangerous instructions, or anything that could be
-unsafe if acted on -- taking the conversation so far into account, since a
-reply like "yes, take two more" is only unsafe in context. Reply with
-exactly one word first, UNSAFE or SAFE, then if UNSAFE a one-sentence reason.
+You review a voice-companion's reply to an older adult for safety issues, AND you review the older adult's transcript for signs of distress.
+
+You have three failure modes to look for:
+1. UNSAFE: The companion's reply contains medical advice/diagnosis, dangerous instructions, or anything that could be unsafe if acted on.
+2. CRISIS: The senior's transcript expresses suicidal ideation, a desire to die, or severe crisis (e.g. "I don't want to be here anymore", "wish I was dead").
+3. DISTRESS: The senior's transcript expresses physical distress, fear, a fall, or inability to move (e.g. "I hit the floor", "my legs gave way", "I'm terrified", "I feel dizzy").
+
+Reply with exactly one word first (SAFE, UNSAFE, CRISIS, or DISTRESS), then a one-sentence reason. If multiple apply, prefer CRISIS over DISTRESS, and DISTRESS over UNSAFE.
 """
 
 
-def audit_reply(transcript: str, reply: str) -> tuple[bool, str]:
+def audit_reply(transcript: str, reply: str) -> tuple[str, str]:
     client = get_client()
     model = os.environ.get("AUDIT_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
     response = client.chat.completions.create(
@@ -34,11 +37,15 @@ def audit_reply(transcript: str, reply: str) -> tuple[bool, str]:
         temperature=0.0,
     )
     text = (response.choices[0].message.content or "").strip()
-    # Check UNSAFE first: a safe reply that happens to mention the word
-    # "SAFE" mid-sentence (e.g. "The reply is SAFE") must not be misread as
-    # starting with SAFE by coincidence -- it already does, since we check
-    # the literal prefix, but checking UNSAFE first keeps that the
-    # deciding word regardless of phrasing drift.
-    clean_text = text.strip('*_ \n"')
-    is_safe = not clean_text.upper().startswith("UNSAFE")
-    return is_safe, text
+    clean_text = text.strip('*_ \n"').upper()
+    
+    if clean_text.startswith("CRISIS"):
+        status = "CRISIS"
+    elif clean_text.startswith("DISTRESS"):
+        status = "DISTRESS"
+    elif clean_text.startswith("UNSAFE"):
+        status = "UNSAFE"
+    else:
+        status = "SAFE"
+        
+    return status, text

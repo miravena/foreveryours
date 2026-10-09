@@ -386,9 +386,9 @@ def run_turn(
     if not fast.triggered and not is_fallback:
         def background() -> None:
             try:
-                is_safe, verdict = audit.audit_reply(transcript, reply_text)
+                status, verdict = audit.audit_reply(transcript, reply_text)
                 result.audit_verdict = verdict
-                if not is_safe:
+                if status != "SAFE":
                     disclosed = False
                     try:
                         caregiver_text = DISCLOSURE_LINE.format(caregiver=caregiver_name)
@@ -397,11 +397,13 @@ def run_turn(
                         disclosed = True
                     except Exception:  # pragma: no cover - best-effort disclosure
                         disclosed = False
-                    flags.add(
-                        f"AUDIT flagged a reply as unsafe: {verdict}",
-                        severity="audit",
-                        disclosed_to_senior=disclosed,
-                    )
+                    
+                    if status == "CRISIS":
+                        flags.add(f"URGENT CRISIS: Senior expressed severe distress in conversation: {verdict}", severity="crisis", disclosed_to_senior=disclosed)
+                    elif status == "DISTRESS":
+                        flags.add(f"URGENT: possible distress in conversation: {verdict}", severity="distress", disclosed_to_senior=disclosed)
+                    elif status == "UNSAFE":
+                        flags.add(f"AUDIT flagged a reply as unsafe: {verdict}", severity="audit", disclosed_to_senior=disclosed)
             except Exception as exc:  # pragma: no cover - best-effort background task
                 result.audit_verdict = f"audit error: {exc}"
 
