@@ -1,10 +1,10 @@
-# ADR-008: Build vs reuse — what we keep custom and what we adopt from open source
+# ADR-009: Build vs reuse — what we keep custom and what we adopt from open source
 
 **Status:** Proposed
 **Date:** 2026-10-09
 **Decided by:** Team (maintainers) — awaiting review
-**Affects:** `pipeline/speak.py`, `memory/store.py`, `VENDOR_DECISIONS.md`, ADR-001
-**Related issue:** [#52](../../issues/52) (better offline TTS), [#14](../../issues/14) (what makes this different), [#88](../../issues/88), [#104](../../issues/104) (disclosure gaps)
+**Affects:** `pipeline/speak.py`, `memory/store.py`, `VENDOR_DECISIONS.md`, ADR-001, ADR-008 (neural TTS)
+**Related issue:** [#52](../../issues/52) (better offline TTS; see also [ADR-008](ADR-008-neural-tts.md)), [#14](../../issues/14) (what makes this different), [#88](../../issues/88), [#104](../../issues/104) (disclosure gaps)
 
 ## Question
 
@@ -24,7 +24,7 @@ against primary pages (repo, LICENSE, model card, vendor page) unless marked *un
 
 | Component | What we have | Existing option | Verdict |
 |---|---|---|---|
-| **TTS** | `espeak-ng` CLI. Robotic; accepted Design-score risk (ADR-001) | **Kokoro-82M** (Apache-2.0, 82M params, 54 voices / 8 languages, v1.0). Runtimes/alternatives: **kokoro-onnx** (MIT runtime), **KittenTTS Nano 0.8** (Apache-2.0, 15M), **Pocket TTS** (MIT code, CC-BY-4.0 weights), **sherpa-onnx** (Apache-2.0 engine; model licences vary), **MeloTTS** (MIT; stale since 2024-12). **Piper** now **GPL-3.0** | **Reuse — trial Kokoro, with a measured shortlist** (#52). See licence note |
+| **TTS** | `espeak-ng` CLI. Robotic; accepted Design-score risk (ADR-001) | **Kokoro-82M** (Apache-2.0, 82M params, 54 voices / 8 languages, v1.0). Runtimes/alternatives: **kokoro-onnx** (MIT runtime), **KittenTTS Nano 0.8** (Apache-2.0, 15M), **Pocket TTS** (MIT code, CC-BY-4.0 weights), **sherpa-onnx** (Apache-2.0 engine; model licences vary), **MeloTTS** (MIT; stale since 2024-12). **Piper** now **GPL-3.0** | **Piper was merged today** ([ADR-008](ADR-008-neural-tts.md), optional CLI-per-sentence tier). **Open: licence decision on `piper-tts`.** Kokoro and the others stay the fallback shortlist if that decision goes against Piper. See licence note |
 | **Memory retrieval** | 416-line JSON store; keyword overlap with stopword pruning and synonym expansion | **Mem0** (Apache-2.0, ~67k stars; local HF embeddings and metadata filters are documented). **Graphiti** (Apache-2.0, ~32k; needs a graph DB; validity windows). **Letta** (Apache-2.0, ~25k; agent runtime, development moved to `letta-code`). Lighter: sentence-transformers + MiniLM (Apache-2.0), LangMem (MIT) | **Conditional trial.** Keep current retrieval until a local embedding model measurably beats it on representative recall without breaking privacy, expiry or supersession. Try hybrid (lexical + embedding) rather than a replacement |
 | **Memory privacy** | `MemoryScope`, `PrivacyLevel`, filtering | Mem0's metadata filters exist but Mem0 documents backend-dependent limits (custom metadata silently dropped on Weaviate) | **Keep ours**, and say plainly what it guarantees today (see below) |
 | **Voice loop** | Hand-built `sentence_chunks`, pipelined playback; no barge-in | **FastRTC** (MIT, Gradio's own real-time voice library; `ReplyOnPause` with barge-in, Kokoro TTS, HF Spaces deployment guide; may need TURN). **Pipecat** (BSD-2; local audio, WebSocket and WebRTC transports). **LiveKit Agents** (Apache-2.0; console mode works without a server, browser deployment uses one) | **Keep for submission; trial FastRTC time-boxed** if the <2s budget allows. Earlier draft said adopting Pipecat "means WebRTC": that was wrong |
@@ -68,7 +68,7 @@ in code". The README and Devpost sentence should be checked against this before 
 
 ## Decision
 
-**We propose:** trial Kokoro for TTS (#52) against a shortlist, measured on beat2; trial
+**We propose:** get a maintainer licence decision on `piper-tts` now that it is in `requirements.txt` (if it goes against Piper, trial Kokoro and the shortlist, measured on beat2); trial
 embeddings or hybrid retrieval behind the existing store interface and privacy filter; keep
 the voice loop for submission and time-box a FastRTC trial; keep the safety fast-path, privacy
 layer and orchestration; narrow the differentiation claim as above.
@@ -84,11 +84,11 @@ commodity, but "stronger recall" is a prediction until measured.
 
 - **Unlocked:** better voice without new infrastructure, if latency holds; a documented exit
   path for the voice loop.
-- **Licence note (corrects the first draft):** this repo is MIT. The first draft said Kokoro
+- **Licence note (corrects the first draft; made urgent by ADR-008 landing):** this repo is MIT, and `requirements.txt` now lists `piper-tts`, which PyPI shows as `GPL-3.0-or-later` (version 1.8.0, checked 2026-10-09). ADR-008 does not mention the licence. It runs Piper as a separate CLI process per sentence and keeps it optional, which may keep this repo's own code under MIT, but that is a legal call for the maintainers and the GPL FAQ does not make it automatic. The first draft said Kokoro
   fits and Piper needs a decision; that did not hold. Kokoro's English path installs
   `misaki[en]`, which pulls `phonemizer-fork` (GPL-3) and `espeakng-loader` (bundles
   eSpeak NG, GPL), and Piper embeds eSpeak NG too. We already call the eSpeak NG CLI as a
-  separate process. Treat Kokoro and Piper alike: both need a recorded licence decision (engine
+  separate process. Treat Kokoro and Piper alike: both need a recorded licence decision (Piper's is now the live one) (engine
   version, integration boundary, whether a hosted Space is "distribution", voice-model terms).
   `kokoro-onnx` and `sherpa-onnx` have not had their dependency licences checked. This is a
   licensing question for the maintainers, not one we can settle here.
@@ -134,7 +134,7 @@ come from a third-party pricing aggregator and one news article, not an OpenAI p
 the Codex cost as an estimate. Claude rates are from Anthropic's published model table as
 cached on 2026-10-06. The Sonnet row covers the whole working session, including the first
 scan and the two drafts, not only the review rounds. The Opus review and the Codex review
-each ran once.
+each ran once, against the first draft, before ADR-008 (neural TTS) merged; this ADR was renumbered to 009 and its TTS verdict updated afterwards.
 
 ## Sources (checked 2026-10-09)
 

@@ -47,6 +47,10 @@ Better voices are a nice-to-have after launch.
 
 ## When to revisit
 
-- A drop-in offline neural TTS with clearly better quality and small size appears. ([ADR-008](ADR-008-build-vs-reuse.md) proposes a measured Kokoro trial, with a licence check first; tracked in [#52](../../issues/52).)
+- A drop-in offline neural TTS with clearly better quality and small size appears. (Met: see [ADR-008](ADR-008-neural-tts.md). [ADR-009](ADR-009-build-vs-reuse.md) raises the open licence question for `piper-tts`.)
 - The silence bug ([#28](../../issues/28)) recurs on the hosted instance.
 - Design-score feedback names voice quality as the reason we lost points.
+
+> **Supplemented by [ADR-008](ADR-008-neural-tts.md) (2026-10-09, #52):** the first and
+> third triggers above are now met. Piper offline neural TTS is the preferred voice; this
+> local pyttsx3 / espeak-ng / System.Speech path is kept as an automatic fallback.

@@ -18,7 +18,7 @@ changes; link the GitHub Issue/commit that changed it.
 
 ## Build vs reuse
 
-What we keep custom, what we may adopt from open source, and the sourced reasoning: [ADR-008](docs/decisions/ADR-008-build-vs-reuse.md) (Proposed; review thread [#114](../../issues/114)).
+What we keep custom, what we may adopt from open source, and the sourced reasoning: [ADR-009](docs/decisions/ADR-009-build-vs-reuse.md) (Proposed; review thread [#114](../../issues/114)).
 
 ## If we must leave it
 
