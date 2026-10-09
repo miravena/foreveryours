@@ -37,9 +37,11 @@ Reserve **Important** for findings that break a README demo beat, weaken a
 safety or disclosure invariant, or leak data. Everything else -- style, naming,
 micro-refactors -- is a **nit**.
 
-## Cap the nits
+## Nits
 
-At most five nits per review; summarize the rest as a count.
+A nit is a finding that breaks no demo beat, weakens no safety or disclosure invariant and
+leaks nothing. Nits are still reported and still get a home (see "Where every finding goes");
+there is no count limit, because grouping by area keeps them small.
 
 ## Do not report
 
@@ -55,8 +57,8 @@ worth doing if it leaves a trace, so every review ends in **a comment on the PR*
 | Case | Reviewer | Why |
 |---|---|---|
 | Our own assistant-written PR (self-review) | OpenAI Codex: `scripts/openai_review.sh` | A different vendor has different blind spots; a second Claude shares the first one's. |
-| A partner's PR after it merges | Claude Sonnet 5.5, medium effort, runtime-checked (run the code, don't just read it) | It can run the change and comment; medium has been enough to catch real bugs. |
-| Safety-critical files (`safety/fastpath.py`, `memory/store.py`, `caregiver.py`, disclosure logic) | Both: Claude at high effort **and** Codex | A miss here has a real person on the other end. |
+| A partner's PR after it merges | Claude Sonnet 5.5, runtime-checked (run the code, don't just read it): **high** effort for safety-critical files and new behaviour that can contact the user, **medium** otherwise | It can run the change and comment; medium has been enough to catch real bugs. One review per PR. |
+| Safety-critical files (`safety/fastpath.py`, `memory/store.py`, `caregiver.py`, disclosure logic) | Claude at high effort; add Codex (`scripts/openai_review.sh`, with the model and effort always pinned, never the CLI default) only when that review looks thin | A miss here has a real person on the other end. A second pass is spent on demand, not by default. |
 
 Run each review in a **separate subagent** so the reviewer's reading never fills the author's
 context. Give it the PR number, this file, and a read-only brief: no edits, no commits, no
@@ -67,21 +69,41 @@ reviewing, see [`CONTRIBUTING.md`](CONTRIBUTING.md)'s "Which model and effort fo
 ### The review comment
 
 - One comment per PR (`gh pr comment`, not an approval or change-request).
-- Start with who and what ran it, e.g. `Review by Claude Sonnet 5.5 (medium effort), runtime-checked`.
-- Findings carry `file:line` and the exact input/output that proves them; say which you reproduced.
+- Start with a header in the same shape as the `Assisted-by` commit trailer
+  ([CONTRIBUTING.md](CONTRIBUTING.md) -> "Recording which model did what"), e.g.
+  `Reviewed-by: ClaudeCode:claude-sonnet-5-5 effort=high, runtime-checked`.
+  **runtime-checked** means the reviewer ran the test suite and the README demo beats against the
+  PR's merge commit and exercised the specific risk, not only read the diff. If something could not
+  be run, say what was skipped, e.g. `runtime-checked (no live key)`.
+- Findings carry `file:line` and the exact input/output that proves them, and are tagged
+  **reproduced** (ran it, saw it fail) or **read only** (seen in the diff, not run).
 - End with a verdict line. Tag the PR's author (`@SirTehTarik`) when a finding concerns their PR.
 - No fleet, host or session details: the repo is public.
 
-### Turning findings into Issues without sprawl
+### Where every finding goes
 
-1. **Search first.** `gh issue list --search "<keywords>"`. If an open Issue covers it, comment
-   there with the evidence instead of opening another.
-2. **New Issue = distinct defect.** It needs its own acceptance criteria and a fix that can land
-   alone. Group by root cause, not by symptom.
-3. **Edit the Issue body** when scope or acceptance criteria change (state lives in the body);
-   comments are for evidence and discussion.
-4. **Nits never become Issues.** Count them in the review comment (at most five).
-5. **At most three new Issues per review.** List the rest, grouped, in the comment.
-6. **Regressions reopen.** If something closed has broken again, reopen it with the evidence.
-7. **Every Issue** gets a milestone (or Backlog), a link to the review comment, and an `@` mention
-   of the PR's author.
+A finding that only lives in a comment is not actionable, so every finding gets exactly one
+home, and the comment lists each finding with the link to it. There are no count limits; the
+rules below keep volume down by grouping, not by cutting.
+
+1. **Search first.** `gh issue list --state all --search "<keywords>"`.
+2. **An open Issue covers it:** add the evidence there, and if the review shows its acceptance
+   criteria are incomplete, edit the Issue body (state lives in the body; comments are for
+   evidence). Do not open a second Issue.
+3. **A closed Issue has regressed:** reopen it with the evidence.
+4. **Findings sharing a root cause:** one Issue, one acceptance-criteria checkbox per symptom.
+5. **Nits:** one grouped Issue per file or area, as a checklist that one PR can close
+   (e.g. "cleanup: `pipeline/orchestrator.py` from review of #94/#99/#100").
+6. **Anything else is a distinct defect:** a new Issue with its own acceptance criteria and a fix
+   that can land alone.
+7. **Every Issue** gets a milestone, the `review-finding` label (plus `bug` or `enhancement`), a
+   link to the review comment, and an `@` mention of the PR's author. Body sections follow the
+   work-item template: Why this matters, Acceptance criteria, Current state (with the
+   reproduction).
+
+Milestone by finding type: breaks a demo beat or blocks hosting -> M5; safety or disclosure
+invariant -> M13 (M5 if it blocks the demo); latency or voice -> M11; submission video or Devpost
+text -> M8 / M12; everything else, including grouped nits -> Backlog.
+
+A reviewer posts nothing until the maintainer has read the draft: the review is itself reviewed
+before it becomes comments and Issues.

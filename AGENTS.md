@@ -49,8 +49,8 @@ missing or logged out, stop and tell the founder.
   criteria (or commit a `plan.md` with the change) — a plan an assistant can read beats
   a plan in someone's head.
 - **Attribution:** author = the human with a GitHub-linked email; AI help appears only
-  as `Co-Authored-By` trailers, one per provider/model. See CONTRIBUTING.md →
-  "Commit attribution".
+  as `Assisted-by: <harness>:<model id> effort=<level>` trailers, one per model, no email
+  and no `Co-Authored-By` for AI. See CONTRIBUTING.md → "Commit attribution".
 - **State never goes in a doc** — status, dates, blockers and "next" live only on
   GitHub Issues/milestones. Docs describe what, why and how.
 - **Never read, print, quote or ask for `.env` contents or any key** — assistant configs (`.claude/settings.json`, `opencode.jsonc`) deny it. Verify a key with `scripts/key_status.sh` (prints an HTTP code only); if a key ever reaches a chat, Issue or commit, it is leaked: rotate it (#67).
@@ -82,9 +82,9 @@ missing or logged out, stop and tell the founder.
 - On Windows the test suite fails on emoji assertions under the default
   cp1252 console. Run with `PYTHONUTF8=1` (PowerShell: `$env:PYTHONUTF8=1`;
   cmd: `set PYTHONUTF8=1`) or `chcp 65001`. Linux and CI are UTF-8 already.
-- **`git commit -m` silently drops the attribution.** The commit template pre-fills
-  the `Co-Authored-By` trailer; passing `-m` bypasses it, and no hook warns, so a
+- **`git commit -m` silently drops the attribution.** The commit template carries the
+  `Assisted-by` example; passing `-m` bypasses it, and no hook warns, so a
   run of six commits went out with a correct author and no trailer at all. Append
-  the trailer yourself whenever you use `-m` — see CONTRIBUTING.md →
+  the `Assisted-by` line yourself whenever you use `-m` — see CONTRIBUTING.md →
   "Commit attribution" and ADR-007.
 - When an assistant makes the same mistake twice, put the correction here.

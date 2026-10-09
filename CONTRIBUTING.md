@@ -164,36 +164,78 @@ Rules:
 
 ## Commit attribution
 
-Every commit has two slots: the **author** (the human) and **co-authors** (AI help).
-GitHub only credits a commit to an account whose registered email matches the author
-email — co-author trailers are credited separately — so this convention is what makes the
-Contributors graph read *"the human, plus the assistant"* instead of crediting the
-assistant alone.
+Every commit has one **author**: the human, who is responsible for the change. AI help is
+recorded as `Assisted-by` trailers (below), not as co-authors. GitHub credits a commit to
+the account whose registered email matches the author email, so a GitHub-linked author
+email is what puts the work under the right person on the Contributors graph. Since
+2026-10-09 we no longer add `Co-Authored-By` for AI ([ADR-007](docs/decisions/ADR-007-attribution.md)
+amendment): it credited a tool or vendor account on the graph, which says nothing about
+who is accountable, and it carried no model id or effort.
 
 - **Author = the human who made the change**, with a GitHub-linked email. The ID form is
   the safest (it survives a username change) and is what this repo is configured with:
   `287302999+elevenbaselab@users.noreply.github.com` — GitHub → Settings → Emails →
   "Keep my email addresses private" shows yours. **Never put an AI identity in the
   author field.**
-- **AI help is shown only as `Co-Authored-By` trailers**, one per provider/model, at the
-  end of the commit message:
-
-  ```
-  Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
-  Co-Authored-By: MiMo v2.6 Flash Free <noreply@opencode.ai>
-  ```
-
-  Keep the trailer your tool already writes rather than stripping it, and when you use
-  another provider, use that provider's own name and email. Don't invent an address for a
-  provider that doesn't publish one — the trailer still documents the assistance in the
-  commit text; it just won't add a Contributors-graph entry unless the email belongs to a
-  GitHub account.
+- **AI help is shown only as `Assisted-by` trailers**, one per harness/model, at the end
+  of the commit message (format below). **No `Co-Authored-By` for AI**, and no email
+  address in the trailer. If your tool adds a `Co-Authored-By` line by default, remove it
+  and add the `Assisted-by` line instead; old commits that carry one stay as they are.
 - **Old commits keep the email they were written with.** We're not rewriting history to
   relabel them, and we never force-push `main`. The convention applies going forward.
 - The commit template (`.github/commit-template.txt`) restates this inline when you
   commit. Enable it once per clone:
   `git config commit.template .github/commit-template.txt`
   (already set in this clone).
+
+### Recording which model did what
+
+The author above is *who is responsible*. This part answers *which harness, model and
+effort produced it*, because we need that for two jobs:
+
+- **Debugging.** A bug that traces to one model or tool (a harness that strips trailers,
+  a small model that skips tests) is only findable if the history says which one was used.
+- **Cross-vendor review.** [`REVIEW.md`](REVIEW.md) reviews a change with a *different*
+  vendor than the one that wrote it, because a second Claude shares the first one's blind
+  spots. You cannot pick the other vendor if the author model is not recorded.
+
+The trailer format, one line per harness/model:
+
+```
+Assisted-by: <harness>:<model id> effort=<level>
+```
+
+```
+Assisted-by: ClaudeCode:claude-sonnet-5-5 effort=medium
+Assisted-by: OpenCode:mimo-v2.6-flash-free effort=unknown
+Assisted-by: Kiro:unknown effort=unknown
+```
+
+- `<harness>:<model id>` follows the Linux kernel's `Assisted-by: AGENT_NAME:MODEL_VERSION`
+  ([coding-assistants doc](https://docs.kernel.org/7.0/process/coding-assistants.html);
+  its example is `Assisted-by: Claude:claude-3-opus coccinelle sparse`). Fedora's AI policy
+  uses the same trailer name with a bare tool name. Neither carries an email.
+- `effort=<level>` is **our extension**; neither source defines an effort field. Use the
+  level the tool was set to (`low`, `medium`, `high`, ...), or `unknown`.
+- Take the model id and effort from the tool's own config or session record (`/model`,
+  `codex exec`'s header, the session log), not from the model's description of itself.
+- Machine-readable: `git log --format='%h %an %(trailers:key=Assisted-by,valueonly,separator=%x2C)'`
+  lists who prepared each commit and with what.
+
+How to document yourself and the model:
+
+1. **You** are the author (see above) and are responsible for the commit. Never list
+   yourself or an AI as `Signed-off-by`.
+2. **Each harness/model that wrote part of the commit** gets one `Assisted-by` line.
+3. **`git commit -m` skips the commit template**, so add the line by hand when you use it.
+4. **Reviews** are not commit trailers. Put them in the PR's `Provenance` block and in the
+   review comment header (`Review by <model> (<effort> effort), runtime-checked`).
+5. **Unknown model?** Write `unknown` rather than leaving the line out: a visible
+   "unknown" is something we can chase, a gap is not.
+
+Do not put session links, internal paths or tool-internal URLs in a commit or PR on this
+public repo. Squash merges can drop trailers: if you squash, check the final message still
+carries them.
 
 ## Secrets
 
