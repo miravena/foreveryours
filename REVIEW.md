@@ -78,6 +78,9 @@ reviewing, see [`CONTRIBUTING.md`](CONTRIBUTING.md)'s "Which model and effort fo
 - Findings carry `file:line` and the exact input/output that proves them, and are tagged
   **reproduced** (ran it, saw it fail) or **read only** (seen in the diff, not run).
 - End with a verdict line. Tag the PR's author (`@SirTehTarik`) when a finding concerns their PR.
+- End with a `Provenance` section: model, effort, and the approximate cost of the review
+  (`Estimated cost of this review: about $0.66, approximate list prices`), or `unknown`.
+  See [CONTRIBUTING.md](CONTRIBUTING.md) -> "Recording what it cost".
 - No fleet, host or session details: the repo is public.
 
 ### Where every finding goes

@@ -233,6 +233,27 @@ How to document yourself and the model:
 5. **Unknown model?** Write `unknown` rather than leaving the line out: a visible
    "unknown" is something we can chase, a gap is not.
 
+### Recording what it cost
+
+Cost is a public trail next to the model and effort, so a reader can see what a change or a
+review took. Format, one line, after the `Assisted-by` line(s):
+
+```
+Cost-estimate: $0.85 (in 234, out 107K tokens, approximate)
+```
+
+- **Where it appears:** a `Cost-estimate:` trailer on the commit, a "Cost estimate" line in
+  the PR's `Provenance` block, and a cost line in the review comment's `Provenance` section
+  ([`REVIEW.md`](REVIEW.md)).
+- **Where the number comes from:** the harness's own usage telemetry for that piece of work
+  (subagents included), at list prices, not a guess from the diff size. It is an
+  approximation and is labelled so. When several pieces of work ran together, say how it was
+  split ("allocated by token share").
+- **Unknown is fine, omitting the line is not:** write `Cost-estimate: unknown` when your
+  tool does not report usage (same rule as `Assisted-by`).
+- **No `Co-Authored-By` for AI and no vendor email, ever:** it credits a tool account on the
+  graph and says nothing about cost or effort. The `commit-msg` hook warns if one slips in.
+
 Do not put session links, internal paths or tool-internal URLs in a commit or PR on this
 public repo. Squash merges can drop trailers: if you squash, check the final message still
 carries them.

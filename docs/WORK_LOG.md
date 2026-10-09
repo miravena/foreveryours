@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-09 (Issue #118 — cost trail and trailer warning)
+- **What:** `CONTRIBUTING.md` gains "Recording what it cost" (`Cost-estimate:` trailer, PR Provenance line, review Provenance section); commit and PR templates and `REVIEW.md` follow; `.githooks/commit-msg` warns on an AI `Co-Authored-By`, a `Claude-Session:` link, and `Assisted-by` without `Cost-estimate`. ADR-007 gets a second amendment.
+- **Why:** the previous amendment dropped `Co-Authored-By` for AI by convention only; nothing noticed when a harness added it back, and cost was not recorded anywhere public.
+- **Gotcha:** `git commit -m` skips the template, so the trailers still have to be typed by hand; the hook now says so when they are missing.
+
 ### 2026-10-09 (Issue #52 — better offline TTS)
 - **What:** Added **Piper** offline neural TTS as a new PREFERRED, auto-detected tier in `pipeline/speak.py`, additive to the existing fallbacks. New per-sentence order: (0) Piper (when `piper` CLI + a complete `.onnx`/`.onnx.json` voice model both resolve) → (1) Windows System.Speech → (2) espeak-ng CLI → (3) pyttsx3. Config via env `TTS_BACKEND` (`auto`/`espeak`) and `TTS_PIPER_MODEL`. Public signatures unchanged; `_get_tts_engine()` still returns `None` on Windows/when espeak CLI exists, so no pyttsx3 engine is spun up (#28 preserved).
 - **Why CLI-per-sentence, not the Python API:** the in-process route would re-introduce the long-lived-engine C-buffer risk ADR-001/#28 and `test_multi_sentence_endurance_no_silence` guard against, and would couple import success to demo-ability. Each synthesis is an isolated subprocess instead.
