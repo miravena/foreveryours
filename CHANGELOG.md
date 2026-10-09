@@ -13,6 +13,9 @@ rename `Unreleased` to the version and date, then tag it.
 ### Added
 - Model-level distress backstop (#56): the async AUDIT pass now evaluates the senior's transcript for long-tail distress phrasings and severe crisis, emitting `DISTRESS` or `CRISIS` verdicts to raise the caregiver flag with zero added latency on the critical path.
 
+### Fixed
+- Crisis fast-path false negatives (#105): Added missing direct suicidal phrasings and updated the false-positive guard to apply per-clause rather than globally, so real crisis statements are no longer suppressed by benign idioms in the same utterance.
+
 ### Docs
 - `CONTRIBUTING.md` gains a "Which model and effort for what" table (which AI assistant
   and effort level to use for a build ticket, a safety-critical change, a review, a

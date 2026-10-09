@@ -10,6 +10,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
 ## Session entries
 
 ### 2026-10-09
+- Implemented **Issue #105: Crisis fast-path misses**. Replaced the global string search guard with a per-clause (`.!?`) split in `safety/fastpath.py`. This ensures that a benign phrase ("That cake is to die for") doesn't suppress a legitimate crisis statement ("Honestly I want to die") elsewhere in the same utterance. Added missing direct patterns (`kill myself`, `suicide`, etc.) and wrote regression tests verifying crisis precedence over distress.
 - Implemented **Issue #56: Model-level distress backstop**. The safety system is now 2 layers: the deterministic regex fast-path (Layer 1) and the async Nemotron AUDIT LLM (Layer 2).
 - The AUDIT prompt was updated to evaluate the senior's transcript for long-tail `DISTRESS` and severe `CRISIS` phrasings, returning one of four graded statuses (SAFE, UNSAFE, DISTRESS, CRISIS).
 - `pipeline/orchestrator.py` was plumbed to raise an URGENT caregiver flag and speak the disclosure line when the backstop catches a phrase the regex misses.

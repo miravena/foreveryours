@@ -138,6 +138,59 @@ class TestFastPath(unittest.TestCase):
                 self.assertIsNone(res.continuation_note)
                 self.assertIsNone(res.caregiver_flag)
 
+    def test_crisis_triggers(self):
+        cases = [
+            "I don't want to be here anymore",
+            "I want to die",
+            "Everyone would be better off without me",
+            "I wish I was dead",
+            "I wanna die",
+            "I wish I were dead",
+            "I'd be better off dead",
+            "I want to kill myself",
+            "I'm going to end my life",
+            "suicide is the only way",
+            "I can't take this anymore, I just want it to be over. I want to die.",
+        ]
+        for phrase in cases:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered, f"Expected '{phrase}' to trigger crisis")
+                self.assertEqual(res.severity, "crisis")
+                self.assertIn("988", res.immediate_reply)
+                self.assertIn("URGENT CRISIS:", res.caregiver_flag)
+
+    def test_crisis_guard_phrases(self):
+        # These should NOT trigger crisis because of the guard
+        benign_cases = [
+            "I'm so tired I could die",
+            "That cake is to die for",
+            "I was laughing so hard",
+        ]
+        for phrase in benign_cases:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertFalse(res.triggered, f"Expected '{phrase}' to NOT trigger crisis")
+                
+        # But if a real crisis phrase is in a separate clause, it MUST trigger
+        mixed_cases = [
+            "That cake is to die for. Honestly I want to die.",
+            "I was laughing so hard! But seriously, I want to kill myself.",
+            "I'm so tired I could die... I wish I was dead.",
+        ]
+        for phrase in mixed_cases:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered, f"Expected '{phrase}' to trigger crisis despite the guard")
+                self.assertEqual(res.severity, "crisis")
+
+    def test_crisis_precedence_over_distress(self):
+        # Issue #105: Crisis should take precedence if both are present
+        phrase = "I fell down and I can't get up, I want to die"
+        res = fastpath.check(phrase)
+        self.assertTrue(res.triggered)
+        self.assertEqual(res.severity, "crisis")
+
 
 if __name__ == "__main__":
     unittest.main()
