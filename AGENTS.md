@@ -57,8 +57,9 @@ missing or logged out, stop and tell the founder.
   To make a **live** call (beat2, key-gated benchmarks, a probe), run it as
   `scripts/with_key.sh <command>`: it puts the key in that command's environment only, redacts
   it from the output and prints `LIVE Nebius key in use`. A reviewer who ran something live says
-  so in the review header; one who did not says that instead. `load_dotenv()` also finds a
-  parent `.env` by itself, so run non-live checks from a directory with no `.env` above it.
+  so in the review header; one who did not says that instead. The app loads only this
+  repo's own `.env` (`envload.load_repo_env()`, never a parent directory's), so a worktree
+  without its own `.env` runs offline.
 - Never commit `.env`, `data/`, `out/`, or anything secret. The repo is public.
   A pre-commit hook blocks staged secrets; a commit-msg hook warns when the author
   email isn't GitHub-linked (both in `.githooks/`), and CI re-checks on every push.
