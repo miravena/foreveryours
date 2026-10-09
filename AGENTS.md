@@ -54,6 +54,11 @@ missing or logged out, stop and tell the founder.
 - **State never goes in a doc** — status, dates, blockers and "next" live only on
   GitHub Issues/milestones. Docs describe what, why and how.
 - **Never read, print, quote or ask for `.env` contents or any key** — assistant configs (`.claude/settings.json`, `opencode.jsonc`) deny it. Verify a key with `scripts/key_status.sh` (prints an HTTP code only); if a key ever reaches a chat, Issue or commit, it is leaked: rotate it (#67).
+  To make a **live** call (beat2, key-gated benchmarks, a probe), run it as
+  `scripts/with_key.sh <command>`: it puts the key in that command's environment only, redacts
+  it from the output and prints `LIVE Nebius key in use`. A reviewer who ran something live says
+  so in the review header; one who did not says that instead. `load_dotenv()` also finds a
+  parent `.env` by itself, so run non-live checks from a directory with no `.env` above it.
 - Never commit `.env`, `data/`, `out/`, or anything secret. The repo is public.
   A pre-commit hook blocks staged secrets; a commit-msg hook warns when the author
   email isn't GitHub-linked (both in `.githooks/`), and CI re-checks on every push.
