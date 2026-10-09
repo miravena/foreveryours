@@ -47,7 +47,7 @@ Better voices are a nice-to-have after launch.
 
 ## When to revisit
 
-- A drop-in offline neural TTS with clearly better quality and small size appears.
+- A drop-in offline neural TTS with clearly better quality and small size appears. (Met: see [ADR-008](ADR-008-neural-tts.md). [ADR-009](ADR-009-build-vs-reuse.md) raises the open licence question for `piper-tts`.)
 - The silence bug ([#28](../../issues/28)) recurs on the hosted instance.
 - Design-score feedback names voice quality as the reason we lost points.
 

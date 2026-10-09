@@ -16,6 +16,10 @@ changes; link the GitHub Issue/commit that changed it.
 | **Static landing page** | Cloudflare Pages (`docs/index.html`) | Built, live | Free, zero setup, good for a stable project-overview link (screenshots, status, links to video/demo/repo) — but **cannot** run the actual pipeline (static-files-only), so it's a front door, not the demo itself. |
 | **Credit protection on a public demo URL** | Per-day request counter (`MAX_DAILY_REQUESTS`, default 50), counted in `data/rate_limit.json` so it survives a restart | Built | Simplest thing that stops a shared public link from draining the whole Nebius credit balance; the count is keyed by date, so it resets daily rather than on restart — deleting `data/rate_limit.json` resets it by hand. |
 
+## Build vs reuse
+
+What we keep custom, what we may adopt from open source, and the sourced reasoning: [ADR-009](docs/decisions/ADR-009-build-vs-reuse.md) (Proposed; review thread [#114](../../issues/114)).
+
 ## If we must leave it
 
 Half this table needs no exit plan — `faster-whisper`, `espeak-ng`, the JSON store and the rate
