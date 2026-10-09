@@ -512,7 +512,6 @@ def _run_demo_turn(
     if not result.is_fallback:
         if is_proactive:
             new_history = history + [{"role": "assistant", "content": result.reply_text}]
-            transcript_and_reply = f"**ForeverYours initiated:**\n\n{result.reply_text}"
         else:
             new_history = history + [
                 {"role": "user", "content": transcript},
@@ -524,7 +523,14 @@ def _run_demo_turn(
 
     combined_audio = _combine_audio_chunks(result.audio_paths, audio_dir)
     reply_audio = str(combined_audio) if combined_audio else None
-    transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
+    # A proactive turn has no senior utterance, so the panel must NOT print a
+    # `Dad said:` line attributing the internal trigger token to the senior
+    # (#65). Render it as an assistant/system-initiated message instead; a
+    # normal turn keeps the senior-then-companion transcript as before.
+    if is_proactive:
+        transcript_and_reply = f'**ForeverYours initiated:**\n\n"{result.reply_text}"'
+    else:
+        transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
     if result.caregiver_flag:
         transcript_and_reply += "\n\n*(📢 Honest Safety Disclosure: Caregiver notified with Dad's knowledge)*"
     turn_count = _next_turn_count(data_dir)
