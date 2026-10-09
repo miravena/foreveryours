@@ -195,6 +195,50 @@ assistant alone.
   `git config commit.template .github/commit-template.txt`
   (already set in this clone).
 
+### Recording which model did what
+
+Attribution above answers *who gets credit*. This part answers *which model wrote or
+reviewed this*, because we need that for two jobs:
+
+- **Debugging.** A bug that traces to one model or tool (a harness that strips trailers,
+  a small model that skips tests) is only findable if the history says which one was used.
+- **Cross-vendor review.** [`REVIEW.md`](REVIEW.md) reviews a change with a *different*
+  vendor than the one that wrote it, because a second Claude shares the first one's blind
+  spots. You cannot pick the other vendor if the author model is not recorded.
+
+Record three things, each in one place so nothing is duplicated:
+
+| What | Where | Example |
+|---|---|---|
+| Who credits the work | `Co-Authored-By` trailer, one per model (rules above) | `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` |
+| Exact harness and model id that wrote the commit | `Assisted-by` trailer, one per model | `Assisted-by: ClaudeCode:claude-sonnet-5-5` |
+| Effort, plus which model **reviewed** it | `Provenance` block in the PR body | see [PR template](.github/pull_request_template.md) |
+
+Why this split: the trailer is the machine-readable record that travels with the commit
+(`git log --format='%(trailers:key=Assisted-by)'`); effort and review are properties of a
+PR, not of one commit, so they live in the PR body, where `REVIEW.md` already asks for them.
+`Assisted-by: <harness>:<model id>` follows the Linux kernel's AI-coding-assistant
+convention and Fedora's AI policy; the effort field is our own addition, since neither
+defines one.
+
+How to document yourself and the model:
+
+1. **You** are the author (see above). Never list yourself as a trailer.
+2. **Each AI that wrote part of the commit** gets one `Co-Authored-By` and one
+   `Assisted-by` line, using the model id the tool reports (`/model`, `codex exec`'s
+   header, the session log) rather than a marketing name.
+3. **A tool that already writes its trailer: keep it.** Add the `Assisted-by` line next to
+   it. If the tool wrote no trailer (Kiro documents none, and `git commit -m` skips the
+   commit template), add both by hand.
+4. **Reviews** are not commit trailers. Put them in the PR's `Provenance` block and in the
+   review comment header (`Review by <model> (<effort> effort), runtime-checked`).
+5. **Unknown model?** Say so (`Assisted-by: Kiro:unknown`) instead of leaving it out;
+   a visible "unknown" is something we can chase, a gap is not.
+
+Do not put session links, internal paths or tool-internal URLs in a commit or PR on this
+public repo. Squash merges can drop trailers: if you squash, check the final message still
+carries them.
+
 ## Secrets
 
 Nebius Token Factory key setup is in `README.md` → Setup. If you get your own

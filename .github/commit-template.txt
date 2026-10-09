@@ -13,4 +13,10 @@
 # Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 # Co-Authored-By: MiMo v2.6 Flash Free <noreply@opencode.ai>
 #
+# And the exact harness:model id, one per model (CONTRIBUTING.md -> "Recording which
+# model did what"). Use :unknown if you can't tell, never leave it out:
+#
+# Assisted-by: ClaudeCode:claude-sonnet-5-5
+# Assisted-by: OpenCode:mimo-v2.6-flash-free
+#
 # (Commented lines are stripped automatically by git.)
