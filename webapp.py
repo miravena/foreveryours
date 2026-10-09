@@ -91,6 +91,7 @@ SESSIONS_DIR = Path(os.environ.get("FY_SESSIONS_DIR", Path(tempfile.gettempdir()
 SHARED_PROFILE = os.environ.get("FY_SHARED_PROFILE") == "1"
 SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
 GRADIO_CACHE_SWEEP = (600, SESSION_TTL_S)  # (check every N s, delete files older than M s)
+HIGH_PRIORITY_SEVERITIES = ("crisis", "distress", "confusion")
 
 _lock = threading.Lock()
 _request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._request_log.clear() still resolves; _rate_limit_ok() keeps its own local dict now
@@ -259,7 +260,7 @@ def _format_caregiver_panel(session_id: str | None) -> str:
         "---",
     ]
     flag_items = flags.all()
-    distress_flags = [f for f in flag_items if f.severity in ("distress", "confusion")]
+    distress_flags = [f for f in flag_items if f.severity in HIGH_PRIORITY_SEVERITIES]
     if distress_flags:
         latest = distress_flags[-1]
         disclosed = "✅ **Disclosed to Senior in conversation**" if latest.disclosed_to_senior else "⚠️ **NOT yet disclosed**"
@@ -323,7 +324,7 @@ def _format_mobile_alert_strip(session_id: str | None) -> str:
         return ""
     data_dir, _ = _session_dirs(session_id)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
-    distress_flags = [f for f in flags.all() if f.severity in ("distress", "confusion")]
+    distress_flags = [f for f in flags.all() if f.severity in HIGH_PRIORITY_SEVERITIES]
     if not distress_flags:
         return ""
     latest = distress_flags[-1]
