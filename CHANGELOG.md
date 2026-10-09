@@ -10,6 +10,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Changed
+- The companion's output voice is now an offline **neural** voice (Piper, `en_US-lessac-medium`) when its CLI and voice model are present, replacing the robotic espeak-ng/System.Speech voice that ADR-001 had accepted as a Design-score tradeoff (#52, ADR-008). It is auto-detected and optional: with no voice model installed the demo falls back automatically to the previous espeak-ng/System.Speech/pyttsx3 path, so no extra install is required to run `main`. Fully offline — no network or API key at runtime. Each sentence is synthesized in its own clean subprocess, so the #28 long-running-silence fix is preserved.
+
 ### Added
 - Model-level distress backstop (#56): the async AUDIT pass now evaluates the senior's transcript for long-tail distress phrasings and severe crisis, emitting `DISTRESS` or `CRISIS` verdicts to raise the caregiver flag with zero added latency on the critical path.
 
