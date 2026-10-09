@@ -201,6 +201,94 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(len(after), 1)
         self.assertIsNone(res.memory_saved)
 
+    @patch("pipeline.orchestrator.fastpath.check")
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.orchestrator.think.stream_reply", return_value=["Reply"])
+    def test_lifestyle_extraction_triggers_disclosure(self, mock_stream, mock_speak, mock_fast):
+        from safety.fastpath import FastPathResult
+        mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        
+        with patch("pipeline.orchestrator.think.extract_new_memory", return_value="LIFESTYLE: SLEEP | Slept poorly due to back pain"):
+            res = run_turn(
+                "I barely slept last night, my back was killing me.",
+                self.store, self.flags, self.audio_dir, caregiver_name="Sarah",
+            )
+            res.background_thread.join(timeout=10)
+            
+        # Verify the disclosure was spoken via _speak_turn
+        # Note: _speak_turn is called twice (once for reply, once for disclosure)
+        speak_calls = [c.args[0] for c in mock_speak.call_args_list]
+        disclosures = []
+        for call_iter in speak_calls:
+            # We must exhaust the iterator to see the text
+            text = list(call_iter)[0]
+            if "I'm making a quick note" in text:
+                disclosures.append(text)
+                
+        self.assertEqual(len(disclosures), 1)
+        self.assertIn("Sarah", disclosures[0])
+        self.assertIn("sleep", disclosures[0])
+        
+        # Verify it was added to memory with the LIFESTYLE scope
+        items = self.store.all()
+        lifestyle_items = [i for i in items if i.scope == "lifestyle"]
+        self.assertEqual(len(lifestyle_items), 1)
+        self.assertEqual(lifestyle_items[0].text, "Slept poorly due to back pain")
+
+    @patch("pipeline.orchestrator.fastpath.check")
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.orchestrator.think.stream_reply", return_value=["Reply"])
+    def test_quiet_mode_hour_parsing(self, mock_stream, mock_speak, mock_fast):
+        from safety.fastpath import FastPathResult
+        mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        
+        # Test "8-10" becomes 10 (not 810)
+        with patch("pipeline.orchestrator.think.extract_new_memory", return_value="QUIET_MODE: 8-10"):
+            res = run_turn("I want to rest for 8-10 hours", self.store, self.flags, self.audio_dir, caregiver_name="Sarah")
+            res.background_thread.join(timeout=10)
+        self.assertIn("Activated Quiet Mode (10.0 hours)", res.memory_saved)
+
+        # Test absurd value clamped to 24
+        with patch("pipeline.orchestrator.think.extract_new_memory", return_value="QUIET_MODE: 1000"):
+            res = run_turn("Sleep forever", self.store, self.flags, self.audio_dir, caregiver_name="Sarah")
+            res.background_thread.join(timeout=10)
+        self.assertIn("Activated Quiet Mode (24.0 hours)", res.memory_saved)
+        
+        # Test missing value uses default 4.0
+        with patch("pipeline.orchestrator.think.extract_new_memory", return_value="QUIET_MODE: I am tired"):
+            res = run_turn("I am tired", self.store, self.flags, self.audio_dir, caregiver_name="Sarah")
+            res.background_thread.join(timeout=10)
+        self.assertIn("Activated Quiet Mode (4.0 hours)", res.memory_saved)
+
+    def test_quiet_mode_offline_suppression_and_breakthrough(self):
+        # Activate quiet mode
+        self.store.set_quiet_mode(hours=4.0)
+        self.assertTrue(self.store.is_quiet_mode_active())
+        
+        # Proactive turn should be blocked
+        res1 = run_turn("[PROACTIVE_TRIGGER]", self.store, self.flags, self.audio_dir, caregiver_name="Sarah", is_proactive=True)
+        self.assertEqual(res1.audit_verdict, "Blocked by Quiet Mode")
+        self.assertEqual(res1.audio_paths, [])
+        self.assertEqual(res1.reply_text, "")
+        
+        # Add a non-urgent schedule update
+        self.store.add("Sarah is coming at 4 PM", source="caregiver_memo")
+        res2 = run_turn("[PROACTIVE_TRIGGER]", self.store, self.flags, self.audio_dir, caregiver_name="Sarah", is_proactive=True)
+        self.assertEqual(res2.audit_verdict, "Blocked by Quiet Mode")
+        
+        # Add an [URGENT] schedule update
+        self.store.add("[URGENT] Sarah is in the ER today", source="caregiver_memo")
+        with patch("pipeline.orchestrator.think.stream_reply", return_value=["Oh no!"]):
+            res3 = run_turn("[PROACTIVE_TRIGGER]", self.store, self.flags, self.audio_dir, caregiver_name="Sarah", is_proactive=True)
+            
+        self.assertNotEqual(res3.audit_verdict, "Blocked by Quiet Mode")
+        self.assertIn("share something urgent", res3.reply_text)
+        # Should only include the urgent update
+        self.assertEqual(res3.memories_used, ["[URGENT] Sarah is in the ER today"])
+        
+        if res3.background_thread:
+            res3.background_thread.join(timeout=10)
+
     @patch("pipeline.think.stream_reply")
     def test_progressive_circuit_breaker_on_consecutive_errors(self, mock_stream):
         # On 2nd consecutive error, circuit breaker trips: does NOT ask Dad to repeat!

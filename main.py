@@ -34,11 +34,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    def load_dotenv():  # noqa: E731
-        pass
+from envload import load_repo_env
 
 from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags
 from memory.store import MemoryStore
@@ -265,7 +261,7 @@ def chat_loop(play: bool = True) -> None:
 if __name__ == "__main__":
     print("\n[TRANSPARENCY NOTICE] You are interacting with ForeverYours, an AI companion. This is not a human.")
     print("[PRIVACY NOTICE] By speaking into the microphone, you consent to your voice being recorded and transcribed locally.\n")
-    load_dotenv()
+    load_repo_env()
     args = sys.argv[1:]
     if not args:
         print(__doc__)
