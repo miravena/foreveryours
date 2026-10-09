@@ -603,14 +603,8 @@ def build_demo() -> gr.Blocks:
         gr.Markdown(
             "# ForeverYours\n"
             "**⚠️ TRANSPARENCY NOTICE: You are interacting with an Artificial Intelligence (AI) companion, not a human.**\n\n"
-            "Watch both sides at once: talk or type as the senior on the left, watch the caregiver side "
-            "on the right update live. Try an ordinary remark first, then try something like "
-            "\"I fell down earlier\" -- the right side updates within a couple seconds, "
-            "and the reply on the left tells Dad, out loud, that it's doing that.\n\n"
-            "Your tab is its own private demo household, already briefed by Dad's daughter "
-            "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
-            "this link sees it, and its memory, flags and audio are deleted when you close "
-            "the tab or after an hour."
+            "Talk or type as the senior on the left; the caregiver side on the right updates live. "
+            "No mic? Use a sample clip below. Try \"I fell down earlier\" to see the honest-disclosure moment."
         )
         gr.Markdown(
             "🤖 **This is an AI companion, not a person.** "
@@ -618,12 +612,6 @@ def build_demo() -> gr.Blocks:
         )
         history_state = gr.State([])
         session_state = gr.State(None, time_to_live=SESSION_TTL_S, delete_callback=_end_session)
-
-        if DEV_MODE:
-            with gr.Accordion("Model & Pipeline Info", open=True):
-                gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
-                            "**Audio Perception (HEAR):** `faster-whisper` (local CPU)\n\n"
-                            "*Background memory extraction & safety audit run asynchronously via Nebius Token Factory.*")
 
         with gr.Row():
             with gr.Column():
@@ -690,6 +678,23 @@ def build_demo() -> gr.Blocks:
                         with gr.TabItem("Record Voice Memo"):
                             memo_audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Record context memo")
                             save_audio_memo_btn = gr.Button("Save Voice Memo", variant="secondary")
+
+        # Below the product on purpose (#21 / Design review): the split-screen
+        # above is the hero, so the longer context and the dev telemetry sit
+        # under it, collapsed, rather than pushing the demo below the fold.
+        with gr.Accordion("About this demo household", open=False):
+            gr.Markdown(
+                "Your tab is its own private demo household, already briefed by Dad's daughter "
+                "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
+                "this link sees it, and its memory, flags and audio are deleted when you close "
+                "the tab or after an hour."
+            )
+
+        if DEV_MODE:
+            with gr.Accordion("Model & Pipeline Info", open=False):
+                gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
+                            "**Audio Perception (HEAR):** `faster-whisper` (local CPU)\n\n"
+                            "*Background memory extraction & safety audit run asynchronously via Nebius Token Factory.*")
 
         run_btn.click(
             fn=run_demo_turn_streaming,
