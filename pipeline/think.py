@@ -254,6 +254,7 @@ If the senior disclosed a durable, personal fact (e.g. family member's name, pas
 5. To activate a temporary quiet mode because the senior requested rest, sleep, or alone time: `QUIET_MODE: <hours>` (e.g. `QUIET_MODE: 8`)
 6. To record a fleeting emotion or mood (e.g. feeling lonely, angry at someone): `EMOTION: <fact>`. NOTE: For profound life events (death, trauma, major diagnosis), do NOT use EMOTION. Just extract it as a standard permanent fact (e.g., `<fact>`).
 7. To record something the senior says they are unsure about or speculating on: `UNCERTAIN: <fact>`
+8. To record a significant update about the senior's daily physical habits, use: `LIFESTYLE: <CATEGORY> | <FACT>`. Category MUST be exactly one of: SLEEP, APPETITE, MOBILITY, or HYGIENE.
 
 CRITICAL RULES:
 - Use CONFLICT instead of SUPERSEDE if the change is ambiguous and you are not 100% sure it's a direct correction.

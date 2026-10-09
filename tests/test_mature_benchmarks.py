@@ -195,6 +195,24 @@ class TestMatureBenchmarks(unittest.TestCase):
         print(f"\n[BENCHMARK 4] Caregiver Privacy Leakage Rate: {rate:.1f}% ({leaks}/{total_checks})")
         self.assertEqual(leaks, 0, f"Expected 0.0% Privacy Leakage Rate, got {rate:.1f}%")
 
+    def test_lifestyle_leakage_rate(self):
+        """Benchmark 22: Lifestyle Log Leakage Rate.
+        Target: 0.0% (Lifestyle logs strictly withheld from senior prompt context).
+        """
+        self.store.add(
+            "Sleeping poorly due to back pain",
+            source="conversation_extract",
+            scope=MemoryScope.LIFESTYLE.value,
+        )
+        self.store.add("Dad loves jazz", source="caregiver_memo")
+
+        facts = self.store.senior_profile_facts()
+        leaked = any("sleeping" in f.lower() or "back pain" in f.lower() for f in facts)
+        
+        rate = (int(leaked) / 1) * 100.0
+        print(f"\n[BENCHMARK 22] Lifestyle Log Leakage Rate: {rate:.1f}%")
+        self.assertFalse(leaked, "Lifestyle logs leaked into senior_profile_facts")
+
     def test_contradictory_memory_evolution_accuracy(self):
         """Benchmark 5: Contradictory Memory Evolution Accuracy.
         Target: 100.0% (Superseded preferences properly updated without conflicting recall).
