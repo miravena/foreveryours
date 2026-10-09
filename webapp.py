@@ -53,11 +53,8 @@ if __name__ == "__main__":
     # a real key depending on process/import order (#81 D2). Must run before
     # the os.environ.get() constants below, or they'd miss .env values
     # (Codex review, PR #90) -- hence the guard sits here, not at EOF.
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except ImportError:
-        pass
+    from envload import load_repo_env
+    load_repo_env()
 
 import re
 import shutil
