@@ -109,6 +109,33 @@ commodity, but "stronger recall" is a prediction until measured.
 - ElliQ, inTouch or another product documents disclosure-first alerts.
 - Post-submission, if barge-in becomes scope (FastRTC, Pipecat or LiveKit).
 
+## Provenance and cost (2026-10-09)
+
+Who and what produced this ADR, so the cost of the research is tracked next to the decision.
+Dollar figures are **list-price equivalents** of the tokens used, not necessarily what was
+billed (the Claude usage ran on a flat-rate plan). Claude token counts and costs come from
+Claude Code's own OpenTelemetry usage metrics; Codex counts come from its session log.
+Totals include web search/fetch helper calls but not per-search tool fees.
+
+| Role | Harness : model | Effort | Input (uncached / cache read / cache write) | Output | List-price cost |
+|---|---|---|---|---|---|
+| Scan, drafting, revisions | claude-code : claude-sonnet-5-5 | medium | 70 / 3,498,334 / 329,779 | 28,310 | $2.30 |
+| Web search and fetch helper | claude-code : claude-haiku-5-5 | n/a | 367,429 / 0 / 0 | 28,554 | $0.19 (telemetry figure) |
+| Independent review 1 | claude-code : claude-opus-5-5 (subagent) | unknown (harness default) | 34 / 1,168,851 / 88,824 | 12,215 | $0.92 |
+| Independent review 2 | codex : gpt-6.1-sol, live web search, read-only | high | 146,617 / 2,502,400 cached / n/a | 11,900 (1,881 reasoning) | $0.66 |
+| **Total** | | | | | **about $4.08** |
+
+Rates used ($ per million tokens). Claude Opus 5.5: $4 input, $20 output, $0.20 cache read, $5
+cache write (5-minute). Claude Sonnet 5.5: $2 input, $10 output, $0.20 cache read, $4 cache
+write (1-hour). Both reproduce the telemetry cost to the cent. Claude Haiku 5.5 is $0.10 / $0.50
+for prompts up to 100K tokens and more beyond, so its figure is the telemetry number rather
+than a rate-card calculation. gpt-6.1-sol: $2 input, $0.10 cached input, $10 output; **these
+come from a third-party pricing aggregator and one news article, not an OpenAI page**, so treat
+the Codex cost as an estimate. Claude rates are from Anthropic's published model table as
+cached on 2026-10-06. The Sonnet row covers the whole working session, including the first
+scan and the two drafts, not only the review rounds. The Opus review and the Codex review
+each ran once.
+
 ## Sources (checked 2026-10-09)
 
 - Kokoro-82M: <https://huggingface.co/hexgrad/Kokoro-82M> · misaki deps: <https://github.com/hexgrad/misaki/blob/main/pyproject.toml> · kokoro-onnx: <https://github.com/thewh1teagle/kokoro-onnx>
