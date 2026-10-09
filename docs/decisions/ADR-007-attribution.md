@@ -84,3 +84,28 @@ a warning, promoting it to a failure is one line and costs nothing.
 A commit lands with an AI identity in the author field (the convention failed,
 and the warn-only guardrail missed it) — or the attribution workflow has stayed
 warning-free for a week, in which case decide whether it becomes a failure.
+
+## Amendment 2026-10-09: `Assisted-by` replaces `Co-Authored-By` for AI
+
+**Decided by:** maintainer (founder), 2026-10-09. **Related issue:** [#42](../../issues/42).
+
+**Change.** AI help is recorded as `Assisted-by: <harness>:<model id> effort=<level>`
+trailers, one per harness/model, and **no longer as `Co-Authored-By`**. The human stays
+the author and is responsible for the commit. Format and how-to: `CONTRIBUTING.md` ->
+"Recording which model did what".
+
+**Why.** The two goals differ. `Co-Authored-By` is a credit mechanism: it names a tool or
+vendor as a co-author, carries no model id or effort, and (when the email maps to a
+GitHub account) puts that account on the graph. What we need for debugging and for
+cross-vendor review (`REVIEW.md`) is which harness, model and effort produced a change.
+`Assisted-by` follows the Linux kernel's `Assisted-by: AGENT_NAME:MODEL_VERSION` and
+Fedora's AI-contribution policy, neither of which uses an email. `effort=` is our own
+extension; neither source defines an effort field.
+
+**Unchanged.** Author = the human with a GitHub-linked email; no rewrite of old commits
+(the 36 mis-credited and every existing `Co-Authored-By` stay); guardrails warn, never
+block. A warn-only check for a missing `Assisted-by` is a follow-up, not part of this
+change.
+
+**Revisit if** a reviewer or the Contributors graph needs the tool credited as a
+co-author again, or the kernel/Fedora convention changes.

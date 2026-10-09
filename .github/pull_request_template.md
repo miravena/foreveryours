@@ -15,4 +15,4 @@
 - [ ] `docs/WORK_LOG.md` entry added; ADR added if a decision was made
 - [ ] `main` stays demo-able (README three-beat demo still works)
 - [ ] No `.env`, keys, `data/` or `out/` committed
-- [ ] Commit authors are humans with a GitHub-linked email; AI help appears only as `Co-Authored-By` + `Assisted-by` trailers, and the Provenance block above is filled in (see CONTRIBUTING.md → Commit attribution)
+- [ ] Commit authors are humans with a GitHub-linked email; AI help appears only as `Assisted-by` trailers (harness:model effort=level; no `Co-Authored-By` for AI), and the Provenance block above is filled in (see CONTRIBUTING.md → Commit attribution)

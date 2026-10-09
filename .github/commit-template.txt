@@ -8,15 +8,11 @@
 #   287302999+elevenbaselab@users.noreply.github.com   (Settings -> Emails -> "Keep my
 #   email addresses private"). Never put an AI identity in the author field.
 #
-# AI help goes below as trailers only, one per provider/model. Uncomment what applies:
+# AI help goes below as `Assisted-by` trailers only: harness:model id and effort, one per
+# model, no email, and NO Co-Authored-By for AI (CONTRIBUTING.md -> "Recording which model
+# did what"). Write `unknown` if you can't tell; never leave the line out. Uncomment:
 #
-# Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
-# Co-Authored-By: MiMo v2.6 Flash Free <noreply@opencode.ai>
-#
-# And the exact harness:model id, one per model (CONTRIBUTING.md -> "Recording which
-# model did what"). Use :unknown if you can't tell, never leave it out:
-#
-# Assisted-by: ClaudeCode:claude-sonnet-5-5
-# Assisted-by: OpenCode:mimo-v2.6-flash-free
+# Assisted-by: ClaudeCode:claude-sonnet-5-5 effort=medium
+# Assisted-by: OpenCode:mimo-v2.6-flash-free effort=unknown
 #
 # (Commented lines are stripped automatically by git.)

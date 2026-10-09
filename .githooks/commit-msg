@@ -14,8 +14,7 @@ cat >&2 <<EOF
 
 WARNING: author email '$email' is not a known GitHub-linked address.
 Commits with an unlinked author email do not appear under your account in the
-Contributors graph (they credit nobody, while any Co-Authored-By trailer still
-credits the assistant). Expected something ending in
+Contributors graph (they credit nobody). Expected something ending in
 @users.noreply.github.com — see CONTRIBUTING.md -> "Commit attribution".
 
 EOF
