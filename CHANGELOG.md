@@ -23,6 +23,7 @@ rename `Unreleased` to the version and date, then tag it.
   and `REVIEW.md`.
 
 ### Changed
+- Honest-disclosure UI (#66 B/C): the recording/processing notice now sits directly above the microphone and states accurately what happens to captured audio — recorded, transcribed locally, and the transcript (not the audio) sent to Nebius Token Factory for the reply and safety check, deleted on tab close. The top-of-page notice keeps the always-visible AI disclosure and privacy-notice link; the duplicated recording clause there was removed so the page states recording once, accurately, where the user acts.
 - Hosting hardening per the judge red-team (#81, #11 row 8): the per-turn Nebius call now uses
   `OpenAI(timeout=20, max_retries=1)` instead of the SDK's 600s/2-retry default, so a hung call
   surfaces as a fallback reply instead of a ten-minute spinner. The browser page shows "Companion

@@ -60,6 +60,9 @@ aspirational. **If a rule isn't true of the code, fix the code or this file in t
   happens, so it must be warm and plain — no model names, no "system", no alarm.
 - **Every tab is its own demo household.** No state may cross `FY_SESSIONS_DIR` sessions; one
   judge must never see another judge's conversation.
+- **The AI-disclosure notice is always visible above the fold** (title block); the
+  recording/processing notice sits next to the input the user acts on (the mic) and states only
+  what the pipeline actually does — transcript, not audio, goes to Nebius by default.
 
 ## Tests
 

@@ -607,8 +607,8 @@ def build_demo() -> gr.Blocks:
             "the tab or after an hour."
         )
         gr.Markdown(
-            "🤖 **This is an AI companion, not a person.** Everything you say here is recorded and "
-            f"transcribed to generate a reply. Read the [privacy notice]({PRIVACY_NOTICE_URL}) before you speak."
+            "🤖 **This is an AI companion, not a person.** "
+            f"Read the [privacy notice]({PRIVACY_NOTICE_URL}) before you speak."
         )
         history_state = gr.State([])
         session_state = gr.State(None, time_to_live=SESSION_TTL_S, delete_callback=_end_session)
@@ -623,6 +623,16 @@ def build_demo() -> gr.Blocks:
             with gr.Column():
                 gr.Markdown("## 🧑 Senior side")
                 mobile_alert = gr.Markdown("", elem_classes=["mobile-alert-strip"])
+                # Recording/processing notice sits next to the input the user
+                # acts on and states only what the pipeline actually does: the
+                # transcript (not the audio) leaves the device by default
+                # (ASR is local faster-whisper), mirroring the caregiver panel's
+                # already-vetted wording so both sides agree (#66 B/C).
+                gr.Markdown(
+                    "🎙️ *When you speak or type here, it is recorded and turned into text. "
+                    "That text (not your voice recording) is sent to Nebius Token Factory to write a "
+                    "reply and run a safety check, then deleted when you close this tab.*"
+                )
                 audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Speak (as the senior)")
                 text_in = gr.Textbox(
                     placeholder="Or type what Dad says (e.g. 'I fell down earlier' or 'Who is Sarah?')...",
