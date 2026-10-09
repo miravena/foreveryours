@@ -454,6 +454,30 @@ def run_turn(
                         fact = saved_cmd.split(":", 1)[1].strip()
                         memory_store.add(fact, source="conversation_extract", scope="uncertain")
                         result.memory_saved = f"Uncertain: {fact}"
+                    elif saved_cmd.startswith("LIFESTYLE:"):
+                        parts = saved_cmd.split(":", 1)[1].split("|", 1)
+                        if len(parts) == 2:
+                            category = parts[0].strip().lower()
+                            fact = parts[1].strip()
+                            
+                            # Synthesize and speak the disclosure
+                            disclosed = False
+                            try:
+                                disclosure_text = f"I'm making a quick note for {caregiver_name} about your {category} so they know how you're feeling lately."
+                                _, extra_paths, _ = _speak_turn(iter([disclosure_text]), audio_out_dir)
+                                result.audio_paths.extend(extra_paths)
+                                disclosed = True
+                            except Exception:
+                                disclosed = False
+                                
+                            if disclosed:
+                                import time
+                                # TTL of 7 days (604800 seconds)
+                                expires_at = time.time() + (7 * 24 * 3600)
+                                memory_store.add(fact, source="conversation_extract", scope="lifestyle", expires_at=expires_at)
+                                result.memory_saved = f"Lifestyle ({category}): {fact}"
+                            else:
+                                result.memory_saved = f"Suppressed Lifestyle ({category}) due to disclosure failure"
                     else:
                         memory_store.add(saved_cmd, source="conversation_extract")
                         result.memory_saved = saved_cmd

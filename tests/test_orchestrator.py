@@ -201,6 +201,40 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(len(after), 1)
         self.assertIsNone(res.memory_saved)
 
+    @patch("pipeline.orchestrator.fastpath.check")
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.orchestrator.think.stream_reply", return_value=["Reply"])
+    def test_lifestyle_extraction_triggers_disclosure(self, mock_stream, mock_speak, mock_fast):
+        from safety.fastpath import FastPathResult
+        mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        
+        with patch("pipeline.orchestrator.think.extract_new_memory", return_value="LIFESTYLE: SLEEP | Slept poorly due to back pain"):
+            res = run_turn(
+                "I barely slept last night, my back was killing me.",
+                self.store, self.flags, self.audio_dir, caregiver_name="Sarah",
+            )
+            res.background_thread.join(timeout=10)
+            
+        # Verify the disclosure was spoken via _speak_turn
+        # Note: _speak_turn is called twice (once for reply, once for disclosure)
+        speak_calls = [c.args[0] for c in mock_speak.call_args_list]
+        disclosures = []
+        for call_iter in speak_calls:
+            # We must exhaust the iterator to see the text
+            text = list(call_iter)[0]
+            if "I'm making a quick note" in text:
+                disclosures.append(text)
+                
+        self.assertEqual(len(disclosures), 1)
+        self.assertIn("Sarah", disclosures[0])
+        self.assertIn("sleep", disclosures[0])
+        
+        # Verify it was added to memory with the LIFESTYLE scope
+        items = self.store.all()
+        lifestyle_items = [i for i in items if i.scope == "lifestyle"]
+        self.assertEqual(len(lifestyle_items), 1)
+        self.assertEqual(lifestyle_items[0].text, "Slept poorly due to back pain")
+
     @patch("pipeline.think.stream_reply")
     def test_progressive_circuit_breaker_on_consecutive_errors(self, mock_stream):
         # On 2nd consecutive error, circuit breaker trips: does NOT ask Dad to repeat!

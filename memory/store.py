@@ -232,9 +232,12 @@ class MemoryStore:
     def delete(self, text: str) -> None:
         """Marks an active memory as deleted (e.g. per user request)."""
         text = text.replace("[UNVERIFIED/UNCERTAIN]: ", "").replace("[EMOTIONAL STATE]: ", "")
+        # Strip date prefix like [2026-10-09] 
+        text = re.sub(r"^\[\d{4}-\d{2}-\d{2}\]\s+", "", text)
         for item in self._items:
             if item.text.lower() == text.lower() and item.status == "active":
                 item.status = "deleted"
+                item.text = "[DELETED]" # Erase from disk
         self._flush()
 
     def supersede(self, old_text: str, new_text: str, source: str = "conversation_extract") -> MemoryItem:
@@ -243,6 +246,10 @@ class MemoryStore:
         e.g. a 2-hour schedule update stays temporary after correction."""
         old_text = old_text.replace("[UNVERIFIED/UNCERTAIN]: ", "").replace("[EMOTIONAL STATE]: ", "")
         new_text = new_text.replace("[UNVERIFIED/UNCERTAIN]: ", "").replace("[EMOTIONAL STATE]: ", "")
+        
+        # Strip date prefix like [2026-10-09]
+        old_text = re.sub(r"^\[\d{4}-\d{2}-\d{2}\]\s+", "", old_text)
+        new_text = re.sub(r"^\[\d{4}-\d{2}-\d{2}\]\s+", "", new_text)
         
         inherited_scope = MemoryScope.PERMANENT.value
         inherited_privacy = PrivacyLevel.PUBLIC_TO_SENIOR.value
@@ -382,7 +389,7 @@ class MemoryStore:
             elif item.scope == MemoryScope.EMOTIONAL.value:
                 facts.append(f"[EMOTIONAL STATE]: {item.text}")
             elif item.scope == MemoryScope.LIFESTYLE.value:
-                facts.append(f"[LIFESTYLE LOG]: {item.text}")
+                continue  # Never leak lifestyle logs into senior-facing context!
             elif item.text == "[QUIET_MODE]":
                 pass
             else:
@@ -398,12 +405,14 @@ class MemoryStore:
         import zoneinfo
         current_time = now or time.time()
         logs = []
+        mutated = False
         for i in self._items:
             if i.scope == MemoryScope.LIFESTYLE.value and i.status == "active":
                 # Expire after 7 days
                 if i.expires_at and current_time >= i.expires_at:
                     i.status = "expired"
-                    self._flush()
+                    i.text = "[EXPIRED]" # Remove text from disk per privacy requirements
+                    mutated = True
                     continue
                 
                 dt_utc = datetime.datetime.fromtimestamp(i.created_at, tz=datetime.timezone.utc)
@@ -413,4 +422,6 @@ class MemoryStore:
                     dt_local = dt_utc
                 date_str = dt_local.strftime("%Y-%m-%d")
                 logs.append(f"[{date_str}] {i.text}")
+        if mutated:
+            self._flush()
         return logs
