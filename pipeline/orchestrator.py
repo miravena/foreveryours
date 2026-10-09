@@ -231,10 +231,32 @@ def run_turn(
     # ---------------------------------------------------------
     # AI RESTRAINT: QUIET MODE
     # ---------------------------------------------------------
+    guardrails = memory_store.caregiver_guardrails()
+    raw_schedule = memory_store.caregiver_schedule_updates(now=t_now)
+    
     if is_proactive and memory_store.is_quiet_mode_active(now=t_now):
-        # Allow Breakthroughs for urgent caregiver schedule updates
-        breakthrough = any(word in u.upper() for u in raw_schedule for word in ["NOW", "URGENT", "EMERGENCY", "CRITICAL", "IMPORTANT"])
-        if not breakthrough:
+        # Allow Breakthroughs for explicit [URGENT] caregiver schedule updates
+        urgent_updates = [u for u in raw_schedule if "[URGENT]" in u.upper()]
+        
+        if urgent_updates:
+            # We break through, but scope it to the urgent updates only
+            raw_schedule = urgent_updates
+            
+            # Disclose the breakthrough to the senior
+            breakthrough_reply = f"I know you asked for some quiet time, but {caregiver_name} asked me to share something urgent."
+            _, breakthrough_paths, breakthrough_first_time = _speak_turn(iter([breakthrough_reply]), audio_out_dir, on_chunk=on_chunk)
+            immediate_audio_paths.extend(breakthrough_paths)
+            if first_audio_time is None:
+                first_audio_time = breakthrough_first_time
+            
+            immediate_reply_text = (immediate_reply_text + " " + breakthrough_reply).strip()
+            
+            # Instruct the LLM to deliver the urgent message without apologizing again (since we just did)
+            continuation_note = "INSTRUCTION: You are breaking Quiet Mode to deliver this [URGENT] caregiver update. Deliver it gently and concisely. Do NOT apologize for interrupting, as you already apologized."
+            
+            # Force intent to LOGISTICAL so the schedule updates are actually passed to the LLM
+            intent = Intent.LOGISTICAL
+        else:
             return TurnResult(
                 transcript=transcript,
                 reply_text="",
@@ -243,8 +265,6 @@ def run_turn(
             )
     # ---------------------------------------------------------
 
-    guardrails = memory_store.caregiver_guardrails()
-    raw_schedule = memory_store.caregiver_schedule_updates(now=t_now)
     caregiver_updates = [_sanitize_caregiver_update(u, caregiver_name) for u in raw_schedule]
     profile_facts = memory_store.senior_profile_facts(now=t_now)
     recalled = [m.text for m in memory_store.search(transcript, now=t_now)]
@@ -437,12 +457,14 @@ def run_turn(
                         parts = saved_cmd.split(":")
                         hours = 4.0
                         if len(parts) > 1:
-                            try:
-                                import re
-                                hours_str = re.sub(r"[^\d\.]", "", parts[1])
-                                hours = float(hours_str)
-                            except ValueError:
-                                pass
+                            import re
+                            nums = re.findall(r"\d+(?:\.\d+)?", parts[1])
+                            if nums:
+                                try:
+                                    hours = max(float(n) for n in nums)
+                                    hours = max(1.0, min(hours, 24.0)) # clamp between 1 and 24 hours
+                                except ValueError:
+                                    hours = 4.0
                         memory_store.set_quiet_mode(hours=hours)
                         result.memory_saved = f"Activated Quiet Mode ({hours} hours)"
                     elif saved_cmd.startswith("EMOTION:"):

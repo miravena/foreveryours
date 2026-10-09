@@ -135,7 +135,19 @@ class TestWebappSessions(unittest.TestCase):
 
         self.assertIn("No flags yet", webapp._format_caregiver_panel(judge_b))
 
-
+    def test_crisis_flag_renders_in_alerts(self):
+        session_id, _ = webapp.init_session()
+        self._turn("I want to die", session_id)
+        
+        panel = webapp._format_caregiver_panel(session_id)
+        strip = webapp._format_mobile_alert_strip(session_id)
+        
+        self.assertIn("HIGH PRIORITY SAFETY ALERT DISPATCHED", panel)
+        self.assertIn("CRISIS", panel)
+        
+        self.assertIn("Caregiver alert:", strip)
+        self.assertNotIn("No flags yet", panel)
+        self.assertNotEqual(strip, "")
 
     def test_end_session_deletes_everything(self):
 

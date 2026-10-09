@@ -77,7 +77,7 @@ def _normalize(text: str) -> str:
 @dataclass
 class FastPathResult:
     triggered: bool
-    severity: str  # "none" | "confusion" | "distress"
+    severity: str  # "none" | "confusion" | "distress" | "crisis"
     immediate_reply: str | None   # spoken right away, before THINK runs
     continuation_note: str | None  # fed into THINK so the turn doesn't dead-end
     caregiver_flag: str | None
