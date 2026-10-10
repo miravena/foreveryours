@@ -74,6 +74,11 @@ do the per-fact extraction instead.
 Nothing else is kept on purpose, but audio does touch disk, so here is
 exactly where and for how long (issue #18):
 
+Lifestyle observations are a separate caregiver-only scope. They are written
+only after the senior has heard the disclosure, expire after seven days, and
+are excluded from both senior-facing profile facts and conversational search.
+Expired legacy lifestyle records are scrubbed when the profile is loaded.
+
 - **Hosted web demo (`webapp.py`).** Each browser tab is its own throwaway
   household under `FY_SESSIONS_DIR`. The reply WAVs from one turn are deleted
   at the start of the next; the whole household (memory, flags, reply audio)

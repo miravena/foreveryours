@@ -108,19 +108,32 @@ class MemoryStore:
             logging.warning(f"Invalid timezone_str '{timezone_str}'. Falling back to UTC.")
             self.timezone_str = "UTC"
         self._items: list[MemoryItem] = self._load()
+        if getattr(self, "_load_mutated", False):
+            self._flush()
 
     def _load(self) -> list[MemoryItem]:
         if not self.path.exists():
             return []
         raw = json.loads(self.path.read_text())
         items = []
+        self._load_mutated = False
+        now = time.time()
         for d in raw:
             d.setdefault("scope", MemoryScope.PERMANENT.value)
             d.setdefault("privacy", PrivacyLevel.PUBLIC_TO_SENIOR.value)
             d.setdefault("expires_at", None)
             d.setdefault("status", "active")
             d.setdefault("superseded_by", None)
-            items.append(MemoryItem(**d))
+            item = MemoryItem(**d)
+            if item.scope == MemoryScope.LIFESTYLE.value:
+                if item.expires_at is None:
+                    item.expires_at = item.created_at + (7 * 24 * 3600)
+                    self._load_mutated = True
+                if item.status == "active" and now >= item.expires_at:
+                    item.status = "expired"
+                    item.text = "[EXPIRED]"
+                    self._load_mutated = True
+            items.append(item)
         return items
 
     def _flush(self) -> None:
@@ -139,9 +152,15 @@ class MemoryStore:
         scope: str = MemoryScope.PERMANENT.value,
         privacy: str = PrivacyLevel.PUBLIC_TO_SENIOR.value,
         expires_at: float | None = None,
+        disclosure_attested: bool = False,
     ) -> MemoryItem | None:
         """No-op (returns None) if this exact (text, source) is already active.
         Auto-infers TEMPORARY scope for schedule/time notes."""
+        if scope == MemoryScope.LIFESTYLE.value and not disclosure_attested:
+            raise ValueError("Lifestyle memory requires delivered disclosure attestation")
+        if scope == MemoryScope.LIFESTYLE.value:
+            expires_at = expires_at or (time.time() + 7 * 24 * 3600)
+            privacy = PrivacyLevel.CAREGIVER_ONLY.value
         if any(i.text == text and i.source == source and i.status == "active" for i in self._items):
             return None
         if scope == MemoryScope.PERMANENT.value and _TEMPORAL_MARKER_RE.search(text.lower()):
@@ -308,7 +327,11 @@ class MemoryStore:
 
         scored = []
         for item in self._items:
-            if item.source in CAREGIVER_SOURCES or not item.is_active(now):
+            if (
+                item.source in CAREGIVER_SOURCES
+                or item.scope == MemoryScope.LIFESTYLE.value
+                or not item.is_active(now)
+            ):
                 continue
             if item.privacy == PrivacyLevel.CAREGIVER_ONLY.value:
                 continue
