@@ -38,6 +38,10 @@ from .intent import Intent, detect_intent  # noqa: E402
 from .nebius_client import NebiusNotConfigured  # noqa: E402
 
 DISCLOSURE_LINE = "I want to let {caregiver} know about something I just said."
+CRISIS_DISCLOSURE_LINE = (
+    "I am also letting {caregiver} know that you may need support. "
+    "If you might hurt yourself or are in immediate danger, please call or text 988 now."
+)
 
 FALLBACK_REPLY_1 = "I'm right here with you, dear. My thoughts drifted for a second—could you say that one more time?"
 FALLBACK_REPLY_2 = "I'm having a little trouble with my connection right now, dear, but I'm still right here beside you. Take your time."
@@ -425,10 +429,13 @@ def run_turn(
             try:
                 status, verdict = audit.audit_reply(transcript, reply_text)
                 result.audit_verdict = verdict
-                if status != "SAFE":
+                if status in {"CRISIS", "DISTRESS", "UNSAFE"}:
                     disclosed = False
                     try:
-                        caregiver_text = DISCLOSURE_LINE.format(caregiver=caregiver_name)
+                        caregiver_template = (
+                            CRISIS_DISCLOSURE_LINE if status == "CRISIS" else DISCLOSURE_LINE
+                        )
+                        caregiver_text = caregiver_template.format(caregiver=caregiver_name)
                         extra_paths, disclosed = _speak_disclosure(
                             caregiver_text, audio_out_dir, on_chunk=on_chunk
                         )
@@ -443,7 +450,11 @@ def run_turn(
                     elif status == "UNSAFE":
                         flags.add(f"AUDIT flagged a reply as unsafe: {verdict}", severity="audit", disclosed_to_senior=disclosed)
             except Exception as exc:  # pragma: no cover - best-effort background task
-                result.audit_verdict = f"audit error: {exc}"
+                print(
+                    f"[orchestrator] audit failed: {type(exc).__name__}",
+                    file=sys.stderr,
+                )
+                result.audit_verdict = "unknown"
 
             try:
                 active_facts = memory_store.senior_profile_facts()

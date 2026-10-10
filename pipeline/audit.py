@@ -9,6 +9,7 @@ that's already been spoken -- see orchestrator.py's disclosure follow-up.
 from __future__ import annotations
 
 import os
+import re
 
 from .nebius_client import get_client
 
@@ -35,17 +36,13 @@ def audit_reply(transcript: str, reply: str) -> tuple[str, str]:
         ],
         max_tokens=300,
         temperature=0.0,
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
     text = (response.choices[0].message.content or "").strip()
-    clean_text = text.strip('*_ \n"').upper()
-    
-    if clean_text.startswith("CRISIS"):
-        status = "CRISIS"
-    elif clean_text.startswith("DISTRESS"):
-        status = "DISTRESS"
-    elif clean_text.startswith("UNSAFE"):
-        status = "UNSAFE"
+    match = re.match(r"^\s*[*_`\"']*(SAFE|UNSAFE|CRISIS|DISTRESS)\b", text, re.IGNORECASE)
+    if not match:
+        status = "UNKNOWN"
     else:
-        status = "SAFE"
-        
+        status = match.group(1).upper()
+
     return status, text

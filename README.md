@@ -37,13 +37,16 @@ HEAR (speech-to-text via local faster-whisper, offline-resilient)
   -> RECALL (memory search, scoped by caregiver-supplied context)
   -> THINK (NVIDIA Nemotron 3 Nano via Nebius Token Factory, streamed)
   -> SPEAK (streamed TTS, starts on the first sentence)
-  -> [async, off the critical path] AUDIT (safety pass) + memory extraction (via Nebius Nemotron)
+  -> [async, off the critical path] AUDIT (reply safety + transcript distress/crisis backstop) +
+     memory extraction (via Nebius Nemotron)
 ```
 
 Latency is treated as a first-class judging risk: the fast-path skips the LLM entirely for
 emergency/distress phrases, THINK streams tokens straight into sentence-sized TTS chunks, and the
 slower safety audit + memory-save step run in a background thread *after* the first sentence of
 audio is already on its way out. Target: under 2 seconds to first audio on the common path.
+AUDIT reads the senior transcript as well as the reply and grades `CRISIS`, `DISTRESS`, and
+`UNSAFE` separately; malformed or failed audit output is recorded as unknown rather than safe.
 **Measured:** 0.11s on the fast-path (no LLM); about 0.9s to first audio on the command-line beat
 on a live Nemotron turn with reasoning off (was 4.22s before, PR #25 -> PR #29). **The browser
 demo was slower than this** because AUDIT and memory extraction were joined onto the critical
