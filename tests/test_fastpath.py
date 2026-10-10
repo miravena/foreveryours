@@ -35,6 +35,7 @@ class TestFastPath(unittest.TestCase):
             "Help – I'm frightened",
             # #55 Criterion 1: "cannot" must fire like "can't"
             "I cannot get up",
+            "I have fall",
             "I cannot breathe",
             # #55 Criterion 2 (option A): a bare plea that is the whole message
             "help",
@@ -149,6 +150,11 @@ class TestFastPath(unittest.TestCase):
             "I'd be better off dead",
             "I want to kill myself",
             "I'm going to end my life",
+            "I am suicidal",
+            "I do not want to live",
+            "I want to end it all",
+            "I want to take my own life",
+            "Life isn't worth living",
             "suicide is the only way",
             "I can't take this anymore, I just want it to be over. I want to die.",
         ]
@@ -177,6 +183,10 @@ class TestFastPath(unittest.TestCase):
             "That cake is to die for. Honestly I want to die.",
             "I was laughing so hard! But seriously, I want to kill myself.",
             "I'm so tired I could die... I wish I was dead.",
+            "That cake is to die for, and I want to die.",
+            "I was laughing so hard, I want to kill myself.",
+            "I'm so tired I could die: I wish I was dead.",
+            "That cake is to die for\nand I want to die.",
         ]
         for phrase in mixed_cases:
             with self.subTest(phrase=phrase):

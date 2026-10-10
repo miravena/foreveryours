@@ -18,6 +18,7 @@ rename `Unreleased` to the version and date, then tag it.
 
 ### Fixed
 - Crisis fast-path false negatives (#105): Added missing direct suicidal phrasings and updated the false-positive guard to apply per-clause rather than globally, so real crisis statements are no longer suppressed by benign idioms in the same utterance.
+- Crisis fast-path coverage (#105): Added direct suicidal-language variants, matched-span idiom filtering, and whitespace normalization for ASR line breaks while preserving the false-positive benchmark.
 - Disclosure truthfulness (#117): safety, perseveration, audit, and lifestyle flags are persisted as disclosed only after non-empty audio is delivered; quiet-mode suppression now happens before proactive flagging, and late non-streaming disclosures remain explicitly undisclosed.
 
 ### Docs
