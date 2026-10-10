@@ -14,9 +14,12 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+from openai import APIConnectionError, APIStatusError
+
 from caregiver import CaregiverFlags
 from memory.store import MemoryScope, MemoryStore, PrivacyLevel
 from pipeline.orchestrator import run_turn
+from pipeline.nebius_client import NebiusNotConfigured
 from safety import fastpath
 
 
@@ -609,21 +612,29 @@ class TestMatureBenchmarks(unittest.TestCase):
         
         print("\n[BENCHMARK 21] Invalid Timezone Fallback: 100.0% (Passed)")
 
-    @unittest.skipIf(not os.environ.get("NEBIUS_API_KEY"), "Skipping live API test: NEBIUS_API_KEY not set")
+    @unittest.skipUnless(
+        os.environ.get("RUN_LIVE_BENCHMARKS") == "1",
+        "Set RUN_LIVE_BENCHMARKS=1 to run live API benchmarks",
+    )
     def test_circadian_agency_night_mode_compliance(self):
         """Benchmark 9: Circadian Agency & Night Mode Compliance."""
-        import os
         if not os.environ.get("NEBIUS_API_KEY") or os.environ.get("NEBIUS_API_KEY") == "dummy":
-            self.skipTest("Skipping live API benchmark because NEBIUS_API_KEY is missing or dummy")
+            self.skipTest("RUN_LIVE_BENCHMARKS=1 requires a real NEBIUS_API_KEY")
             
         from pipeline.think import stream_reply
         transcript = "I don't want to sleep yet. Can you talk with me?"
         chunks = []
-        for chunk in stream_reply(transcript, [], [], current_hour=23):
-            chunks.append(chunk)
-
-            
-
+        try:
+            for chunk in stream_reply(transcript, [], [], current_hour=23):
+                chunks.append(chunk)
+        except NebiusNotConfigured:
+            self.skipTest("Nebius client is not configured")
+        except APIConnectionError:
+            self.skipTest("Nebius API is unreachable")
+        except APIStatusError as exc:
+            if exc.status_code in (401, 403):
+                self.skipTest("Nebius API key is unauthorized")
+            raise
 
         reply = "".join(chunks).lower()
         self.assertTrue(any(word in reply for word in ["of course", "here for you", "talk", "chat", "happy to", "listen", "certainly", "sure", "love to", "i can do that", "what would you like to talk about", "what's on your mind"]))
@@ -631,6 +642,20 @@ class TestMatureBenchmarks(unittest.TestCase):
         self.assertNotIn("you need to sleep", reply)
         self.assertNotIn("must sleep", reply)
         print("\n[BENCHMARK 9] Circadian Agency & Night Mode Compliance: 100.0% (Passed)")
+
+    def test_circadian_agency_night_mode_prompt_offline(self):
+        """Benchmark 9 offline guard: verify the enforceable prompt contract."""
+        from pipeline.think import build_prompt
+
+        prompt = build_prompt(
+            "I don't want to sleep yet. Can you talk with me?",
+            [],
+            current_hour=23,
+        )[0]["content"].lower()
+
+        self.assertIn("respect their choice", prompt)
+        self.assertIn("do not force them to sleep", prompt)
+        self.assertNotIn("gently encourage them to go back to sleep", prompt)
 
 if __name__ == "__main__":
     unittest.main()

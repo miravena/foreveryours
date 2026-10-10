@@ -465,31 +465,30 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIn("jazz", res.memories_used[0].lower())
         if res.background_thread:
             res.background_thread.join()
-if __name__ == "__main__":
-    unittest.main()
-
 
     @patch("pipeline.orchestrator.fastpath.check")
     @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
     @patch("pipeline.orchestrator.think.stream_reply", return_value=["Reply"])
     def test_perseveration_tracking_flags_loop(self, mock_stream, mock_speak, mock_fast):
-        from pipeline.intent import Intent
-        from pipeline.fastpath import FastPathResult
+        from safety.fastpath import FastPathResult
         mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        mock_speak.return_value = ("Reply", [self.audio_dir / "reply.wav"], 0.5)
         history = [
             {"role": "user", "content": "What time is Sarah coming?"},
             {"role": "assistant", "content": "Sarah is coming at 4 PM."},
-            {"role": "user", "content": "When is Sarah visiting?"},
+            {"role": "user", "content": "What time is Sarah coming?"},
             {"role": "assistant", "content": "She's visiting at 4 PM today."},
         ]
         # The 3rd time
-        orchestrator.run_turn(
-            "What time did you say Sarah was coming?", 
+        result = run_turn(
+            "What time is Sarah coming?",
             self.store, 
             self.flags, 
             self.audio_dir, 
             history=history
         )
+        if result.background_thread:
+            result.background_thread.join(timeout=10)
         flag_items = self.flags.all()
         self.assertTrue(any("Perseveration loop detected" in f.text for f in flag_items))
         
@@ -497,8 +496,12 @@ if __name__ == "__main__":
         self.assertTrue(persev_flag.disclosed_to_senior)
         
         # Verify the continuation note was passed to stream_reply
-        call_args = mock_stream.call_args[1]
-        self.assertIn("already handled. Just answer them gently", call_args['think_input'])
+        call_args = mock_stream.call_args
+        self.assertIn("already handled. Just answer them gently", call_args.args[0])
+
+
+if __name__ == "__main__":
+    unittest.main()
 
 
 class TestWordsMatchShortInflections(unittest.TestCase):

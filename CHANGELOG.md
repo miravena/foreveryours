@@ -17,6 +17,7 @@ rename `Unreleased` to the version and date, then tag it.
 - Model-level distress backstop (#56): the async AUDIT pass now evaluates the senior's transcript for long-tail distress phrasings and severe crisis, emitting `DISTRESS` or `CRISIS` verdicts to raise the caregiver flag with zero added latency on the critical path.
 
 ### Fixed
+- Test integrity (#63, #107): live Benchmark 9 now requires explicit `RUN_LIVE_BENCHMARKS=1` opt-in, while its offline prompt contract always runs; only known missing-configuration, authorization, and connectivity failures skip live execution. Restored the perseveration regression test to discovery and added daemon boundary and missing-state coverage.
 - Crisis fast-path false negatives (#105): Added missing direct suicidal phrasings and updated the false-positive guard to apply per-clause rather than globally, so real crisis statements are no longer suppressed by benign idioms in the same utterance.
 - Crisis fast-path coverage (#105): Added direct suicidal-language variants, matched-span idiom filtering, and whitespace normalization for ASR line breaks while preserving the false-positive benchmark.
 - Disclosure truthfulness (#117): safety, perseveration, audit, and lifestyle flags are persisted as disclosed only after non-empty audio is delivered; quiet-mode suppression now happens before proactive flagging, and late non-streaming disclosures remain explicitly undisclosed.
