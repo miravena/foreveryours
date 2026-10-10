@@ -190,8 +190,19 @@ def run_turn(
         caregiver_updates = memory_store.caregiver_schedule_updates(time.time())
         if trigger_type == "hobby" and not active_facts:
             return TurnResult(transcript, "[Proactive turn suppressed by policy: No hobbies in context]", is_fallback=True)
-        if trigger_type == "reminder" and not caregiver_updates:
-            return TurnResult(transcript, "[Proactive turn suppressed by policy: No caregiver updates in context]", is_fallback=True)
+        if trigger_type == "reminder":
+            if not caregiver_updates:
+                return TurnResult(transcript, "[Proactive turn suppressed by policy: No caregiver updates in context]", is_fallback=True)
+            # Deduplication: suppress if key words from the reminder were already mentioned recently
+            if history:
+                recent_ai = " ".join([h.get("content", "").lower() for h in history[-4:] if h.get("role") == "assistant"])
+                update_text = " ".join(caregiver_updates).lower()
+                # Find meaningful words (5+ letters, skipping some common ones)
+                key_words = [w for w in re.findall(r'\b[a-z]{5,}\b', update_text) if w not in {"today", "tomorrow", "about", "there", "their", "would"}]
+                if key_words:
+                    matches = sum(1 for w in key_words if w in recent_ai)
+                    if matches >= min(2, len(key_words)):
+                        return TurnResult(transcript, "[Proactive turn suppressed by policy: Reminder already delivered recently]", is_fallback=True)
             
         # Two-Strike Suppression Rule (History Bloat)
         if history and len(history) >= 2:
@@ -486,7 +497,6 @@ def run_turn(
                         parts = saved_cmd.split(":")
                         hours = 4.0
                         if len(parts) > 1:
-                            import re
                             nums = re.findall(r"\d+(?:\.\d+)?", parts[1])
                             if nums:
                                 try:
