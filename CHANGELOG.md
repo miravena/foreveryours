@@ -17,6 +17,7 @@ rename `Unreleased` to the version and date, then tag it.
 - Model-level distress backstop (#56): the async AUDIT pass now evaluates the senior's transcript for long-tail distress phrasings and severe crisis, emitting `DISTRESS` or `CRISIS` verdicts to raise the caregiver flag with zero added latency on the critical path.
 
 ### Fixed
+- Proactive reminder dedup (#132): a caregiver reminder is now suppressed only when that specific schedule item was actually delivered to the senior in a recent turn, instead of whenever a couple of its words happened to appear in recent conversation. Time-sensitive reminders (e.g. "Sarah is dropping off groceries at 4 PM") are no longer silently dropped because of incidental word overlap with chit-chat.
 - Lifestyle privacy hardening (#106): lifestyle notes now require delivered-disclosure attestation, default to a seven-day TTL, are scrubbed on reload after expiry, and are excluded from conversational search.
 - Model safety backstop (#56): the asynchronous audit now parses whole-word verdicts, disables reasoning overhead, records malformed failures as `unknown` rather than `SAFE`, and uses crisis-specific 988/family disclosure wording.
 - Test integrity (#63, #107): live Benchmark 9 now requires explicit `RUN_LIVE_BENCHMARKS=1` opt-in, while its offline prompt contract always runs; only known missing-configuration, authorization, and connectivity failures skip live execution. Restored the perseveration regression test to discovery and added daemon boundary and missing-state coverage.

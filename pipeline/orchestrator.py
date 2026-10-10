@@ -193,16 +193,42 @@ def run_turn(
         if trigger_type == "reminder":
             if not caregiver_updates:
                 return TurnResult(transcript, "[Proactive turn suppressed by policy: No caregiver updates in context]", is_fallback=True)
-            # Deduplication: suppress if key words from the reminder were already mentioned recently
+            # Delivery-aware deduplication (#132). There is no per-item "delivered"
+            # marker in MemoryStore, so the only honest signal that a specific
+            # reminder was already spoken is the session history: webapp.py appends
+            # each proactive reply as an assistant turn. We therefore ask, per
+            # schedule item, whether a recent assistant turn actually delivered
+            # THAT item -- matching the item's own distinctive words against what
+            # was said -- rather than pooling 2+ long words from any update and
+            # looking for incidental overlap with chit-chat. Why this matters for
+            # Principle #2 (the caregiver's instruction is respected, not just
+            # logged): the old word-bag dropped a never-delivered, time-sensitive
+            # reminder (e.g. "Sarah is dropping off groceries at 4 PM") whenever
+            # recent small talk happened to reuse a couple of its words. We only
+            # suppress when EVERY pending update has already been delivered; if any
+            # item was never spoken, the reminder proceeds so it reaches the senior.
             if history:
                 recent_ai = " ".join([h.get("content", "").lower() for h in history[-4:] if h.get("role") == "assistant"])
-                update_text = " ".join(caregiver_updates).lower()
-                # Find meaningful words (5+ letters, skipping some common ones)
-                key_words = [w for w in re.findall(r'\b[a-z]{5,}\b', update_text) if w not in {"today", "tomorrow", "about", "there", "their", "would"}]
-                if key_words:
-                    matches = sum(1 for w in key_words if w in recent_ai)
-                    if matches >= min(2, len(key_words)):
-                        return TurnResult(transcript, "[Proactive turn suppressed by policy: Reminder already delivered recently]", is_fallback=True)
+
+                def _already_delivered(item: str) -> bool:
+                    # An item counts as delivered only when substantially all of
+                    # its own meaningful words appear in recent assistant speech --
+                    # a high per-item coverage test, not a pooled 2-of-N bag. This
+                    # reuses MATCH_IGNORE_WORDS as the single stop-word source (it
+                    # already subsumes the old ad-hoc {today, tomorrow, about,
+                    # there, their, would} set), so no separate stop-word list is
+                    # needed.
+                    item_words = [
+                        w for w in re.findall(r"\b[a-z]{4,}\b", item.lower())
+                        if w not in MATCH_IGNORE_WORDS
+                    ]
+                    if not item_words:
+                        return False
+                    hits = sum(1 for w in item_words if w in recent_ai)
+                    return hits >= max(2, (len(item_words) * 3 + 3) // 4)
+
+                if all(_already_delivered(u) for u in caregiver_updates):
+                    return TurnResult(transcript, "[Proactive turn suppressed by policy: Reminder already delivered recently]", is_fallback=True)
             
         # Two-Strike Suppression Rule (History Bloat)
         if history and len(history) >= 2:
