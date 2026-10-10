@@ -4,7 +4,7 @@
 **Date:** 2026-10-01
 **Decided by:** Team
 **Affects:** `safety/fastpath.py`
-**Related issue:** [#15](../../issues/15), [#33](../../issues/33)
+**Related issue:** [#15](../../issues/15), [#33](../../issues/33), [#105](../../issues/105)
 
 ## Question
 
@@ -26,6 +26,11 @@ Deterministic, under 50ms, no hallucination risk, and it can speak a reassurance
   `tests/test_fastpath.py`. Remaining gaps are tracked on GitHub, not here.
 - Every pattern change needs a test in `tests/test_fastpath.py` for both the trigger and the
   near-miss.
+- **Crisis tier:** direct suicidal language (`I am suicidal`, `I want to end it all`, `I do not
+  want to live`, and equivalent phrases) takes precedence over distress. Benign idioms such as
+  `to die for`, `tired I could die`, and `laughing so hard` are removed only as matched spans;
+  genuine crisis text elsewhere in the same clause remains detectable. Newline-separated ASR
+  fragments are normalized before matching.
 
 ## When to revisit
 

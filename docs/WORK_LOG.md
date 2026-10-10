@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-10 (Issue #105 - crisis fast-path coverage)
+- **What:** Added direct suicidal-language patterns, normalized newline-separated ASR fragments, and changed benign idiom filtering to remove only the idiom span instead of skipping the entire clause.
+- **Why:** A genuine crisis phrase could be missed when it shared a clause with "to die for", "tired I could die", or "laughing so hard"; several direct phrasings and simplified ASR forms were also uncovered.
+- **Result:** Fast-path and mature safety tests passed: 31 tests, 8 expected live-model skips. Benchmark 2 remained 0.0% false-positive escalation.
+
 ### 2026-10-10 (Issue #117 - disclosure delivery contract)
 - **What:** Centralized late disclosure handling in `pipeline/orchestrator.py`. Fast-path and perseveration flags are persisted only after speech produces audio; AUDIT and lifestyle disclosures require a delivery callback, and proactive quiet-mode suppression runs before flagging.
 - **Why:** The browser could record "Dad was told" after its response had already been handed to Gradio, and quiet-mode turns could persist a disclosed perseveration flag with no reply audio.

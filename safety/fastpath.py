@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 DISTRESS_PATTERNS = [
     r"\b(i('ve| have)?\s+had\s+a\s+fall|had\s+a\s+fall|took\s+a\s+fall)\b",
+    r"\bi\s+have\s+fall\b",
     r"\b(i('ve| have)?\s+fallen|fall(en|ing)?\s+(down|over|off))\b",
     r"\bi('m| am)\s+falling(?!\s+asleep)\b",
     r"\bfell(?!\s+asleep)\b",
@@ -47,7 +48,7 @@ DISTRESS_PATTERNS = [
 ]
 
 CRISIS_PATTERNS = [
-    r"\b(don'?t\s+want\s+to\s+be\s+here\s+anymore|want\s+to\s+die|wanna\s+die|everyone\s+would\s+be\s+better\s+off\s+without\s+me|wish\s+i\s+(was|were)\s+dead|better\s+off\s+dead|kill\s+myself|end\s+my\s+life|suicide)\b",
+    r"\b(don'?t\s+want\s+to\s+be\s+here\s+anymore|do\s+not\s+want\s+to\s+live|want\s+to\s+die|wanna\s+die|everyone\s+would\s+be\s+better\s+off\s+without\s+me|wish\s+i\s+(was|were)\s+dead|better\s+off\s+dead|kill\s+myself|end\s+(my\s+life|it\s+all)|take\s+my\s+own\s+life|i('m| am)\s+suicidal|life\s+isn'?t\s+worth\s+living|suicide)\b",
 ]
 
 CONFUSION_PATTERNS = [
@@ -69,9 +70,24 @@ def _normalize(text: str) -> str:
     """
     text = unicodedata.normalize("NFKD", text)
     text = text.replace("’", "'").replace("‘", "'")
+    text = re.sub(r"\s+", " ", text)
     for dash in ("—", "–", "―", "‐", "‑", "−"):
         text = text.replace(dash, " ")
     return text.lower()
+
+
+_BENIGN_CRISIS_IDIOMS = (
+    r"\bto\s+die\s+for\b",
+    r"\b(?:so\s+)?tired\s+i\s+could\s+die\b",
+    r"\blaughing\s+so\s+hard\b",
+)
+
+
+def _without_benign_crisis_idioms(clause: str) -> str:
+    """Remove only known idiom spans; preserve nearby genuine crisis text."""
+    for pattern in _BENIGN_CRISIS_IDIOMS:
+        clause = re.sub(pattern, " ", clause)
+    return clause
 
 
 @dataclass
@@ -91,12 +107,9 @@ def check(transcript: str) -> FastPathResult:
         clause = clause.strip()
         if not clause:
             continue
-        # Guard against false positives in the same clause
-        if "to die for" in clause or "tired i could die" in clause or "laughing so hard" in clause:
-            continue
-            
+        crisis_text = _without_benign_crisis_idioms(clause)
         for pattern in CRISIS_PATTERNS:
-            if re.search(pattern, clause):
+            if re.search(pattern, crisis_text):
                 return FastPathResult(
                     triggered=True,
                     severity="crisis",
