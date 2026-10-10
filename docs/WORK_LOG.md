@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-10 (Issue #102 - Quiet Mode UI and history fix)
+- **What:** Added is_fallback=True and a specific suppression text to the TurnResult returned when Quiet Mode blocks a proactive turn.
+- **Why:** Previously, the suppression yielded an empty reply which bloated session history (tripping the two-strike rule) and caused the webapp UI to incorrectly display Dad said: [PROACTIVE_TRIGGER] when encountering exceptions.
+- **Result:** Quiet Mode correctly suppresses proactive turns without history bloat, and the UI correctly renders ForeverYours initiated.
+
 ### 2026-10-09 (Issue #118 — cost trail and trailer warning)
 - **What:** `CONTRIBUTING.md` gains "Recording what it cost" (`Cost-estimate:` trailer, PR Provenance line, review Provenance section); commit and PR templates and `REVIEW.md` follow; `.githooks/commit-msg` warns on an AI `Co-Authored-By`, a `Claude-Session:` link, and `Assisted-by` without `Cost-estimate`. ADR-007 gets a second amendment.
 - **Why:** the previous amendment dropped `Co-Authored-By` for AI by convention only; nothing noticed when a harness added it back, and cost was not recorded anywhere public.
