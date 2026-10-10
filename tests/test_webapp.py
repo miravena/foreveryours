@@ -361,21 +361,37 @@ class TestWebappSessions(unittest.TestCase):
 
     def test_quiet_mode_breakthrough_offline(self):
         """Issue #102: Offline webapp test: quiet on, three proactive ticks, then an [URGENT] memo; the next tick delivers the urgent line."""
-        from pipeline.memory import MemoryStore
+        from memory.store import MemoryStore
         session_id, _ = webapp.init_session()
         data_dir, _ = webapp._session_dirs(session_id)
         store = MemoryStore("default", data_dir)
         store.set_quiet_mode(hours=4.0)
+        from pipeline.intent import Intent
         for _ in range(3):
-            res = webapp._run_demo_turn(None, None, [], session_id, is_proactive=True, trigger_type="silence")
+            # With no [URGENT] memo yet, a proactive tick in Quiet Mode must be
+            # suppressed by the orchestrator before any LLM call. Force quiet mode
+            # active (persistence is covered by MemoryStore's own tests) so this
+            # webapp-level test is deterministic and fully offline, and stub the
+            # LLM reply stream so no path can reach NEBIUS_API_KEY.
+            with patch("memory.store.MemoryStore.is_quiet_mode_active", return_value=True), \
+                 patch("pipeline.orchestrator.detect_intent", return_value=Intent.LOGISTICAL), \
+                 patch("pipeline.orchestrator.think.stream_reply", return_value=iter(["Okay."])), \
+                 patch("pipeline.orchestrator._speak_turn", return_value=("", [], 0.0)):
+                res = webapp._run_demo_turn(None, None, [], session_id, is_proactive=True, trigger_type="silence")
             panel = res[0]
             self.assertIn("Blocked by Quiet Mode", panel)
             self.assertIn("ForeverYours initiated:", panel)
             self.assertNotIn("Dad said:", panel)
             history = res[2]
             self.assertEqual(len(history), 0)
-        webapp.save_caregiver_text_memo("[URGENT] Please drink water", session_id)
-        with patch("pipeline.orchestrator.think.generate_reply_stream", return_value=["Okay, I'll tell him."]), patch("pipeline.orchestrator._speak_turn", return_value=("", [], 0.0)):
+        # The memo must read as a caregiver *schedule update* (contains a time/
+        # errand marker) so caregiver_schedule_updates() surfaces it; only then
+        # does the [URGENT] breakthrough fire during Quiet Mode.
+        webapp.save_caregiver_text_memo("[URGENT] Doctor appointment this afternoon", session_id)
+        with patch("memory.store.MemoryStore.is_quiet_mode_active", return_value=True), \
+             patch("pipeline.orchestrator.think.stream_reply", return_value=iter(["Okay, I'll tell him."])), \
+             patch("pipeline.orchestrator._speak_turn", return_value=("", [], 0.0)), \
+             patch("pipeline.orchestrator.detect_intent", return_value=Intent.LOGISTICAL):
             res = webapp._run_demo_turn(None, None, [], session_id, is_proactive=True, trigger_type="silence")
         panel = res[0]
         self.assertIn("share something urgent", panel)
