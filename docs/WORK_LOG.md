@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-10 (Issues #63 and #107 - test integrity)
+- **What:** Made the live night-mode benchmark opt-in, added an always-offline prompt-contract test, narrowed live skips to known provider configuration/auth/connectivity failures, restored the misplaced perseveration test, and covered daemon boundary hours plus missing interaction state.
+- **Why:** A broad exception could turn real benchmark regressions green, the benchmark made an API call during every suite run, and several regression tests were not being discovered.
+- **Result:** Targeted Benchmark 9 integrity tests passed (one expected opt-in skip); the moved perseveration test exposed stale test data and was corrected to exercise the actual three-repeat condition.
+
 ### 2026-10-10 (Issue #105 - crisis fast-path coverage)
 - **What:** Added direct suicidal-language patterns, normalized newline-separated ASR fragments, and changed benign idiom filtering to remove only the idiom span instead of skipping the entire clause.
 - **Why:** A genuine crisis phrase could be missed when it shared a clause with "to die for", "tired I could die", or "laughing so hard"; several direct phrasings and simplified ASR forms were also uncovered.

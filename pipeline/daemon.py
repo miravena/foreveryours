@@ -1,10 +1,13 @@
 import time
 
-def tick(last_interaction_timestamp: float, current_hour: int, active_facts: bool, caregiver_updates: bool) -> str | None:
+def tick(last_interaction_timestamp: float | None, current_hour: int, active_facts: bool, caregiver_updates: bool) -> str | None:
     """
     Evaluates whether a proactive event should fire based on time and state.
     Returns the trigger_type if it should fire, otherwise None.
     """
+    if last_interaction_timestamp is None:
+        return None
+
     hours_since_active = (time.time() - last_interaction_timestamp) / 3600.0
     if hours_since_active < 4:
         return None  # Too soon since last interaction
