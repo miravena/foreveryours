@@ -1,14 +1,10 @@
 # ForeverYours
 
-**The companion the family briefs — your voice in Dad's day when you can't be there.**
+**ForeverYours is a purpose-built voice companion for older adults that combines life-context memory, proactive companionship, caregiver coordination, safety-aware escalation, and privacy-preserving family connection — designed to help seniors feel remembered without feeling monitored.**
 
-ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
-there, and never reports anything to the family that it hasn't first said to him out loud.
+We didn't want to build another generic chatbot that talks to seniors. ChatGPT already does that well. The question we asked was: *what happens when you design the entire AI system around one older adult's long-term life, relationships, autonomy, and wellbeing?*
 
-A voice-first AI companion for older adults. A caregiver gives it context once (a voice memo:
-names, preferences, daily updates), and the senior gets a warm, low-friction voice conversation
-that actually uses that context — while the caregiver gets honest safety flags, never silent
-surveillance.
+ChatGPT is a general-purpose AI you talk to. ForeverYours is a relationship coordination system: a caregiver gives it context once (names, preferences, daily updates), and the senior gets a warm, low-friction voice conversation that actually uses that context — while the family stays connected without anyone being watched.
 
 Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackathon.devpost.com/)
 (Personal AI track, which permits either Nebius Token Factory or Nebius AI Cloud). This project

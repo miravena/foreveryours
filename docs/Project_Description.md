@@ -31,14 +31,13 @@ This creates a gap between **what the family knows** and **what the AI knows**.
 
 # Our Idea
 
-> ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
-> there, and never reports anything to the family that it hasn't first said to him out loud.
+> **ForeverYours is a purpose-built voice companion for older adults that combines life-context memory, proactive companionship, caregiver coordination, safety-aware escalation, and privacy-preserving family connection — designed to help seniors feel remembered without feeling monitored.**
 
-**ForeverYours is a voice-first Personal AI for older adults that can be deliberately briefed by family members, remember relevant personal context, and carry that context across conversations.**
+We didn't want to build another generic chatbot that talks to seniors. ChatGPT already does that exceptionally well. The question we asked was: *what happens when you design the entire AI system around one older adult's long-term life, relationships, autonomy, and wellbeing?*
 
-The central idea is simple:
+ChatGPT is a general-purpose AI you talk to. ForeverYours is a relationship coordination system. The central difference is the product architecture:
 
-> **The family briefs the AI. The AI carries that context into the senior's day.**
+> **The family briefs the AI. The AI carries that context into the senior's day. The family stays connected without anyone being surveilled.**
 
 A family member can record a short voice memo:
 
