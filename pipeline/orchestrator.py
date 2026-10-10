@@ -510,6 +510,9 @@ def run_turn(
                         if len(parts) == 2:
                             category = parts[0].strip().lower()
                             fact = parts[1].strip()
+                            if category.upper() not in {"SLEEP", "APPETITE", "MOBILITY", "HYGIENE"} or not fact:
+                                result.memory_saved = "Suppressed Lifestyle (invalid category or empty note)"
+                                return
                             
                             # Synthesize and speak the disclosure
                             disclosed = False
@@ -526,7 +529,13 @@ def run_turn(
                                 import time
                                 # TTL of 7 days (604800 seconds)
                                 expires_at = time.time() + (7 * 24 * 3600)
-                                memory_store.add(fact, source="conversation_extract", scope="lifestyle", expires_at=expires_at)
+                                memory_store.add(
+                                    fact,
+                                    source="conversation_extract",
+                                    scope="lifestyle",
+                                    expires_at=expires_at,
+                                    disclosure_attested=True,
+                                )
                                 result.memory_saved = f"Lifestyle ({category}): {fact}"
                             else:
                                 result.memory_saved = f"Suppressed Lifestyle ({category}) due to disclosure failure"

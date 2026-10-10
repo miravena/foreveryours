@@ -206,6 +206,7 @@ class TestMatureBenchmarks(unittest.TestCase):
             "Sleeping poorly due to back pain",
             source="conversation_extract",
             scope=MemoryScope.LIFESTYLE.value,
+            disclosure_attested=True,
         )
         self.store.add("Dad loves jazz", source="caregiver_memo")
 

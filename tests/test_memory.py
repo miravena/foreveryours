@@ -264,7 +264,7 @@ class TestLifestyleLogs(unittest.TestCase):
         
     def test_lifestyle_logs_do_not_leak_to_senior(self):
         """Lifestyle logs must NEVER enter the senior-facing context."""
-        self.store.add("Has been sleeping poorly", source="conversation_extract", scope="lifestyle")
+        self.store.add("Has been sleeping poorly", source="conversation_extract", scope="lifestyle", disclosure_attested=True)
         facts = self.store.senior_profile_facts()
         self.assertFalse(any("sleeping poorly" in f.lower() for f in facts))
         self.assertFalse(any("LIFESTYLE" in f for f in facts))
@@ -274,7 +274,7 @@ class TestLifestyleLogs(unittest.TestCase):
         import time
         now = time.time()
         # Create an expired log (created 8 days ago)
-        self.store.add("Ate only crackers", source="conversation_extract", scope="lifestyle", expires_at=now - 3600)
+        self.store.add("Ate only crackers", source="conversation_extract", scope="lifestyle", expires_at=now - 3600, disclosure_attested=True)
         
         # Verify it is removed
         logs = self.store.caregiver_lifestyle_logs(now=now)
@@ -287,7 +287,7 @@ class TestLifestyleLogs(unittest.TestCase):
         
     def test_lifestyle_logs_date_prefix_stripping(self):
         """Forget/correct requests can target lifestyle logs by their date-prefixed UI text."""
-        self.store.add("Mobility is getting worse", source="conversation_extract", scope="lifestyle")
+        self.store.add("Mobility is getting worse", source="conversation_extract", scope="lifestyle", disclosure_attested=True)
         logs = self.store.caregiver_lifestyle_logs()
         self.assertEqual(len(logs), 1)
         displayed_text = logs[0] # e.g. "[2026-10-09] Mobility is getting worse"

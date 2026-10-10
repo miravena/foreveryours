@@ -135,6 +135,8 @@ class TestOrchestrator(unittest.TestCase):
         for mem in res.memories_used:
             self.assertNotIn("groceries", mem.lower())
             self.assertNotIn("4 pm", mem.lower())
+        if res.background_thread:
+            res.background_thread.join(timeout=10)
 
     @patch("pipeline.think.stream_reply")
     def test_history_aware_anchor_rotation_suppresses_recent_anchor(self, mock_stream):
@@ -158,6 +160,8 @@ class TestOrchestrator(unittest.TestCase):
         # Should rotate away from jazz to Leo or another unmentioned anchor
         for mem in res.memories_used:
             self.assertNotIn("jazz", mem.lower())
+        if res.background_thread:
+            res.background_thread.join(timeout=10)
 
     @patch("pipeline.think.stream_reply")
     def test_empty_reply_triggers_graceful_fallback(self, mock_stream):

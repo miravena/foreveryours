@@ -17,6 +17,7 @@ rename `Unreleased` to the version and date, then tag it.
 - Model-level distress backstop (#56): the async AUDIT pass now evaluates the senior's transcript for long-tail distress phrasings and severe crisis, emitting `DISTRESS` or `CRISIS` verdicts to raise the caregiver flag with zero added latency on the critical path.
 
 ### Fixed
+- Lifestyle privacy hardening (#106): lifestyle notes now require delivered-disclosure attestation, default to a seven-day TTL, are scrubbed on reload after expiry, and are excluded from conversational search.
 - Model safety backstop (#56): the asynchronous audit now parses whole-word verdicts, disables reasoning overhead, records malformed failures as `unknown` rather than `SAFE`, and uses crisis-specific 988/family disclosure wording.
 - Test integrity (#63, #107): live Benchmark 9 now requires explicit `RUN_LIVE_BENCHMARKS=1` opt-in, while its offline prompt contract always runs; only known missing-configuration, authorization, and connectivity failures skip live execution. Restored the perseveration regression test to discovery and added daemon boundary and missing-state coverage.
 - Crisis fast-path false negatives (#105): Added missing direct suicidal phrasings and updated the false-positive guard to apply per-clause rather than globally, so real crisis statements are no longer suppressed by benign idioms in the same utterance.

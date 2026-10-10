@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-10 (Issue #106 - lifestyle privacy boundary)
+- **What:** Enforced disclosure attestation at the memory-store boundary, defaulted lifestyle notes to seven-day expiry, scrubbed expired legacy notes during load, and excluded lifestyle scope from conversational search.
+- **Why:** The storage API could accept undisclosed lifestyle notes, legacy records could retain plaintext indefinitely, and search could return caregiver-only lifestyle data to prompt assembly.
+- **Result:** Added offline tests for attestation, TTL/search isolation, and reload-time erasure.
+
 ### 2026-10-10 (Issue #56 - model distress backstop hardening)
 - **What:** Hardened the transcript-aware AUDIT backstop: whole-word verdict parsing, explicit no-reasoning requests, unknown handling for malformed responses, crisis-specific disclosure wording, and offline parser tests.
 - **Why:** The existing plumbing could classify empty or unparseable audit output as `SAFE`, and a CRISIS verdict did not provide crisis-specific spoken guidance.
