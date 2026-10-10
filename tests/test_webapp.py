@@ -366,8 +366,9 @@ class TestWebappSessions(unittest.TestCase):
         data_dir, _ = webapp._session_dirs(session_id)
         store = MemoryStore("default", data_dir)
         store.set_quiet_mode(hours=4.0)
+        from pipeline.intent import Intent
         for _ in range(3):
-            with patch("pipeline.orchestrator.detect_intent", return_value=webapp.pipeline.intent.Intent.LOGISTICAL):
+            with patch("pipeline.orchestrator.detect_intent", return_value=Intent.LOGISTICAL):
                 res = webapp._run_demo_turn(None, None, [], session_id, is_proactive=True, trigger_type="silence")
             panel = res[0]
             self.assertIn("Blocked by Quiet Mode", panel)
@@ -378,7 +379,7 @@ class TestWebappSessions(unittest.TestCase):
         webapp.save_caregiver_text_memo("[URGENT] Please drink water", session_id)
         with patch("pipeline.orchestrator.think.generate_reply_stream", return_value=["Okay, I'll tell him."]), \
              patch("pipeline.orchestrator._speak_turn", return_value=("", [], 0.0)), \
-             patch("pipeline.orchestrator.detect_intent", return_value=webapp.pipeline.intent.Intent.LOGISTICAL):
+             patch("pipeline.orchestrator.detect_intent", return_value=Intent.LOGISTICAL):
             res = webapp._run_demo_turn(None, None, [], session_id, is_proactive=True, trigger_type="silence")
         panel = res[0]
         self.assertIn("share something urgent", panel)
