@@ -365,8 +365,8 @@ class TestOrchestrator(unittest.TestCase):
         )
         self.assertEqual(len(res.memories_used), 1)
         self.assertIn("jazz", res.memories_used[0].lower())
-
-
+        if res.background_thread:
+            res.background_thread.join()
 if __name__ == "__main__":
     unittest.main()
 

@@ -401,22 +401,197 @@ def run_proactive_turn(history, session, sim_time, trigger_type):
     return run_demo_turn(None, None, history, session, sim_time, is_proactive=True, trigger_type=trigger_type)
 
 
-def _stream_with_thinking_indicator(real_result_fn):
-    """Wrap a turn handler as a generator so the browser shows "thinking..."
-    the instant a turn starts, instead of a blank spinner for however long
-    Token Factory takes to answer (#81 B1, #11 row 8 decision). `gr.skip()`
-    leaves every other output untouched on the first yield."""
-    def gen(*args, **kwargs):
-        yield (
-            "_Companion is thinking..._",
-            gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(),
-        )
-        yield real_result_fn(*args, **kwargs)
-    return gen
+
+def run_demo_turn_streaming(
+    audio_in: str | None = None,
+    text_in_or_history: str | list[dict] | None = None,
+    history_or_session: list[dict] | str | None = None,
+    session_id: str | None = None,
+    simulated_time_in: str | None = None,
+    is_proactive: bool = False,
+    trigger_type: str = "silence",
+):
+    import queue
+    import threading
+    from pathlib import Path
+    
+    if isinstance(text_in_or_history, list):
+        history = text_in_or_history
+        session_id_val = history_or_session if isinstance(history_or_session, str) else session_id
+        actual_text = None
+        simulated_time_str = "Morning (Default)"
+    else:
+        actual_text = text_in_or_history
+        history = history_or_session if isinstance(history_or_session, list) else []
+        session_id_val = session_id
+        simulated_time_str = simulated_time_in or "Morning (Default)"
+
+    session_expired = session_id_val is None
+    session_id_val = session_id_val or _new_session()
+
+    simulated_hour = 10
+    if "Sundowning" in simulated_time_str:
+        simulated_hour = 18
+    elif "Night" in simulated_time_str:
+        simulated_hour = 23
+
+    yield (
+        "_Companion is thinking..._",
+        gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(),
+    )
+
+    data_dir, audio_dir = _session_dirs(session_id_val)
+    _join_previous_turn(session_id_val)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
+    flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
+    panel = lambda: _format_caregiver_panel(session_id_val)  # noqa: E731
+    biomarkers = {"wpm": 0.0, "avg_pause_s": 0.0}
+
+    if is_proactive:
+        transcript = "[PROACTIVE_TRIGGER]"
+    elif actual_text and actual_text.strip():
+        transcript = actual_text.strip()
+    elif audio_in:
+        transcript, biomarkers = hear.transcribe(Path(audio_in), return_metrics=True)
+    else:
+        out = ("Record audio or type what Dad says first.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_")
+        if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+        yield (*out, session_id_val, "", None)
+        return
+
+    if not transcript.strip() and not is_proactive:
+        out = ("Couldn't make out any speech or text -- try again.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_")
+        if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+        yield (*out, session_id_val, "", None)
+        return
+
+    if _will_call_nebius() and not _rate_limit_ok(data_dir):
+        out = ("This demo has hit its daily request cap -- please try again tomorrow.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_Rate limited_")
+        if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+        yield (*out, session_id_val, "", None)
+        return
+
+    _clear_session_audio(audio_dir)
+
+    q = queue.Queue()
+    accumulated_audio_paths = []
+
+    def _on_chunk(sentence: str, chunk_path: Path):
+        q.put(("CHUNK", sentence, chunk_path))
+
+    def _worker():
+        try:
+            res = run_turn(
+                transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type,
+                enable_perseveration_flag=DEV_MODE,
+                on_chunk=_on_chunk
+            )
+            q.put(("DONE", res))
+        except Exception as exc:
+            q.put(("ERROR", exc))
+
+    t = threading.Thread(target=_worker)
+    t.start()
+
+    current_reply_text = ""
+    while True:
+        msg = q.get()
+        if msg[0] == "DONE":
+            result = msg[1]
+            break
+        elif msg[0] == "ERROR":
+            exc = msg[1]
+            err = str(exc)
+            if "NEBIUS_API_KEY" in err or "NebiusNotConfigured" in type(exc).__name__:
+                out = (
+                    f'**Dad said:** "{transcript}"\n\n'
+                    f"⚠️ *The live AI model isn't reachable right now -- the offline safety fast-path still works.*\n\n"
+                    f"💡 **Try an emergency phrase:** Say or type *\"I fell down earlier and I'm scared\"* - the safety fast-path runs completely offline with real spoken voice!",
+                    None,
+                    history,
+                    panel(),
+                    "### 📊 Acoustic Biomarkers\n_Awaiting API Key_",
+                )
+                if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+                yield (*out, session_id_val, "", None)
+                return
+            
+            print(f"Pipeline error processing turn: {type(exc).__name__}")
+            import traceback
+            traceback.print_exc()
+            out = (
+                f'**Dad said:** "{transcript}"\n\n⚠️ *I\'m sorry, I ran into an unexpected error processing that.*',
+                None,
+                history,
+                panel(),
+                "### 📊 Acoustic Biomarkers\n_Error_",
+            )
+            if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+            yield (*out, session_id_val, "", None)
+            return
+        elif msg[0] == "CHUNK":
+            _, sentence, chunk_path = msg
+            current_reply_text += sentence + " "
+            accumulated_audio_paths.append(chunk_path)
+            
+            combined_audio = _combine_audio_chunks(accumulated_audio_paths, audio_dir)
+            reply_audio = str(combined_audio) if combined_audio else None
+            
+            if is_proactive:
+                transcript_and_reply = f'**ForeverYours initiated:**\n\n"{current_reply_text.strip()}"'
+            else:
+                transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{current_reply_text.strip()}"'
+                
+            biomarkers_panel = f"### 📊 Acoustic Biomarkers\n- Words per minute: {biomarkers.get('wpm', 0):.0f}\n- Avg pause: {biomarkers.get('avg_pause_s', 0.0):.1f}s"
+            
+            out = (transcript_and_reply, reply_audio, history, panel(), biomarkers_panel)
+            if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+            yield (*out, session_id_val, "", None)
+
+    _remember_background_thread(session_id_val, result.background_thread)
+
+    if not result.is_fallback:
+        if is_proactive:
+            new_history = history + [{"role": "assistant", "content": result.reply_text}]
+        else:
+            new_history = history + [
+                {"role": "user", "content": transcript},
+                {"role": "assistant", "content": result.reply_text},
+            ]
+        new_history = new_history[-(MAX_HISTORY_TURNS * 2) :]
+    else:
+        new_history = history
+
+    combined_audio = _combine_audio_chunks(result.audio_paths, audio_dir)
+    reply_audio = str(combined_audio) if combined_audio else None
+
+    if is_proactive:
+        transcript_and_reply = f'**ForeverYours initiated:**\n\n"{result.reply_text}"'
+    else:
+        transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
+    
+    if result.caregiver_flag:
+        transcript_and_reply += "\n\n*(📢 Honest Safety Disclosure: Caregiver notified with Dad\'s knowledge)*"
+    
+    turn_count = _next_turn_count(data_dir)
+    if turn_count % REMINDER_EVERY_N_TURNS == 0:
+        transcript_and_reply += "\n\n*(🤖 Reminder: this is an AI companion, and this conversation is recorded and transcribed.)*"
+
+    wpm = biomarkers.get("wpm", 0.0)
+    pause = biomarkers.get("avg_pause_s", 0.0)
+    if wpm > 0:
+        biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
+    else:
+        biomarker_str = "### 📊 Acoustic Biomarkers\n_Calculated from live voice input only_"
+
+    out = (transcript_and_reply, reply_audio, new_history, panel(), biomarker_str)
+    if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+    yield (*out, session_id_val, "", None)
+
+def run_proactive_turn_streaming(history, session, sim_time, trigger_type):
+    yield from run_demo_turn_streaming(None, None, history, session, sim_time, is_proactive=True, trigger_type=trigger_type)
 
 
-run_demo_turn_streaming = _stream_with_thinking_indicator(run_demo_turn)
-run_proactive_turn_streaming = _stream_with_thinking_indicator(run_proactive_turn)
 
 
 def _run_demo_turn(
