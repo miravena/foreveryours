@@ -187,6 +187,15 @@ def _next_turn_count(data_dir: Path) -> int:
     return count
 
 
+def _get_turn_count(data_dir: Path) -> int:
+    """Gets the current turn count without incrementing it."""
+    counter_file = data_dir / "turn_count.txt"
+    try:
+        return int(counter_file.read_text("utf-8").strip())
+    except (OSError, ValueError):
+        return 0
+
+
 def _sweep_stale_sessions() -> None:
     """Backstop for sessions whose delete_callback never ran (process
     restart, crashed tab): anything untouched for SESSION_TTL_S goes."""
@@ -248,6 +257,13 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
 
+    flag_items = flags.all()
+    distress_flags = [f for f in flag_items if f.severity in HIGH_PRIORITY_SEVERITIES]
+    turn_count = _get_turn_count(data_dir)
+    
+    wellbeing_status = "⚠️ **Safety alert dispatched**" if distress_flags else "🟢 **Calm · No safety concerns**"
+    wellbeing_summary = f"> **Today:** {turn_count} conversation{'s' if turn_count != 1 else ''} · {wellbeing_status}\n"
+
     lines = [
         # A blank line before "---" matters: text immediately followed by "---"
         # is a Markdown setext heading (renders <h2>), which is how the pledge
@@ -255,9 +271,9 @@ def _format_caregiver_panel(session_id: str | None) -> str:
         "🛡️ Peace of mind without surveillance. ForeverYours summarizes important updates and medical/safety flags. Turn transcripts (not audio) go to Nebius Token Factory to generate replies and run the safety check; see [Safety & privacy design](https://github.com/miravena/foreveryours/blob/main/docs/SAFETY_AND_PRIVACY.md).",
         "",
         "---",
+        wellbeing_summary,
     ]
-    flag_items = flags.all()
-    distress_flags = [f for f in flag_items if f.severity in HIGH_PRIORITY_SEVERITIES]
+    
     if distress_flags:
         latest = distress_flags[-1]
         disclosed = "✅ **Disclosed to Senior in conversation**" if latest.disclosed_to_senior else "⚠️ **NOT yet disclosed**"
@@ -309,6 +325,8 @@ def _format_caregiver_panel(session_id: str | None) -> str:
             desc = item.text
 
         lines.append(f"- {badge}{priv_badge}{desc} `({item.source})`")
+        
+    lines.append("\n---\n_ForeverYours shows safety-relevant events, never surveillance. Private conversations stay private._")
     return "\n".join(lines)
 
 
