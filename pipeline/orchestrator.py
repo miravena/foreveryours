@@ -148,6 +148,19 @@ def _speak_turn(sentences, audio_out_dir: Path, on_chunk=None) -> tuple[str, lis
     return " ".join(parts), paths, first_audio_time
 
 
+def _speak_disclosure(
+    text: str,
+    audio_out_dir: Path,
+    on_chunk=None,
+) -> tuple[list[Path], bool]:
+    """Synthesize and deliver a disclosure before it can be recorded as told."""
+    _, paths, _ = _speak_turn(iter([text]), audio_out_dir, on_chunk=on_chunk)
+    # A late disclosure is only delivered when the caller accepts it in the
+    # current output stream. Returning a WAV path alone is not enough: the
+    # non-streaming browser path has already handed its response to Gradio.
+    return paths, bool(paths) and on_chunk is not None
+
+
 def run_turn(
     transcript: str,
     memory_store: MemoryStore,
@@ -183,19 +196,37 @@ def run_turn(
 
     t0 = time.monotonic()
 
+    # Quiet mode must be checked before any proactive flagging. Otherwise a
+    # suppressed proactive turn can persist a disclosure with no audio.
+    t_now = time.time()
+    raw_schedule = memory_store.caregiver_schedule_updates(now=t_now)
+    quiet_breakthrough = False
+    if is_proactive and memory_store.is_quiet_mode_active(now=t_now):
+        urgent_updates = [u for u in raw_schedule if "[URGENT]" in u.upper()]
+        if not urgent_updates:
+            return TurnResult(
+                transcript=transcript,
+                reply_text="[Proactive turn suppressed by policy: Blocked by Quiet Mode]",
+                audio_paths=[],
+                audit_verdict="Blocked by Quiet Mode",
+                is_fallback=True,
+            )
+        quiet_breakthrough = True
+
     fast = fastpath.check(transcript)
     immediate_audio_paths: list[Path] = []
     continuation_note = None
     if fast.triggered:
-        # Fast-path IS the disclosure: the senior hears this before anything
-        # else happens, so disclosed_to_senior=True is simply true here.
-        flags.add(fast.caregiver_flag, severity=fast.severity, disclosed_to_senior=True)
-        _, immediate_audio_paths, first_audio_time = _speak_turn(iter([fast.immediate_reply]), audio_out_dir, on_chunk=on_chunk)
+        # Persist the flag only after the disclosure has produced audio.
+        _, immediate_audio_paths, first_audio_time = _speak_turn(
+            iter([fast.immediate_reply]), audio_out_dir, on_chunk=on_chunk
+        )
+        if immediate_audio_paths:
+            flags.add(fast.caregiver_flag, severity=fast.severity, disclosed_to_senior=True)
         continuation_note = fast.continuation_note
     else:
         first_audio_time = None
 
-    t_now = time.time()
     intent = detect_intent(transcript)
     
     # Cognitive Drift: Perseveration Tracking -- off the public path (webapp.py's
@@ -208,14 +239,15 @@ def run_turn(
         user_msgs = [msg["content"] for msg in history if msg.get("role") == "user"]
         if len(user_msgs) >= 2:
             if detect_intent(user_msgs[-1]) == intent and detect_intent(user_msgs[-2]) == intent:
-                flags.add(
-                    text=f"Perseveration loop detected: Senior exhibited {intent.value} intent 3 times in a row.",
-                    severity="confusion",
-                    disclosed_to_senior=True,
-                )
                 persev_reply = "I'm going to make a note for your family that we've talked about this a few times today."
                 
                 _, persev_paths, persev_first_time = _speak_turn(iter([persev_reply]), audio_out_dir, on_chunk=on_chunk)
+                if persev_paths:
+                    flags.add(
+                        text=f"Perseveration loop detected: Senior exhibited {intent.value} intent 3 times in a row.",
+                        severity="confusion",
+                        disclosed_to_senior=True,
+                    )
                 immediate_audio_paths.extend(persev_paths)
                 if first_audio_time is None:
                     first_audio_time = persev_first_time
@@ -232,38 +264,22 @@ def run_turn(
     # AI RESTRAINT: QUIET MODE
     # ---------------------------------------------------------
     guardrails = memory_store.caregiver_guardrails()
-    raw_schedule = memory_store.caregiver_schedule_updates(now=t_now)
-    
-    if is_proactive and memory_store.is_quiet_mode_active(now=t_now):
+    if quiet_breakthrough:
         # Allow Breakthroughs for explicit [URGENT] caregiver schedule updates
         urgent_updates = [u for u in raw_schedule if "[URGENT]" in u.upper()]
-        
-        if urgent_updates:
-            # We break through, but scope it to the urgent updates only
-            raw_schedule = urgent_updates
-            
-            # Disclose the breakthrough to the senior
-            breakthrough_reply = f"I know you asked for some quiet time, but {caregiver_name} asked me to share something urgent."
-            _, breakthrough_paths, breakthrough_first_time = _speak_turn(iter([breakthrough_reply]), audio_out_dir, on_chunk=on_chunk)
-            immediate_audio_paths.extend(breakthrough_paths)
-            if first_audio_time is None:
-                first_audio_time = breakthrough_first_time
-            
-            immediate_reply_text = (immediate_reply_text + " " + breakthrough_reply).strip()
-            
-            # Instruct the LLM to deliver the urgent message without apologizing again (since we just did)
-            continuation_note = "INSTRUCTION: You are breaking Quiet Mode to deliver this [URGENT] caregiver update. Deliver it gently and concisely. Do NOT apologize for interrupting, as you already apologized."
-            
-            # Force intent to LOGISTICAL so the schedule updates are actually passed to the LLM
-            intent = Intent.LOGISTICAL
-        else:
-            return TurnResult(
-                transcript=transcript,
-                reply_text="[Proactive turn suppressed by policy: Blocked by Quiet Mode]",
-                audio_paths=[],
-                audit_verdict="Blocked by Quiet Mode",
-                is_fallback=True,
-            )
+        raw_schedule = urgent_updates
+
+        breakthrough_reply = f"I know you asked for some quiet time, but {caregiver_name} asked me to share something urgent."
+        _, breakthrough_paths, breakthrough_first_time = _speak_turn(
+            iter([breakthrough_reply]), audio_out_dir, on_chunk=on_chunk
+        )
+        immediate_audio_paths.extend(breakthrough_paths)
+        if first_audio_time is None:
+            first_audio_time = breakthrough_first_time
+
+        immediate_reply_text = (immediate_reply_text + " " + breakthrough_reply).strip()
+        continuation_note = "INSTRUCTION: You are breaking Quiet Mode to deliver this [URGENT] caregiver update. Deliver it gently and concisely. Do NOT apologize for interrupting, as you already apologized."
+        intent = Intent.LOGISTICAL
     # ---------------------------------------------------------
 
     caregiver_updates = [_sanitize_caregiver_update(u, caregiver_name) for u in raw_schedule]
@@ -413,9 +429,10 @@ def run_turn(
                     disclosed = False
                     try:
                         caregiver_text = DISCLOSURE_LINE.format(caregiver=caregiver_name)
-                        _, extra_paths, _ = _speak_turn(iter([caregiver_text]), audio_out_dir)
+                        extra_paths, disclosed = _speak_disclosure(
+                            caregiver_text, audio_out_dir, on_chunk=on_chunk
+                        )
                         result.audio_paths.extend(extra_paths)
-                        disclosed = True
                     except Exception:  # pragma: no cover - best-effort disclosure
                         disclosed = False
                     
@@ -487,9 +504,10 @@ def run_turn(
                             disclosed = False
                             try:
                                 disclosure_text = f"I'm making a quick note for {caregiver_name} about your {category} so they know how you're feeling lately."
-                                _, extra_paths, _ = _speak_turn(iter([disclosure_text]), audio_out_dir)
+                                extra_paths, disclosed = _speak_disclosure(
+                                    disclosure_text, audio_out_dir, on_chunk=on_chunk
+                                )
                                 result.audio_paths.extend(extra_paths)
-                                disclosed = True
                             except Exception:
                                 disclosed = False
                                 

@@ -54,10 +54,10 @@ Nebius client has a bounded 20s timeout instead of the SDK's 600s default, and t
 "Companion is thinking..." the instant a turn starts. Six consecutive turns on the local page
 after the fix measured 0.6-3.9s each (was 3-41s before), run live against Token Factory — a turn
 can still wait on the *previous* turn's background thread (bounded, up to 10s) rather than on its
-own. **Known
-gap (#11):** if AUDIT flags a reply unsafe after the turn has already returned, its spoken
-disclosure is synthesized but has already missed that turn's audio output — the caregiver panel
-still shows the flag (polled every 2s), just not as a voice the senior hears in the moment.
+own. **Disclosure boundary:** if AUDIT flags a reply after the turn's response has already been handed
+to the non-streaming browser path, the flag remains explicitly **NOT yet disclosed** and no
+lifestyle note is saved. The streaming browser path and CLI pass an audio callback, so a
+follow-up disclosure is delivered as a later audio chunk before the flag is marked as told.
 Dated measurements are in
 [`docs/WORK_LOG.md`](docs/WORK_LOG.md). The CLI (`main.py`/`chat`) now plays each reply sentence
 as soon as it is synthesized (pipelined playback, [#17](../../issues/17)), so it reports both
