@@ -44,11 +44,13 @@ senior as a follow-up, not silently dropped.
    silent right after. Deliberately conservative patterns — a false positive
    here (an unnecessary caregiver note) is far cheaper than a false negative.
 2. **Audit** (`pipeline/audit.py`) — asynchronous, a second small-model pass
-   over every *other* reply (given both the senior's words and the
-   companion's reply, since some advice is only unsafe in context), checking
-   for medical-hallucination or unsafe-advice risk. Runs after the reply is
-   already on its way to audio, so it never adds latency — it can only flag
-   and disclose after the fact, not block in time.
+   over every *other* reply and the senior's transcript. It checks for
+   medical-hallucination or unsafe-advice risk and provides a wider,
+   graded `DISTRESS`/`CRISIS` backstop for phrasing the regex cannot cover.
+   Runs after the reply is already on its way to audio, so it never adds
+   latency — it can only flag and disclose after the fact, not block in time.
+   Empty, malformed, or failed audit responses are recorded as `unknown`, not
+   treated as safe.
 
 Neither layer is a substitute for the other. The fast-path is a narrow net
 for the highest-urgency, most time-critical cases; the audit pass is a wider

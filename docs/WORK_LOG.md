@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-10 (Issue #56 - model distress backstop hardening)
+- **What:** Hardened the transcript-aware AUDIT backstop: whole-word verdict parsing, explicit no-reasoning requests, unknown handling for malformed responses, crisis-specific disclosure wording, and offline parser tests.
+- **Why:** The existing plumbing could classify empty or unparseable audit output as `SAFE`, and a CRISIS verdict did not provide crisis-specific spoken guidance.
+- **Result:** Added tests for CRISIS, DISTRESS, UNSAFE, SAFE, markdown, case, empty, malformed, and reasoning-disabled requests. Live phrase recall remains dependent on the configured provider model and requires a key-gated measurement.
+
 ### 2026-10-10 (Issues #63 and #107 - test integrity)
 - **What:** Made the live night-mode benchmark opt-in, added an always-offline prompt-contract test, narrowed live skips to known provider configuration/auth/connectivity failures, restored the misplaced perseveration test, and covered daemon boundary hours plus missing interaction state.
 - **Why:** A broad exception could turn real benchmark regressions green, the benchmark made an API call during every suite run, and several regression tests were not being discovered.

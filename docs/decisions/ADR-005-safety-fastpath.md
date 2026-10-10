@@ -1,4 +1,4 @@
-# ADR-005: Safety fast-path is deterministic rules, not a model
+# ADR-005: Safety fast-path plus asynchronous model backstop
 
 **Status:** Accepted
 **Date:** 2026-10-01
@@ -12,7 +12,8 @@ How do we detect distress ("I fell", "help me") fast and safely?
 
 ## Decision
 
-**Rule-based regex**, checked before any model call.
+**Rule-based regex**, checked before any model call, with an asynchronous AUDIT
+model backstop for transcript phrasing the rules cannot cover.
 
 ## Rationale
 
@@ -32,6 +33,17 @@ Deterministic, under 50ms, no hallucination risk, and it can speak a reassurance
   genuine crisis text elsewhere in the same clause remains detectable. Newline-separated ASR
   fragments are normalized before matching.
 
+## Model backstop amendment
+
+The AUDIT pass reads the senior transcript as well as the companion reply and
+can return `CRISIS`, `DISTRESS`, `UNSAFE`, or `SAFE`. It runs after speech has
+started, so it does not replace the immediate fast-path reassurance or add
+latency to first audio. `CRISIS` and `DISTRESS` flags receive a spoken
+follow-up before persistence; a failed or unparseable audit is recorded as
+`unknown`, never as `SAFE`.
+
 ## When to revisit
 
-False-positive/negative rates in testing justify a hybrid rule + model check.
+False-positive/negative rates in live evaluation justify changing the model,
+prompt, or graded severity policy. The deterministic fast-path remains the
+first safety layer.
