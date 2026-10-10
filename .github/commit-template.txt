@@ -13,6 +13,7 @@
 # did what"). Write `unknown` if you can't tell; never leave the line out. Uncomment:
 #
 # Assisted-by: ClaudeCode:claude-sonnet-5-5 effort=medium
+# Cost-estimate: $0.85 (in 234, out 107K tokens, approximate)   <- or `unknown`; never omit
 # Assisted-by: OpenCode:mimo-v2.6-flash-free effort=unknown
 #
 # (Commented lines are stripped automatically by git.)

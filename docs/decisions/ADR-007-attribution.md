@@ -109,3 +109,19 @@ change.
 
 **Revisit if** a reviewer or the Contributors graph needs the tool credited as a
 co-author again, or the kernel/Fedora convention changes.
+
+## Amendment 2026-10-09 (2): cost trail, and a warning that keeps `Co-Authored-By` out
+
+**Decided by:** maintainer (founder), 2026-10-09. **Related issue:** [#118](../../issues/118).
+
+**Change.** (1) Commits, PR `Provenance` blocks and review comments also carry an approximate
+cost estimate (`Cost-estimate:` trailer; format and source in `CONTRIBUTING.md` -> "Recording
+what it cost"). (2) `.githooks/commit-msg` now also warns, never blocks, on an AI
+`Co-Authored-By`, a `Claude-Session:` link, and an `Assisted-by` line with no `Cost-estimate`
+line. This is the "warn-only check" the previous amendment deferred.
+
+**Why.** The previous amendment removed `Co-Authored-By` for AI by convention only, and a
+harness that adds it by default would put it back unnoticed. The cost line makes the
+model/effort trail say what the work took.
+
+**Unchanged.** Advisory only (exit 0); old commits stay as they are; no history rewrite.

@@ -9,6 +9,7 @@
 <!-- See CONTRIBUTING.md -> "Recording which model did what". Write "none" if no AI was used; "unknown" if you can't tell. -->
 - Written by (harness : model id, effort):
 - Reviewed by (model, effort) or "not yet":
+- Cost estimate (usd, tokens; approximate) or "unknown":
 
 - [ ] Work state (status, dates, blockers) is on the GitHub Issue/milestone only, not copied into a doc
 - [ ] `CHANGELOG.md` updated under `[Unreleased]` (skip for pure typo fixes)

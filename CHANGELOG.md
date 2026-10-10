@@ -20,6 +20,7 @@ rename `Unreleased` to the version and date, then tag it.
 - Crisis fast-path false negatives (#105): Added missing direct suicidal phrasings and updated the false-positive guard to apply per-clause rather than globally, so real crisis statements are no longer suppressed by benign idioms in the same utterance.
 
 ### Docs
+- Cost estimates as a public trail (#118): `Cost-estimate:` commit trailer, PR Provenance line and review-comment Provenance section; `commit-msg` hook now warns (advisory) on an AI `Co-Authored-By`, a `Claude-Session:` link, or `Assisted-by` without `Cost-estimate`. ADR-007 amended.
 - `CONTRIBUTING.md` gains a "Which model and effort for what" table (which AI assistant
   and effort level to use for a build ticket, a safety-critical change, a review, a
   mechanical chore, or a founder-gated judgement call), with pointers from `AGENTS.md`
