@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-10 (Issue #132 - delivery-aware reminder dedup)
+- **What:** Replaced the proactive reminder's bag-of-words dedup with a per-item delivery check: for each caregiver schedule item we ask whether a recent assistant turn actually spoke that specific item (high per-item word coverage against the last four assistant turns), and suppress only when every pending update was already delivered. Deleted the ad-hoc `{today, tomorrow, about, there, their, would}` stop-word set that only existed to prune the word bag, reusing `MATCH_IGNORE_WORDS` as the single stop-word source.
+- **Why:** The 2-of-N word bag suppressed a reminder whenever two of its longer words happened to appear in recent chit-chat, so a never-delivered, time-sensitive reminder could be silently dropped — brushing Principle #2 (the caregiver's instruction must be respected, not just logged). No per-item "delivered" marker exists in `MemoryStore`, so session history is the only honest delivery signal.
+- **Result:** Added a two-direction offline regression test (never-delivered-but-word-overlap is NOT suppressed; actually-delivered IS suppressed) to `tests/test_proactive_agency.py`. The dedup stays gated to `is_proactive and trigger_type == "reminder"` and runs before the fast-path/flag path, so no disclosure invariant changes.
+
 ### 2026-10-10 (Issue #106 - lifestyle privacy boundary)
 - **What:** Enforced disclosure attestation at the memory-store boundary, defaulted lifestyle notes to seven-day expiry, scrubbed expired legacy notes during load, and excluded lifestyle scope from conversational search.
 - **Why:** The storage API could accept undisclosed lifestyle notes, legacy records could retain plaintext indefinitely, and search could return caregiver-only lifestyle data to prompt assembly.

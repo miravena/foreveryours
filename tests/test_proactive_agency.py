@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 from pipeline.think import build_proactive_prompt
 
 class TestProactiveAgency(unittest.TestCase):
@@ -81,6 +82,52 @@ class TestProactiveAgency(unittest.TestCase):
             res = run_turn("", store, flags, audio_dir, history=history, is_proactive=True, trigger_type="silence")
             self.assertTrue(res.is_fallback)
             self.assertIn("Too many consecutive AI turns", res.reply_text)
+
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.think.stream_reply", return_value=iter(["Reply"]))
+    def test_reminder_dedup_only_suppresses_delivered_reminders(self, mock_stream, mock_speak):
+        """#132: a reminder is suppressed only when that specific schedule item
+        was actually delivered to the senior -- not because recent chit-chat
+        happened to reuse a couple of its words."""
+        from pipeline.orchestrator import run_turn
+        from memory.store import MemoryStore
+        from caregiver import CaregiverFlags
+        import tempfile
+        from pathlib import Path
+
+        SUPPRESSION = "Reminder already delivered recently"
+
+        # (a) NEVER delivered, but recent chit-chat happens to reuse two of the
+        # item's words ("dropping", "groceries") in a totally unrelated story.
+        # The old 2-of-N word bag suppressed on exactly this incidental overlap;
+        # the delivery-aware check must NOT, because the specific reminder was
+        # never actually spoken, so it still has to reach the senior.
+        with tempfile.TemporaryDirectory() as td:
+            store = MemoryStore('test', Path(td))
+            flags = CaregiverFlags('test', Path(td))
+            audio_dir = Path(td)
+            store.add("Sarah is dropping off groceries at 4 PM", source="caregiver_memo")
+
+            history = [{"role": "assistant", "content": "You were telling me about dropping your reading glasses, and how the corner shop ran out of your favourite groceries last week."}]
+            res = run_turn("", store, flags, audio_dir, history=history, is_proactive=True, trigger_type="reminder")
+            if res.background_thread:
+                res.background_thread.join(timeout=10)
+            self.assertNotIn(SUPPRESSION, res.reply_text)
+
+        # (b) ACTUALLY delivered: the assistant already spoke this exact item ->
+        # suppress so the senior isn't told the same reminder twice.
+        with tempfile.TemporaryDirectory() as td:
+            store = MemoryStore('test', Path(td))
+            flags = CaregiverFlags('test', Path(td))
+            audio_dir = Path(td)
+            store.add("Sarah is dropping off groceries at 4 PM", source="caregiver_memo")
+
+            history = [{"role": "assistant", "content": "Just so you know, Sarah is dropping off groceries at 4 PM today."}]
+            res = run_turn("", store, flags, audio_dir, history=history, is_proactive=True, trigger_type="reminder")
+            if res.background_thread:
+                res.background_thread.join(timeout=10)
+            self.assertTrue(res.is_fallback)
+            self.assertIn(SUPPRESSION, res.reply_text)
 
 if __name__ == '__main__':
     unittest.main()
