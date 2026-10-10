@@ -18,6 +18,7 @@ rename `Unreleased` to the version and date, then tag it.
 
 ### Fixed
 - Crisis fast-path false negatives (#105): Added missing direct suicidal phrasings and updated the false-positive guard to apply per-clause rather than globally, so real crisis statements are no longer suppressed by benign idioms in the same utterance.
+- Disclosure truthfulness (#117): safety, perseveration, audit, and lifestyle flags are persisted as disclosed only after non-empty audio is delivered; quiet-mode suppression now happens before proactive flagging, and late non-streaming disclosures remain explicitly undisclosed.
 
 ### Docs
 - Cost estimates as a public trail (#118): `Cost-estimate:` commit trailer, PR Provenance line and review-comment Provenance section; `commit-msg` hook now warns (advisory) on an AI `Co-Authored-By`, a `Claude-Session:` link, or `Assisted-by` without `Cost-estimate`. ADR-007 amended.

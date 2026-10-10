@@ -202,28 +202,35 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIsNone(res.memory_saved)
 
     @patch("pipeline.orchestrator.fastpath.check")
-    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.orchestrator._speak_turn")
     @patch("pipeline.orchestrator.think.stream_reply", return_value=["Reply"])
     def test_lifestyle_extraction_triggers_disclosure(self, mock_stream, mock_speak, mock_fast):
         from safety.fastpath import FastPathResult
         mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        delivered = []
+        spoken_texts = []
+
+        def speak_side_effect(sentences, *_args, **kwargs):
+            text = list(sentences)[0]
+            spoken_texts.append(text)
+            path = self.audio_dir / f"{len(mock_speak.call_args_list)}.wav"
+            if kwargs.get("on_chunk"):
+                kwargs["on_chunk"](text, path)
+            return text, [path], 0.5
+
+        mock_speak.side_effect = speak_side_effect
         
         with patch("pipeline.orchestrator.think.extract_new_memory", return_value="LIFESTYLE: SLEEP | Slept poorly due to back pain"):
             res = run_turn(
                 "I barely slept last night, my back was killing me.",
                 self.store, self.flags, self.audio_dir, caregiver_name="Sarah",
+                on_chunk=lambda sentence, path: delivered.append(path),
             )
             res.background_thread.join(timeout=10)
             
         # Verify the disclosure was spoken via _speak_turn
         # Note: _speak_turn is called twice (once for reply, once for disclosure)
-        speak_calls = [c.args[0] for c in mock_speak.call_args_list]
-        disclosures = []
-        for call_iter in speak_calls:
-            # We must exhaust the iterator to see the text
-            text = list(call_iter)[0]
-            if "I'm making a quick note" in text:
-                disclosures.append(text)
+        disclosures = [text for text in spoken_texts if "I'm making a quick note" in text]
                 
         self.assertEqual(len(disclosures), 1)
         self.assertIn("Sarah", disclosures[0])
@@ -234,6 +241,95 @@ class TestOrchestrator(unittest.TestCase):
         lifestyle_items = [i for i in items if i.scope == "lifestyle"]
         self.assertEqual(len(lifestyle_items), 1)
         self.assertEqual(lifestyle_items[0].text, "Slept poorly due to back pain")
+        self.assertEqual(len(delivered), 2)
+
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    def test_fastpath_flag_stays_undelivered_when_no_audio_is_synthesized(self, mock_speak):
+        result = run_turn(
+            "I fell down earlier and I'm scared",
+            self.store,
+            self.flags,
+            self.audio_dir,
+            caregiver_name="Sarah",
+        )
+
+        self.assertEqual(result.audio_paths, [])
+        self.assertEqual(self.flags.all(), [])
+
+    @patch("pipeline.orchestrator.fastpath.check")
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.think.stream_reply", return_value=["Reply"])
+    def test_lifestyle_note_is_not_saved_without_delivered_disclosure(
+        self, mock_stream, mock_speak, mock_fast
+    ):
+        from safety.fastpath import FastPathResult
+        mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+
+        with patch(
+            "pipeline.orchestrator.think.extract_new_memory",
+            return_value="LIFESTYLE: SLEEP | Slept poorly",
+        ):
+            result = run_turn(
+                "I barely slept last night.",
+                self.store,
+                self.flags,
+                self.audio_dir,
+                caregiver_name="Sarah",
+            )
+            result.background_thread.join(timeout=10)
+
+        self.assertFalse(any(item.scope == "lifestyle" for item in self.store.all()))
+        self.assertIn("Suppressed Lifestyle", result.memory_saved or "")
+
+    @patch("pipeline.orchestrator.audit.audit_reply", return_value=("DISTRESS", "fell"))
+    @patch("pipeline.orchestrator._speak_turn", side_effect=[
+        ("Reply", [Path("reply.wav")], 0.5),
+        ("I want to let Sarah know about something I just said.", [], None),
+    ])
+    @patch("pipeline.think.stream_reply", return_value=["Reply"])
+    def test_audit_flag_stays_undisclosed_until_audio_is_delivered(
+        self, mock_stream, mock_speak, mock_audit
+    ):
+        result = run_turn(
+            "I feel unwell",
+            self.store,
+            self.flags,
+            self.audio_dir,
+            caregiver_name="Sarah",
+        )
+        result.background_thread.join(timeout=10)
+
+        self.assertEqual(len(self.flags.all()), 1)
+        self.assertFalse(self.flags.all()[0].disclosed_to_senior)
+
+    @patch("pipeline.orchestrator.fastpath.check")
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [Path("reply.wav")], 0.5))
+    @patch("pipeline.think.stream_reply", return_value=["Reply"])
+    def test_quiet_mode_blocks_proactive_perseveration_before_flagging(
+        self, mock_stream, mock_speak, mock_fast
+    ):
+        from safety.fastpath import FastPathResult
+        mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        self.store.set_quiet_mode(hours=4)
+        history = [
+            {"role": "user", "content": "What time is Sarah coming?"},
+            {"role": "assistant", "content": "At 4 PM."},
+            {"role": "user", "content": "When is Sarah visiting?"},
+            {"role": "assistant", "content": "At 4 PM."},
+        ]
+
+        result = run_turn(
+            "[PROACTIVE_TRIGGER]",
+            self.store,
+            self.flags,
+            self.audio_dir,
+            caregiver_name="Sarah",
+            history=history,
+            is_proactive=True,
+        )
+
+        self.assertTrue(result.is_fallback)
+        self.assertEqual(self.flags.all(), [])
 
     @patch("pipeline.orchestrator.fastpath.check")
     @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))

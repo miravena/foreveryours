@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-10 (Issue #117 - disclosure delivery contract)
+- **What:** Centralized late disclosure handling in `pipeline/orchestrator.py`. Fast-path and perseveration flags are persisted only after speech produces audio; AUDIT and lifestyle disclosures require a delivery callback, and proactive quiet-mode suppression runs before flagging.
+- **Why:** The browser could record "Dad was told" after its response had already been handed to Gradio, and quiet-mode turns could persist a disclosed perseveration flag with no reply audio.
+- **Result:** Added regression tests for silent fast-path, audit, lifestyle and quiet-mode paths. The focused suite passed 56 tests; the full suite passed 159 tests with 8 expected skips. README now documents the non-streaming disclosure boundary.
+
 ### 2026-10-10 (Issue #121 - CI import fix)
 - **What:** Fixed ModuleNotFoundError in 	est_webapp.py by correcting pipeline.memory to memory.store.
 - **Why:** The offline webapp test introduced in Issue #102 had the wrong import path, causing CI failure.
