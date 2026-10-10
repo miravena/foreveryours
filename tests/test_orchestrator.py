@@ -269,12 +269,14 @@ class TestOrchestrator(unittest.TestCase):
         res1 = run_turn("[PROACTIVE_TRIGGER]", self.store, self.flags, self.audio_dir, caregiver_name="Sarah", is_proactive=True)
         self.assertEqual(res1.audit_verdict, "Blocked by Quiet Mode")
         self.assertEqual(res1.audio_paths, [])
-        self.assertEqual(res1.reply_text, "")
+        self.assertEqual(res1.reply_text, "[Proactive turn suppressed by policy: Blocked by Quiet Mode]")
+        self.assertTrue(res1.is_fallback)
         
         # Add a non-urgent schedule update
         self.store.add("Sarah is coming at 4 PM", source="caregiver_memo")
         res2 = run_turn("[PROACTIVE_TRIGGER]", self.store, self.flags, self.audio_dir, caregiver_name="Sarah", is_proactive=True)
         self.assertEqual(res2.audit_verdict, "Blocked by Quiet Mode")
+        self.assertTrue(res2.is_fallback)
         
         # Add an [URGENT] schedule update
         self.store.add("[URGENT] Sarah is in the ER today", source="caregiver_memo")
