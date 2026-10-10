@@ -259,9 +259,10 @@ def run_turn(
         else:
             return TurnResult(
                 transcript=transcript,
-                reply_text="",
+                reply_text="[Proactive turn suppressed by policy: Blocked by Quiet Mode]",
                 audio_paths=[],
-                audit_verdict="Blocked by Quiet Mode"
+                audit_verdict="Blocked by Quiet Mode",
+                is_fallback=True,
             )
     # ---------------------------------------------------------
 
