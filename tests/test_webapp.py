@@ -361,7 +361,7 @@ class TestWebappSessions(unittest.TestCase):
 
     def test_quiet_mode_breakthrough_offline(self):
         """Issue #102: Offline webapp test: quiet on, three proactive ticks, then an [URGENT] memo; the next tick delivers the urgent line."""
-        from pipeline.memory import MemoryStore
+        from memory.store import MemoryStore
         session_id, _ = webapp.init_session()
         data_dir, _ = webapp._session_dirs(session_id)
         store = MemoryStore("default", data_dir)
