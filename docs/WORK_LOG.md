@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-10 (Issue #121 - CI import fix)
+- **What:** Fixed ModuleNotFoundError in 	est_webapp.py by correcting pipeline.memory to memory.store.
+- **Why:** The offline webapp test introduced in Issue #102 had the wrong import path, causing CI failure.
+- **Result:** The test suite can run successfully again.
+
 ### 2026-10-10 (Issue #102 - Quiet Mode UI and history fix)
 - **What:** Added is_fallback=True and a specific suppression text to the TurnResult returned when Quiet Mode blocks a proactive turn.
 - **Why:** Previously, the suppression yielded an empty reply which bloated session history (tripping the two-strike rule) and caused the webapp UI to incorrectly display Dad said: [PROACTIVE_TRIGGER] when encountering exceptions.
