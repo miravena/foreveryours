@@ -69,6 +69,7 @@ MATCH_IGNORE_WORDS = {
     "capital", "plus", "minus", "divided", "times", "rain", "sun", "outside",
     "really", "much", "always", "never", "used", "also", "something", "anything",
     "thing", "things", "talk", "talking", "feel", "feeling", "felt", "say", "said",
+    "there", "their",
 }
 
 
@@ -214,10 +215,10 @@ def run_turn(
                     # An item counts as delivered only when substantially all of
                     # its own meaningful words appear in recent assistant speech --
                     # a high per-item coverage test, not a pooled 2-of-N bag. This
-                    # reuses MATCH_IGNORE_WORDS as the single stop-word source (it
-                    # already subsumes the old ad-hoc {today, tomorrow, about,
-                    # there, their, would} set), so no separate stop-word list is
-                    # needed.
+                    # reuses MATCH_IGNORE_WORDS as the single stop-word source,
+                    # which now contains every word from the old ad-hoc
+                    # {today, tomorrow, about, there, their, would} set, so no
+                    # separate stop-word list is needed.
                     item_words = [
                         w for w in re.findall(r"\b[a-z]{4,}\b", item.lower())
                         if w not in MATCH_IGNORE_WORDS
