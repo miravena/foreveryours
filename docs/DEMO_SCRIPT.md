@@ -101,9 +101,18 @@ python main.py beat4 --audio samples/senior_grandson.wav   # real voice recall
 - The companion naturally recalls the durable fact from the caregiver memo (that the grandson is Leo).
 - When run without `NEBIUS_API_KEY`, it prints a clean, friendly message directing to `python main.py day2` instead of crashing.
 
+## Beat 5 — Time-Awareness (Circadian Dynamics)
+
+Show the companion adapting to the senior's daily rhythm by running the exact same input at two different times of day.
+
+1. **Morning mode (e.g., 10:00 AM)**: The companion should offer a warm, full conversation or gentle check-in.
+2. **Night mode / Sundowning (e.g., 22:00 PM)**: The companion restricts its output to very short, soothing sentences, avoiding new cognitive load.
+
+**Expect:**
+- The LLM visibly alters its response style based strictly on the time of day, proving the companion adapts to the senior's life context, rather than acting like a generic AI.
+
 ## What the video should NOT open on
 
 Architecture diagrams, pipeline boxes, or "here's our tech stack" slides.
-Open on beat 2 — the senior actually talking and the companion actually using
-what the caregiver told it. Explain the pipeline after the demo lands, not
-before.
+**Open on the split-screen triangle:** the caregiver panel on one side, and the senior talking on the other. Show that when the caregiver updates context, the senior's conversation changes. And when the senior expresses distress, the caregiver's panel lights up *only after* the senior is told. 
+The Caregiver ↔ ForeverYours ↔ Senior relationship IS the product. Show it immediately. Explain the pipeline after the demo lands, not before.
