@@ -95,6 +95,8 @@ _request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._re
 
 _bg_threads_lock = threading.Lock()
 _bg_threads: dict[str, threading.Thread] = {}  # session_id -> that session's in-flight AUDIT/memory-extraction thread, if any
+_session_sweeper_started = False
+_session_sweeper_lock = threading.Lock()
 
 
 def _join_previous_turn(session_id: str) -> None:
@@ -208,6 +210,33 @@ def _sweep_stale_sessions() -> None:
                 shutil.rmtree(child, ignore_errors=True)
         except FileNotFoundError:
             pass
+
+
+def _start_session_sweeper(
+    interval_s: float | None = None,
+    stop_event: threading.Event | None = None,
+) -> threading.Thread | None:
+    """Sweep orphaned sessions at startup and without requiring a visitor."""
+    global _session_sweeper_started
+    if SHARED_PROFILE:
+        return None
+    with _session_sweeper_lock:
+        if _session_sweeper_started and stop_event is None:
+            return None
+        if stop_event is None:
+            _session_sweeper_started = True
+
+    interval = interval_s if interval_s is not None else GRADIO_CACHE_SWEEP[0]
+    event = stop_event or threading.Event()
+
+    def sweep() -> None:
+        _sweep_stale_sessions()
+        while not event.wait(interval):
+            _sweep_stale_sessions()
+
+    thread = threading.Thread(target=sweep, name="session-retention-sweeper", daemon=True)
+    thread.start()
+    return thread
 
 
 def _new_session() -> str:
@@ -781,6 +810,7 @@ footer { display: none !important; }
 
 
 def build_demo() -> gr.Blocks:
+    _start_session_sweeper()
     with gr.Blocks(
         title="ForeverYours — talk, and the family that isn't there finds out",
         delete_cache=GRADIO_CACHE_SWEEP,

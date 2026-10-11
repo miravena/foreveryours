@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-11 (Issues #136 and #142 - session retention)
+- **What:** Added startup and periodic orphan-session cleanup, plus a regression test that expires a session without creating another visitor.
+- **Why:** A restart could leave household memory, flags, and reply audio on disk indefinitely because cleanup only ran when the next session opened.
+- **Result:** The retention sweeper uses a daemon thread, preserves the existing one-hour TTL, and avoids starting for shared local profiles.
+
 ### 2026-10-11 (Issue #134 - hosted ASR safety fallback)
 - **What:** Added automatic local Whisper fallback when hosted ASR fails, preserving the existing transcript-before-fast-path safety boundary; failures identify exception types without exposing provider messages.
 - **Why:** A hosted ASR outage or missing dependency could prevent spoken crisis audio from reaching the deterministic reassurance and caregiver-alert path.

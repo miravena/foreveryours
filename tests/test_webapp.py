@@ -16,6 +16,8 @@ import os
 
 import tempfile
 
+import threading
+
 import time
 
 import unittest
@@ -192,6 +194,24 @@ class TestWebappSessions(unittest.TestCase):
         self.assertFalse((self.sessions_dir / stale).exists())
 
         self.assertTrue((self.sessions_dir / fresh).exists())
+
+    def test_session_sweeper_expires_orphan_without_new_visitor(self):
+        orphan = "orphan-no-visitor"
+        root = self.sessions_dir / orphan
+        root.mkdir(parents=True, exist_ok=True)
+        old = time.time() - webapp.SESSION_TTL_S - 60
+        os.utime(root, (old, old))
+
+        stop = threading.Event()
+        thread = webapp._start_session_sweeper(interval_s=0.01, stop_event=stop)
+        self.assertIsNotNone(thread)
+        for _ in range(100):
+            if not root.exists():
+                break
+            time.sleep(0.01)
+        stop.set()
+        thread.join(timeout=2)
+        self.assertFalse(root.exists())
 
 
 
@@ -578,4 +598,3 @@ class TestBuildDemoCss(unittest.TestCase):
 if __name__ == "__main__":
 
     unittest.main()
-

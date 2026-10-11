@@ -79,6 +79,10 @@ only after the senior has heard the disclosure, expire after seven days, and
 are excluded from both senior-facing profile facts and conversational search.
 Expired legacy lifestyle records are scrubbed when the profile is loaded.
 
+Hosted-demo session directories are also swept at startup and periodically,
+so an abandoned session is removed after `SESSION_TTL_S` even if no new
+visitor opens the demo after a process restart.
+
 - **Hosted web demo (`webapp.py`).** Each browser tab is its own throwaway
   household under `FY_SESSIONS_DIR`. The reply WAVs from one turn are deleted
   at the start of the next; the whole household (memory, flags, reply audio)
