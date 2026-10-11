@@ -69,8 +69,12 @@ can hand a judge or a partner — going back never means rebuilding.
 
 ## Decided: ASR backend
 
-Local `faster-whisper`, because Token Factory has no audio-transcription endpoint (verified
-live, PR #25). Full reasoning: [ADR-004](decisions/ADR-004-asr-backend.md).
+Hosted ASR may be selected for deployment, with local `faster-whisper` as the safety fallback.
+If hosted transcription fails, audio is retried locally before the turn reaches the fast-path;
+this preserves end-to-end spoken safety handling rather than only safety for text that already has
+a transcript. Local `faster-whisper` remains the default because Token Factory has no guaranteed
+transcription availability (verified live, PR #25). Full reasoning:
+[ADR-004](decisions/ADR-004-asr-backend.md).
 
 ## Judging requirements we're building against
 
