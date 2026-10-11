@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-11 (Issue #134 - hosted ASR safety fallback)
+- **What:** Added automatic local Whisper fallback when hosted ASR fails, preserving the existing transcript-before-fast-path safety boundary; failures identify exception types without exposing provider messages.
+- **Why:** A hosted ASR outage or missing dependency could prevent spoken crisis audio from reaching the deterministic reassurance and caregiver-alert path.
+- **Result:** Added offline tests for hosted-success fallback, local recovery, and a safe combined failure error. Roadmap wording now distinguishes transcript-level safety from end-to-end spoken safety.
+
 ### 2026-10-10 (Issue #132 - delivery-aware reminder dedup)
 - **What:** Replaced the proactive reminder's bag-of-words dedup with a per-item delivery check: for each caregiver schedule item we ask whether a recent assistant turn actually spoke that specific item (high per-item word coverage against the last four assistant turns), and suppress only when every pending update was already delivered. Deleted the ad-hoc `{today, tomorrow, about, there, their, would}` stop-word set that only existed to prune the word bag, reusing `MATCH_IGNORE_WORDS` as the single stop-word source.
 - **Why:** The 2-of-N word bag suppressed a reminder whenever two of its longer words happened to appear in recent chit-chat, so a never-delivered, time-sensitive reminder could be silently dropped — brushing Principle #2 (the caregiver's instruction must be respected, not just logged). No per-item "delivered" marker exists in `MemoryStore`, so session history is the only honest delivery signal.
