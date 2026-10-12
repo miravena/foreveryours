@@ -137,12 +137,25 @@ _CAREGIVER_PANEL_NON_EMOTIONAL_SCOPES = frozenset(
 _EMOTIONAL_TEXT_PREFIXES = ("[EMOTIONAL STATE]", "[PAST EMOTION")
 
 
+_ALL_KNOWN_SCOPES = frozenset(s.value for s in MemoryScope)
+
+
 def _caregiver_panel_may_show(item) -> bool:
     """True if `item` (a memory.store.MemoryItem) is safe to render in the
     caregiver panel: caregiver-authored memos/notes always are; anything
     else only if it is neither EMOTIONAL-scope nor EMOTIONAL-state text
     (active or decayed), and its scope is one this code actually
     recognises."""
+    # Fallback (RULE): an unrecognised scope is hidden regardless of
+    # source. This check used to run only for non-CAREGIVER_SOURCES items
+    # (the CAREGIVER_SOURCES branch below short-circuited first), so a
+    # caregiver-sourced item with a garbage/future scope value -- e.g. a
+    # hand-edited data file, or a later code change that starts writing
+    # caregiver items with a new scope this function doesn't know about --
+    # would have rendered unconditionally. Checking it first makes the
+    # fail-closed guarantee unconditional, matching the RULE's own wording.
+    if item.scope not in _ALL_KNOWN_SCOPES:
+        return False
     if item.scope == MemoryScope.EMOTIONAL.value or item.text.startswith(_EMOTIONAL_TEXT_PREFIXES):
         return False
     if item.source in CAREGIVER_SOURCES:

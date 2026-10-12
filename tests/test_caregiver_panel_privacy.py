@@ -143,6 +143,27 @@ class TestCaregiverPanelPrivacy(unittest.TestCase):
         panel = webapp._format_caregiver_panel(session_id)
         self.assertNotIn("Some future, as-yet-unhandled scope value", panel)
 
+    def test_unknown_scope_hidden_even_for_caregiver_source(self):
+        # The unknown-scope fallback must not be bypassed just because the
+        # item's source is CAREGIVER_SOURCES -- a hand-edited data file or a
+        # future code change could write a caregiver-sourced item with a
+        # scope this code doesn't recognise, and the fail-closed guarantee
+        # has to hold regardless of who (ostensibly) wrote the item
+        # (review-arm finding: the unknown-scope fallback had this
+        # uncovered exception).
+        session_id, _ = webapp.init_session()
+        data_dir, _ = webapp._session_dirs(session_id)
+        store = MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
+
+        store.add(
+            "Caregiver note with a scope value this code has never seen",
+            source="caregiver_memo",
+            scope="some_future_scope",
+        )
+
+        panel = webapp._format_caregiver_panel(session_id)
+        self.assertNotIn("Caregiver note with a scope value this code has never seen", panel)
+
 
 if __name__ == "__main__":
     unittest.main()
