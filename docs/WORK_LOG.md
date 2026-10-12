@@ -9,6 +9,33 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-12 (Issue #71 follow-up - review-arm bounce addressed: merge-trailer gap disclosed, GitHub closure evidence posted)
+- **What:** review-arm (Codex engine) bounced #14296 as `changes-requested`: AC 1 and AC 2 were
+  met (honesty test + negative control reproduced against `9f5a311`), but AC 3's "#71 closed
+  with evidence" was unmet for two reasons -- the merge commit `6c32de9` carries neither
+  `Assisted-by` nor `Cost-estimate`, and GitHub verification had failed at bounce time because
+  the network was unavailable from that session.
+- **Merge-trailer gap:** `6c32de9` (`git merge --no-ff fix/<slug>` of this ticket's branch) was
+  already pushed to `origin/main` in the same push as later, unrelated commits before this
+  follow-up started -- confirmed with `git merge-base --is-ancestor 6c32de9 origin/main`. Per
+  this session's own "never rewrite a commit already on GitHub" rule, that merge commit is not
+  amended. This is the same, now-familiar gap `b717ab7`'s WORK_LOG entry above disclosed for
+  `53affd2` and three sibling merge commits: plain `git merge --no-ff` does not carry trailers
+  the way a feature commit's own message does, and nothing in this repo's merge step adds them.
+  Feature commit `bd9de6f` (the actual change) carries correct `Assisted-by`/`Cost-estimate`
+  trailers; only the auto-generated merge commit does not.
+- **GitHub closure:** network is available from this session. `gh issue view 71 -R
+  miravena/foreveryours --json state,closedAt,comments,url` shows the issue already `CLOSED`
+  (auto-closed by GitHub on the `Fixes #71` trailer when `6c32de9` was pushed) but with zero
+  comments -- closed without the evidence comment AC 3 asks for. Posted that comment now: commit
+  SHAs, the AC 1 test output, the AC 2 negative-control probe output, and this review-arm verdict
+  (with the merge-trailer gap named rather than hidden), each line starting with the required
+  `Assisted-by: ClaudeCode:claude-sonnet-5 effort=medium` audit line. No further issue-state
+  change was needed since GitHub had already closed it correctly.
+- **Result:** `.venv/bin/python -m unittest discover tests`: `Ran 201 tests ... OK (skipped=8)`
+  on `main` at this follow-up's merge base. CI (`tests`, `attribution`, `CodeQL`) green on every
+  `main` push since `b717ab7`, confirmed via `gh run list -R miravena/foreveryours -b main`.
+
 ### 2026-10-12 (Issue #139 follow-up - review-arm bounce addressed, pushed and closed)
 - **What:** review-arm bounced #14295 (`changes-requested`): the merge commit lacked audit
   trailers and issue closure with evidence was unmet. Root cause for the closure half: the
