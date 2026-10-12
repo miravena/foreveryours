@@ -46,27 +46,33 @@ base="http://127.0.0.1:$PORT"
 up=0
 for _ in $(seq 1 30); do
   sleep 0.5
-  # A bind failure (port already taken by someone else's server) makes
-  # OUR process exit, but /config could still answer -- from that OTHER
-  # process, possibly a real ForeverYours instance with FY_SHARED_PROFILE=1,
-  # which this script must never write real demo data into. So two
-  # independent checks, both required: (1) our own pid is still alive,
-  # and (2) /config's body actually has Gradio's shape (a "dependencies"
-  # list), not just any HTTP response -- a 404 from an unrelated listener
-  # on that port would otherwise race us into a false "up" (Codex review,
-  # scripts/openai_review.sh).
+  # A bind failure (port already taken by someone else's server, including
+  # a real ForeverYours instance) makes OUR process exit -- but checking
+  # "did OUR pid die" and "does /config look like Gradio" are both still
+  # inferences from the network side, and an already-running, still-up
+  # server on the same port passes both while OUR process is merely slow
+  # to start. The only ground truth for "who is actually bound to $PORT"
+  # is the kernel's own socket table: `ss -ltnp` names the owning pid of
+  # the LISTEN socket directly, and a TCP port has exactly one listener,
+  # so once ss confirms $SERVER_PID owns it, no other process -- Gradio
+  # or not -- can be the one answering on it (Codex review,
+  # scripts/openai_review.sh, two rounds: HTTP-shape checks alone can't
+  # close this race, only socket ownership can).
   if ! kill -0 "$SERVER_PID" 2>/dev/null; then
     echo "FAIL our server process ($SERVER_PID) died before answering -- port $PORT may already be in use; log:"
     cat "$LOG"; exit 1
   fi
-  if curl -s "$base/config" 2>/dev/null | "$PYTHON" -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if isinstance(d.get("dependencies"), list) else 1)' 2>/dev/null; then
+  if ! ss -ltnp 2>/dev/null | grep -E ":$PORT[[:space:]]" | grep -q "pid=$SERVER_PID,"; then
+    continue  # not yet listening, or (if ever) listening under a different pid -- keep waiting, never trust it
+  fi
+  if curl -s -o /dev/null -w '' "$base/config" 2>/dev/null; then
     up=1; break
   fi
 done
 if [[ "$up" -ne 1 ]]; then
-  echo "FAIL server never came up; log:"; cat "$LOG"; exit 1
+  echo "FAIL server never came up (or never proved it owns port $PORT); log:"; cat "$LOG"; exit 1
 fi
-echo "  ok   server answering on $base (our pid $SERVER_PID, still alive)"
+echo "  ok   port $PORT's LISTEN socket is owned by our pid $SERVER_PID, and it answers $base/config"
 
 SESSION_HASH="demo$$-$RANDOM"  # Gradio State (session_id) is bound to session_hash, not
                                 # the explicit data payload -- every call in this script
