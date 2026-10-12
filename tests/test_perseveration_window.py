@@ -131,6 +131,16 @@ class TestPerseverationWindow(unittest.TestCase):
         self.assertEqual(self._perseveration_flags(), [])
         self.assertNotIn("make a note for your family", res.reply_text)
 
+    def test_garbled_ts_degrades_to_no_flag_instead_of_crashing(self, *_mocks):
+        # A non-numeric 'ts' (corrupted session data, a future caller) must
+        # degrade to "outside the window" like a missing one -- not crash
+        # the turn (Review finding on #139).
+        history = _history(PARAPHRASES[:2], ["not-a-number", object()])
+        res = self._run(PARAPHRASES[2], history)
+
+        self.assertEqual(self._perseveration_flags(), [])
+        self.assertNotIn("make a note for your family", res.reply_text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -312,11 +312,12 @@ def run_turn(
         if len(user_entries) >= 2:
             prev1, prev2 = user_entries[-1], user_entries[-2]
             ts1, ts2 = prev1.get("ts"), prev2.get("ts")
-            # A history entry with no 'ts' counts as outside the window --
-            # that errs toward no false confusion label (#139) rather than
-            # guessing a timestamp for it.
+            # A history entry with no 'ts' -- or a garbled one that isn't a
+            # real number -- counts as outside the window -- that errs
+            # toward no false confusion label (#139) rather than guessing a
+            # timestamp for it or crashing the turn (Review finding on #139).
             within_window = (
-                ts1 is not None and ts2 is not None
+                isinstance(ts1, (int, float)) and isinstance(ts2, (int, float))
                 and (t_now - ts1) <= PERSEVERATION_WINDOW_S
                 and (t_now - ts2) <= PERSEVERATION_WINDOW_S
             )
