@@ -175,11 +175,17 @@ def speak_sentences(sentences: Iterator[str], out_dir: Path) -> Iterator[tuple[s
         yield sentence, out_path
 
 
-def play_wav(audio_path: "Path") -> None:
+def play_wav(audio_path: "Path") -> bool:
     """Play a single WAV file through the OS audio backend, blocking until it
     finishes. Factored out of main.py so both the CLI and the pipelined player
     share one implementation (no duplication). No-ops with a printed note if the
-    backend is missing, so headless boxes never crash a turn."""
+    backend is missing, so headless boxes never crash a turn.
+
+    Returns True only when playback actually completed (winsound returned with
+    no exception, or the afplay/aplay subprocess exited 0). Returns False on a
+    missing player, a non-zero exit, or a winsound exception -- the note is
+    still printed either way. Callers (PipelinedPlayer) rely on this to avoid
+    reporting a time-to-first-sound for sound that never played (#71)."""
     if sys.platform == "win32":
         try:
             import winsound
@@ -187,15 +193,19 @@ def play_wav(audio_path: "Path") -> None:
             winsound.PlaySound(str(audio_path), winsound.SND_FILENAME)
         except Exception as exc:  # pragma: no cover - platform/audio specific
             print(f"  (windows playback failed for {audio_path.name}: {exc})")
-        return
+            return False
+        return True
 
     player = "afplay" if sys.platform == "darwin" else "aplay"
     try:
         subprocess.run([player, str(audio_path)], check=True, capture_output=True)
     except FileNotFoundError:
         print(f"  (no {player} found -- skipping playback of {audio_path.name})")
+        return False
     except subprocess.CalledProcessError as exc:  # pragma: no cover - audio specific
         print(f"  (playback of {audio_path.name} failed: {exc})")
+        return False
+    return True
 
 
 class PipelinedPlayer:
@@ -208,8 +218,14 @@ class PipelinedPlayer:
     (single consumer thread, FIFO queue).
 
     ``time_to_first_sound_s`` is the wall-clock delay from construction to the
-    first ``play_wav`` call actually starting -- i.e. time to first SOUND HEARD,
-    the number issue #17 says we should report instead of time-to-first-WAV-written.
+    first ``play_wav`` call that actually completed playback -- i.e. time to
+    first SOUND HEARD, the number issue #17 says we should report instead of
+    time-to-first-WAV-written. It stays ``None`` when no ``play_wav`` call ever
+    returns ``True`` (no working audio player, every attempt failed, or
+    nothing was fed), so a missing audio backend is never reported as a fast
+    turn (#71). It measures from player construction to the start of the first
+    successful playback, and excludes speech-to-text (ASR happens before the
+    player is constructed).
 
     Usage:
         player = PipelinedPlayer(play=play)
@@ -239,9 +255,10 @@ class PipelinedPlayer:
             path = self._q.get()
             if path is None:  # sentinel from close()
                 return
-            if self.time_to_first_sound_s is None:
-                self.time_to_first_sound_s = time.monotonic() - self._t0
-            play_wav(path)
+            t = time.monotonic() - self._t0
+            played = play_wav(path)
+            if played and self.time_to_first_sound_s is None:
+                self.time_to_first_sound_s = t
 
     def feed(self, sentence: str, audio_path: "Path") -> None:
         """on_chunk callback: queue a freshly synthesized WAV for playback."""
