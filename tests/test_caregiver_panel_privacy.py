@@ -73,6 +73,31 @@ class TestCaregiverPanelPrivacy(unittest.TestCase):
         panel = webapp._format_caregiver_panel(session_id)
         self.assertNotIn("misses his late wife", panel)
 
+    def test_decayed_emotional_memory_stays_hidden(self):
+        # MemoryStore._decay_emotions() ages a 24h-expired EMOTIONAL item
+        # into HISTORICAL scope, prefixing its still-private text with
+        # "[PAST EMOTION - <date>]" instead of deleting it. Decaying scope
+        # alone must not resurrect it in the caregiver panel (Codex review,
+        # scripts/openai_review.sh).
+        session_id, _ = webapp.init_session()
+        data_dir, _ = webapp._session_dirs(session_id)
+        store = MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
+
+        emotional_text = "I feel lonely since my wife died"
+        store.add(
+            emotional_text,
+            source="conversation_extract",
+            scope=MemoryScope.EMOTIONAL.value,
+            expires_at=1.0,  # already in the past
+        )
+        store._decay_emotions(now=2.0)
+        item = next(i for i in store.all() if emotional_text in i.text)
+        self.assertEqual(item.scope, MemoryScope.HISTORICAL.value)
+        self.assertTrue(item.text.startswith("[PAST EMOTION"))
+
+        panel = webapp._format_caregiver_panel(session_id)
+        self.assertNotIn(emotional_text, panel)
+
     def test_unknown_scope_hidden_by_fallback(self):
         # Fallback: an item whose scope this code does not recognise must
         # not be shown just because it isn't explicitly EMOTIONAL.

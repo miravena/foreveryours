@@ -101,12 +101,22 @@ _CAREGIVER_PANEL_NON_EMOTIONAL_SCOPES = frozenset(
 )
 
 
+# MemoryStore._decay_emotions() ages a 24h-expired EMOTIONAL item into
+# HISTORICAL scope, prefixing its (unchanged, still private) text with
+# "[PAST EMOTION - <date>]" instead of deleting it -- scope alone can't
+# tell a decayed emotional disclosure apart from an ordinary historical
+# fact, so the text prefix has to be checked too, same as "[EMOTIONAL
+# STATE]" is for a still-active one.
+_EMOTIONAL_TEXT_PREFIXES = ("[EMOTIONAL STATE]", "[PAST EMOTION")
+
+
 def _caregiver_panel_may_show(item) -> bool:
     """True if `item` (a memory.store.MemoryItem) is safe to render in the
     caregiver panel: caregiver-authored memos/notes always are; anything
-    else only if it is neither EMOTIONAL-scope nor EMOTIONAL-state text, and
-    its scope is one this code actually recognises."""
-    if item.scope == MemoryScope.EMOTIONAL.value or item.text.startswith("[EMOTIONAL STATE]"):
+    else only if it is neither EMOTIONAL-scope nor EMOTIONAL-state text
+    (active or decayed), and its scope is one this code actually
+    recognises."""
+    if item.scope == MemoryScope.EMOTIONAL.value or item.text.startswith(_EMOTIONAL_TEXT_PREFIXES):
         return False
     if item.source in CAREGIVER_SOURCES:
         return True
