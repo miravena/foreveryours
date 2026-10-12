@@ -17,6 +17,20 @@
 #   PYTHON=/path/to/python PORT=7913 scripts/demo_caregiver_panel_live.sh
 set -euo pipefail
 
+# The readiness check below needs `ss` (iproute2) to prove port ownership at
+# the kernel level -- nothing in this repo's documented setup installs it.
+# Fail loudly and immediately if it's missing, rather than having every
+# readiness poll silently fail and report "server never came up" after 15s
+# against a server that was actually healthy the whole time (Codex review,
+# scripts/openai_review.sh). iproute2 ships by default on Debian/Ubuntu
+# (including GitHub Actions' ubuntu-latest runners) and most other distros;
+# this only bites a deliberately minimal image.
+if ! command -v ss >/dev/null 2>&1; then
+  echo "FAIL this script requires 'ss' (Debian/Ubuntu package: iproute2) to verify" >&2
+  echo "     which process actually owns \$PORT before trusting it -- not installed." >&2
+  exit 1
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ -z "${PYTHON:-}" ]]; then
   if [[ -x "$ROOT/.venv/bin/python" ]]; then PYTHON="$ROOT/.venv/bin/python"; else PYTHON=python3; fi
