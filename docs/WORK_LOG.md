@@ -9,6 +9,13 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-12 (Issue #140 second follow-up - review-arm bounce addressed: fallback gap + live deployment evidence)
+- **What:** review-arm bounced #14294 a second time: "GitHub closure and comment audit requirements remain unverifiable [from review-arm's own environment -- its GitHub connection failed], deployment evidence is absent, and the unknown-scope fallback has an uncovered exception."
+- **Fixed (the real finding):** `_caregiver_panel_may_show()` checked `item.source in CAREGIVER_SOURCES` *before* checking whether `item.scope` was one this code recognises, so the RULE's "if an item's scope is unknown, do not show it" fallback only actually fired for non-caregiver-sourced items -- a caregiver-sourced item with a garbage/future scope value would have rendered unconditionally. Moved the unknown-scope check to the top of the function so it applies regardless of source. Added `test_unknown_scope_hidden_even_for_caregiver_source`.
+- **Addressed (deployment evidence):** launched the real `webapp.py` Gradio server as its own OS process (`PORT=7899 FY_SESSIONS_DIR=<tmp> .venv/bin/python webapp.py`), confirmed it serving (`curl` -> 200), called `init_session` live over its `/gradio_api/call/...` HTTP API to create a real session, injected an EMOTIONAL-scope memory and a flag directly into that live session's on-disk store (the same files the running process reads), then called `_format_caregiver_panel` over the same HTTP API against the still-running server and confirmed the response omits the private text while showing the flag and all caregiver memos -- i.e. the actual deployed server process filtering live input, not a unittest mock. Full transcript saved at session time (curl commands + decoded response); not committed to the repo (ephemeral demo, temp dirs cleaned up after).
+- **Not independently re-verifiable by review-arm:** the GitHub comment/closure posted for the first bounce round is unchanged (issue #140 is CLOSED on GitHub with the evidence comment from the prior round); review-arm's own tooling could not reach GitHub to re-confirm this, which is outside this worker's control.
+- **Result:** `tests/test_caregiver_panel_privacy.py` now 6 tests, all pass on `main`; negative control against pre-fix commit `9f5a311` -- 6 failures (assertions, 0 errors). Full suite: `202 tests, OK (skipped=8)`.
+
 ### 2026-10-12 (Issue #71 follow-up - review-arm bounce addressed: merge-trailer gap disclosed, GitHub closure evidence posted)
 - **What:** review-arm (Codex engine) bounced #14296 as `changes-requested`: AC 1 and AC 2 were
   met (honesty test + negative control reproduced against `9f5a311`), but AC 3's "#71 closed
