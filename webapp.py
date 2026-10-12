@@ -164,11 +164,28 @@ def _will_call_nebius() -> bool:
     return bool(os.environ.get("NEBIUS_API_KEY", "").strip())
 
 
+_SESSION_ID_RE = re.compile(r"[0-9a-f]{32}")
+
+
+def _session_root(session_id: str) -> Path:
+    """This session's directory, directly under SESSIONS_DIR. The id is always
+    a server-made uuid4 hex, but it reaches us through Gradio State, so it is
+    checked before it becomes a path or an rmtree target (#147, CodeQL
+    py/path-injection). Raises ValueError for anything else."""
+    if not isinstance(session_id, str) or not _SESSION_ID_RE.fullmatch(session_id):
+        raise ValueError("invalid session id")
+    base = os.path.realpath(SESSIONS_DIR)
+    root = os.path.realpath(os.path.join(base, session_id))
+    if os.path.dirname(root) != base:
+        raise ValueError("invalid session id")
+    return Path(root)
+
+
 def _session_dirs(session_id: str) -> tuple[Path, Path]:
     """(data_dir, audio_dir) for one browser session."""
     if SHARED_PROFILE:
         return DATA_DIR, AUDIO_DIR
-    root = SESSIONS_DIR / session_id
+    root = _session_root(session_id)
     return root / "data", root / "audio"
 
 
@@ -258,7 +275,11 @@ def _end_session(session_id: str | None) -> None:
         with _bg_threads_lock:
             _bg_threads.pop(session_id, None)
     if session_id and not SHARED_PROFILE:
-        shutil.rmtree(SESSIONS_DIR / session_id, ignore_errors=True)
+        try:
+            root = _session_root(session_id)
+        except ValueError:
+            return  # a Gradio delete callback: never raise, never delete outside SESSIONS_DIR
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def _clear_session_audio(audio_dir: Path) -> None:

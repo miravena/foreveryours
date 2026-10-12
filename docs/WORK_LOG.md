@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-12 (Issue #147 - session id path validation)
+- **What:** `_session_root()` accepts only a 32-character lowercase hex id that resolves to a directory directly under `SESSIONS_DIR`, and every per-session path is now built from it. `_end_session` ignores an invalid id instead of passing it to `rmtree`.
+- **Why:** 14 open CodeQL `py/path-injection` alerts all traced to the session id going straight into a path. The id is server-made, so the risk was low, but the negative control showed it was real: the old `_end_session("../victim")` deleted a directory outside `SESSIONS_DIR`.
+- **Result:** `tests/test_session_paths.py` (4 tests) fails 9 ways on the old code and passes on the new. Shared-profile mode is unchanged. Still to check: the CodeQL run on `main` should move the alerts to fixed.
+
 ### 2026-10-11 (Issues #136 and #142 - session retention)
 - **What:** Added startup and periodic orphan-session cleanup, plus a regression test that expires a session without creating another visitor.
 - **Why:** A restart could leave household memory, flags, and reply audio on disk indefinitely because cleanup only ran when the next session opened.
