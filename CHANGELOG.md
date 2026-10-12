@@ -17,6 +17,7 @@ rename `Unreleased` to the version and date, then tag it.
 - Model-level distress backstop (#56): the async AUDIT pass now evaluates the senior's transcript for long-tail distress phrasings and severe crisis, emitting `DISTRESS` or `CRISIS` verdicts to raise the caregiver flag with zero added latency on the critical path.
 
 ### Fixed
+- Active sessions survive cleanup (#146): the hourly session sweeper no longer deletes a household that is still in use (its memories, caregiver flags and reply audio). A conversation turn or caregiver memo counts as activity, and a turn still finishing in the background is never swept. A tab left idle for an hour still expires through Gradio's own session timer, as before.
 - Session path validation (#147): a browser session id must be a server-made hex id under the sessions directory before any file is read, written or deleted for it. This closes the CodeQL path-injection alerts, and a tampered id can no longer make session cleanup delete anything else.
 - Session retention after restart (#136, #142): orphaned hosted-demo sessions are swept at startup and periodically, even when no new visitor arrives.
 - Hosted ASR safety fallback (#134): hosted transcription failures now retry local Whisper before the transcript reaches the safety fast-path, preserving spoken crisis handling during provider outages.
