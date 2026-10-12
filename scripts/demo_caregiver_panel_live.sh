@@ -34,7 +34,12 @@ trap cleanup EXIT
 
 cd "$ROOT"
 echo "== launching webapp.py on 127.0.0.1:$PORT (FY_SESSIONS_DIR=$SESS_DIR)"
-PORT="$PORT" FY_SESSIONS_DIR="$SESS_DIR" "$PYTHON" webapp.py >"$LOG" 2>&1 &
+# FY_SHARED_PROFILE=0 is forced (not just left unset): this demo's whole
+# premise is a throwaway per-session store under $SESS_DIR, and a real .env
+# with FY_SHARED_PROFILE=1 would otherwise leak through, making init_session
+# write into the repo's actual shared data/dad.* store instead -- the one
+# real thing this script must never touch (Codex review, scripts/openai_review.sh).
+PORT="$PORT" FY_SESSIONS_DIR="$SESS_DIR" FY_SHARED_PROFILE=0 "$PYTHON" webapp.py >"$LOG" 2>&1 &
 SERVER_PID=$!
 
 base="http://127.0.0.1:$PORT"
