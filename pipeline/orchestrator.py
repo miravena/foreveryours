@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from caregiver import CaregiverFlags  # noqa: E402
-from memory.store import MemoryStore  # noqa: E402
+from memory.store import STOPWORDS, MemoryStore  # noqa: E402
 from safety import fastpath  # noqa: E402
 
 from . import audit, speak, think  # noqa: E402
@@ -45,6 +45,36 @@ CRISIS_DISCLOSURE_LINE = (
 
 FALLBACK_REPLY_1 = "I'm right here with you, dear. My thoughts drifted for a second—could you say that one more time?"
 FALLBACK_REPLY_2 = "I'm having a little trouble with my connection right now, dear, but I'm still right here beside you. Take your time."
+
+# Fixes #139: a confusion/perseveration flag needs a repeated QUESTION, not
+# just a repeated intent -- three distinct LOGISTICAL questions ("When is my
+# appointment?" / "Are groceries coming?" / "What's planned tomorrow?") share
+# one intent label but are not the same question, and must not flag.
+PERSEVERATION_WINDOW_S = 1800  # 30 minutes
+
+_CONTENT_WORD_RE = re.compile(r"[a-z0-9]+")
+
+
+def _content_words(text: str) -> set[str]:
+    """Lowercase alnum tokens longer than 2 chars, minus memory.store.STOPWORDS --
+    the same stop-word source RECALL's own keyword matching uses, so "is this a
+    repeated question" and "is this a relevant memory" agree on what counts as
+    content."""
+    return {
+        w for w in _CONTENT_WORD_RE.findall(text.lower())
+        if len(w) > 2 and w not in STOPWORDS
+    }
+
+
+def _is_repeat_question(a: str, b: str) -> bool:
+    """Jaccard overlap of content words >= 0.5. Two messages with no content
+    words in common (or none at all) are never a repeat -- an empty overlap
+    must not look like a 100% match."""
+    words_a, words_b = _content_words(a), _content_words(b)
+    if not words_a or not words_b:
+        return False
+    union = words_a | words_b
+    return len(words_a & words_b) / len(union) >= 0.5
 
 
 def _sanitize_caregiver_update(text: str, caregiver_name: str) -> str:
@@ -278,9 +308,26 @@ def run_turn(
     immediate_reply_text = fast.immediate_reply if fast.triggered else ""
 
     if enable_perseveration_flag and history:
-        user_msgs = [msg["content"] for msg in history if msg.get("role") == "user"]
-        if len(user_msgs) >= 2:
-            if detect_intent(user_msgs[-1]) == intent and detect_intent(user_msgs[-2]) == intent:
+        user_entries = [msg for msg in history if msg.get("role") == "user"]
+        if len(user_entries) >= 2:
+            prev1, prev2 = user_entries[-1], user_entries[-2]
+            ts1, ts2 = prev1.get("ts"), prev2.get("ts")
+            # A history entry with no 'ts' counts as outside the window --
+            # that errs toward no false confusion label (#139) rather than
+            # guessing a timestamp for it.
+            within_window = (
+                ts1 is not None and ts2 is not None
+                and (t_now - ts1) <= PERSEVERATION_WINDOW_S
+                and (t_now - ts2) <= PERSEVERATION_WINDOW_S
+            )
+            is_repeat = (
+                within_window
+                and detect_intent(prev1["content"]) == intent
+                and detect_intent(prev2["content"]) == intent
+                and _is_repeat_question(prev1["content"], transcript)
+                and _is_repeat_question(prev2["content"], transcript)
+            )
+            if is_repeat:
                 persev_reply = "I'm going to make a note for your family that we've talked about this a few times today."
                 
                 _, persev_paths, persev_first_time = _speak_turn(iter([persev_reply]), audio_out_dir, on_chunk=on_chunk)

@@ -642,7 +642,7 @@ def run_demo_turn_streaming(
             new_history = history + [{"role": "assistant", "content": result.reply_text}]
         else:
             new_history = history + [
-                {"role": "user", "content": transcript},
+                {"role": "user", "content": transcript, "ts": time.time()},
                 {"role": "assistant", "content": result.reply_text},
             ]
         new_history = new_history[-(MAX_HISTORY_TURNS * 2) :]
@@ -773,7 +773,7 @@ def _run_demo_turn(
             new_history = history + [{"role": "assistant", "content": result.reply_text}]
         else:
             new_history = history + [
-                {"role": "user", "content": transcript},
+                {"role": "user", "content": transcript, "ts": time.time()},
                 {"role": "assistant", "content": result.reply_text},
             ]
         new_history = new_history[-(MAX_HISTORY_TURNS * 2) :]
