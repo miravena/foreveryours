@@ -176,6 +176,10 @@ def _session_root(session_id: str) -> Path:
         raise ValueError("invalid session id")
     base = os.path.realpath(SESSIONS_DIR)
     root = os.path.realpath(os.path.join(base, session_id))
+    # realpath + startswith is the containment check CodeQL recognises; the
+    # dirname check then pins it to exactly one level below SESSIONS_DIR.
+    if not root.startswith(base + os.sep):
+        raise ValueError("invalid session id")
     if os.path.dirname(root) != base:
         raise ValueError("invalid session id")
     return Path(root)
