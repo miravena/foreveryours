@@ -477,10 +477,14 @@ class TestOrchestrator(unittest.TestCase):
         from safety.fastpath import FastPathResult
         mock_fast.return_value = FastPathResult(False, "none", None, None, None)
         mock_speak.return_value = ("Reply", [self.audio_dir / "reply.wav"], 0.5)
+        # Fixes #139: a repeat now also needs a 'ts' inside PERSEVERATION_WINDOW_S
+        # on each prior entry (webapp.py adds this when it appends a user turn).
+        import time as _time
+        now = _time.time()
         history = [
-            {"role": "user", "content": "What time is Sarah coming?"},
+            {"role": "user", "content": "What time is Sarah coming?", "ts": now - 600},
             {"role": "assistant", "content": "Sarah is coming at 4 PM."},
-            {"role": "user", "content": "What time is Sarah coming?"},
+            {"role": "user", "content": "What time is Sarah coming?", "ts": now - 300},
             {"role": "assistant", "content": "She's visiting at 4 PM today."},
         ]
         # The 3rd time

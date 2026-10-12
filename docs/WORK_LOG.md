@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-12 (Issue #139 - perseveration flag needs a repeated question)
+- **What:** The confusion/perseveration flag in `pipeline/orchestrator.py` now requires the current turn and the two prior user turns to (1) share `detect_intent`, (2) have content-word Jaccard overlap >= 0.5 (content words: lowercase `[a-z0-9]+` tokens longer than 2 chars, minus `memory.store.STOPWORDS`), and (3) all fall inside a new named constant, `PERSEVERATION_WINDOW_S = 1800`. `webapp.py` and `main.py` now stamp `"ts": time.time()` on each user turn appended to history; a history entry with no `ts` (or a non-numeric one) counts as outside the window (errs toward no false confusion label).
+- **Why:** The old rule only checked that the last two user turns shared one intent label. Three distinct LOGISTICAL questions ("When is my appointment?" / "Are groceries coming today?" / "What is planned tomorrow?") all classify as `LOGISTICAL` and were wrongly flagged as a confusion loop.
+- **Result:** `tests/test_perseveration_window.py` (6 cases: distinct questions, verbatim repeat, repeat older than the window, paraphrases, missing `ts`, garbled `ts`) fails on the distinct-questions case on pre-fix code (assertion, not import error) and passes post-fix. `tests/test_orchestrator.py::test_perseveration_tracking_flags_loop` updated to stamp `ts` on its history so the disclosure-on-a-real-flag invariant stays covered. REVIEW.md high-effort pass (Claude, high effort, subagent) found a malformed-`ts` crash, fixed here, and filed two follow-ups: #153 (short identifying tokens like 2-letter surnames collapse distinct questions) and a nit (prior-vs-prior comparison not checked) noted on the existing grouped-nits Issue. Full suite: `Ran 185 tests ... OK (skipped=8)`.
+
 ### 2026-10-12 (Issue #71 - no fake time-to-first-sound when nothing played)
 - **What:** `pipeline/speak.play_wav` now returns `True` only when playback actually completed
   (winsound returned with no exception, or the afplay/aplay subprocess exited 0) and `False` on a

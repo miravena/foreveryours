@@ -25,6 +25,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import os
+import time
 SENIOR_TIMEZONE = os.environ.get('SENIOR_TIMEZONE', 'Asia/Kuala_Lumpur')
 from pathlib import Path
 
@@ -256,7 +257,10 @@ def chat_loop(play: bool = True) -> None:
             print(f"Audit: {result.audit_verdict}")
 
         if not result.is_fallback:
-            history.append({"role": "user", "content": senior_input})
+            # Fixes #139: the perseveration window check needs a 'ts' on each
+            # user turn (same as webapp.py), or it treats every CLI turn as
+            # outside the window and the flag never fires here.
+            history.append({"role": "user", "content": senior_input, "ts": time.time()})
             history.append({"role": "assistant", "content": result.reply_text})
             history = history[-(max_history_turns * 2):]
         print("")
