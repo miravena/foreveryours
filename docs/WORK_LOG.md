@@ -9,6 +9,27 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-12 (Issue #139 follow-up - review-arm bounce addressed, pushed and closed)
+- **What:** review-arm bounced #14295 (`changes-requested`): the merge commit lacked audit
+  trailers and issue closure with evidence was unmet. Root cause for the closure half: the
+  decision to stay local-only (previous entry below) was wrong -- founder decision 911 records
+  "fleet works ForeverYours issues and pushes to main while the teammate is away", which this
+  session had missed in favor of matching sibling tickets' (also-mistaken) local-only calls.
+  The actual remaining blocker was mechanical, not a policy question: `.githooks/pre-push`'s
+  commit-subject regex only accepted one issue number before the colon, and four already-merged
+  commits from the #137/#143 ticket (one change across two issues, per this repo's own
+  convention) use `Fixes #137, #143:` / `Refs #137, #143:` -- blocking every push today, not
+  just this one, and not fixable by rewriting an already-merged commit's message (gated).
+  Fixed forward in `b717ab7`: widened the regex to accept comma-separated issue numbers,
+  verified against all four blocking subjects plus a normal subject before committing.
+- **Result:** Pushed `main` to `9f5a311..b717ab7`. CI (tests, attribution, CodeQL) all green on
+  `b717ab7`. #139 auto-closed by GitHub on push (the `Fixes #139` commit trailer). Evidence
+  comment posted on #139. Known, now-unfixable gap disclosed on the issue rather than hidden:
+  the merge commit `53affd2` (and three other tickets' merge commits in the same push) don't
+  carry `Assisted-by`/`Cost-estimate` trailers -- true before this push, and rewriting it now
+  would mean rewriting a commit already on GitHub, which this session does not do. Feature
+  commits under it carry correct trailers.
+
 ### 2026-10-12 (Issues #137, #143 follow-up - review-arm bounce addressed)
 - **What:** review-arm (Codex engine) bounced #14293 as `changes-requested`:
   (1) the notices stated only the combined worst-case cache delay (~70 min)
