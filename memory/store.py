@@ -277,14 +277,28 @@ class MemoryStore:
         for item in self._items:
             if item.text.lower() == old_text.lower() and item.status == "active":
                 item.status = "superseded"
-                item.superseded_by = new_text
                 # Inherit temporal and privacy properties from the original
                 inherited_scope = item.scope
                 inherited_privacy = item.privacy
                 inherited_expires_at = item.expires_at
-                
+
                 if inherited_scope == MemoryScope.UNCERTAIN.value:
                     inherited_scope = MemoryScope.PERMANENT.value
+
+                # Fixes #140 follow-up (Codex review, scripts/openai_review.sh):
+                # _decay_emotions() ages a 24h-expired EMOTIONAL item to
+                # HISTORICAL scope but keeps its still-private text behind a
+                # "[PAST EMOTION - <date>]" prefix. Without carrying that
+                # prefix forward, a correction to a decayed emotional memory
+                # would inherit the plain HISTORICAL scope and surface as an
+                # ordinary fact in caregiver-facing views -- undoing the
+                # privacy boundary decay was already respecting.
+                if item.text.startswith("[PAST EMOTION"):
+                    prefix = item.text.split(":", 1)[0] + ": "
+                    if not new_text.startswith(prefix):
+                        new_text = f"{prefix}{new_text}"
+
+                item.superseded_by = new_text
 
         new_item = MemoryItem(
             text=new_text,

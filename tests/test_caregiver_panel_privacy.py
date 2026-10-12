@@ -98,6 +98,35 @@ class TestCaregiverPanelPrivacy(unittest.TestCase):
         panel = webapp._format_caregiver_panel(session_id)
         self.assertNotIn(emotional_text, panel)
 
+    def test_correction_of_decayed_emotional_memory_stays_hidden(self):
+        # MemoryStore.supersede() inherits scope from the item it replaces.
+        # Correcting a decayed EMOTIONAL item (now HISTORICAL, text tagged
+        # "[PAST EMOTION - ...]") must not drop that tag off the new fact,
+        # or the correction -- itself drawn from the senior's own words --
+        # would surface in the caregiver panel untagged (Codex review,
+        # scripts/openai_review.sh).
+        session_id, _ = webapp.init_session()
+        data_dir, _ = webapp._session_dirs(session_id)
+        store = MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
+
+        original_text = "Angry with Sarah today"
+        store.add(
+            original_text,
+            source="conversation_extract",
+            scope=MemoryScope.EMOTIONAL.value,
+            expires_at=1.0,
+        )
+        store._decay_emotions(now=2.0)
+        decayed = next(i for i in store.all() if original_text in i.text)
+
+        correction_text = "Angry with Sarah because she never visits"
+        new_item = store.supersede(decayed.text, correction_text)
+        self.assertEqual(new_item.scope, MemoryScope.HISTORICAL.value)
+        self.assertTrue(new_item.text.startswith("[PAST EMOTION"))
+
+        panel = webapp._format_caregiver_panel(session_id)
+        self.assertNotIn(correction_text, panel)
+
     def test_unknown_scope_hidden_by_fallback(self):
         # Fallback: an item whose scope this code does not recognise must
         # not be shown just because it isn't explicitly EMOTIONAL.
