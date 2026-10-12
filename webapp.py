@@ -112,7 +112,9 @@ GRADIO_CACHE_SWEEP = (600, SESSION_TTL_S)  # (check every N s, delete files olde
 _GRADIO_CLOSED_STATE_TTL_S = 3600  # Gradio's own fixed constant, not ours
 _CLOSED_TAB_MIN = _GRADIO_CLOSED_STATE_TTL_S // 60
 _SESSION_TTL_MIN = SESSION_TTL_S // 60
-_CACHE_MAX_MIN = (GRADIO_CACHE_SWEEP[0] + GRADIO_CACHE_SWEEP[1] + 59) // 60
+_CACHE_SWEEP_INTERVAL_MIN = GRADIO_CACHE_SWEEP[0] // 60  # how often the cache sweep runs
+_CACHE_MAX_AGE_MIN = GRADIO_CACHE_SWEEP[1] // 60  # how old a file must be before that sweep removes it
+_CACHE_MAX_MIN = (GRADIO_CACHE_SWEEP[0] + GRADIO_CACHE_SWEEP[1] + 59) // 60  # worst case: sweep just missed it
 HIGH_PRIORITY_SEVERITIES = ("crisis", "distress", "confusion")
 # Fixes #140: the caregiver panel's "Briefed memory" list is built from
 # MemoryStore.all(), which also holds EMOTIONAL-scope memories extracted from
@@ -945,8 +947,9 @@ def build_demo() -> gr.Blocks:
                     f"reply and run a safety check. Your household's memory, flags and audio are "
                     f"removed about {_CLOSED_TAB_MIN} minutes after you close this tab, or after "
                     f"{_SESSION_TTL_MIN} minutes of inactivity if the close never registers; your "
-                    f"recorded/uploaded input audio sits in Gradio's own cache for up to "
-                    f"{_CACHE_MAX_MIN} minutes.*"
+                    f"recorded/uploaded input audio separately sits in Gradio's own cache, swept "
+                    f"every {_CACHE_SWEEP_INTERVAL_MIN} minutes and removing files older than "
+                    f"{_CACHE_MAX_AGE_MIN} minutes, so up to about {_CACHE_MAX_MIN} minutes.*"
                 )
                 audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Speak (as the senior)")
                 text_in = gr.Textbox(
@@ -1010,8 +1013,10 @@ def build_demo() -> gr.Blocks:
                 "this link sees it. Its memory, flags and reply audio are removed about "
                 f"{_CLOSED_TAB_MIN} minutes after you close the tab, or after "
                 f"{_SESSION_TTL_MIN} minutes of inactivity if the close never registers. "
-                f"Recorded or uploaded input audio sits in Gradio's own cache for up to "
-                f"{_CACHE_MAX_MIN} minutes. We never promise deletion the instant the tab closes."
+                f"Recorded or uploaded input audio separately sits in Gradio's own cache, swept "
+                f"every {_CACHE_SWEEP_INTERVAL_MIN} minutes and removing files older than "
+                f"{_CACHE_MAX_AGE_MIN} minutes, so up to about {_CACHE_MAX_MIN} minutes. We never "
+                f"promise deletion the instant the tab closes."
             )
 
         if DEV_MODE:

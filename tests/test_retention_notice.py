@@ -86,9 +86,35 @@ class TestRetentionNoticeWording(unittest.TestCase):
             "webapp notice does not cite a minute figure derived from GRADIO_CACHE_SWEEP",
         )
 
+    def test_webapp_notice_cites_cache_sweep_interval_and_threshold_minutes(self):
+        """Not just the combined worst case -- the notice must also name the
+        sweep's own interval (how often it runs) and age threshold (how old a
+        file must be) separately, derived from GRADIO_CACHE_SWEEP."""
+        interval_s, max_age_s = webapp.GRADIO_CACHE_SWEEP
+        self.assertIn(
+            str(interval_s // 60),
+            self.notice_text,
+            "webapp notice does not cite the cache sweep's own interval in minutes",
+        )
+        self.assertIn(
+            str(max_age_s // 60),
+            self.notice_text,
+            "webapp notice does not cite the cache sweep's own age threshold in minutes",
+        )
+
     def test_privacy_md_names_both_mechanisms(self):
         text_lower = self.privacy_md.lower()
         self.assertIn("close", text_lower)
+        self.assertRegex(
+            text_lower,
+            r"every 10 minutes",
+            "docs/PRIVACY.md does not name the cache sweep's own 10-minute interval",
+        )
+        self.assertRegex(
+            text_lower,
+            r"older than 60 minutes",
+            "docs/PRIVACY.md does not name the cache sweep's own 60-minute age threshold",
+        )
         self.assertRegex(
             text_lower,
             r"(hour|minute)",
@@ -107,6 +133,12 @@ class TestRetentionNoticeWording(unittest.TestCase):
             text_lower,
             r"cache",
             "docs/SAFETY_AND_PRIVACY.md does not mention Gradio's separate input-audio cache",
+        )
+        interval_s, _max_age_s = webapp.GRADIO_CACHE_SWEEP
+        self.assertIn(
+            str(interval_s),
+            self.safety_md,
+            "docs/SAFETY_AND_PRIVACY.md does not name the cache sweep's own interval in seconds",
         )
         self.assertNotRegex(
             text_lower,
