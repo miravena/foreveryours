@@ -9,6 +9,26 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-12 (Issue #71 - no fake time-to-first-sound when nothing played)
+- **What:** `pipeline/speak.play_wav` now returns `True` only when playback actually completed
+  (winsound returned with no exception, or the afplay/aplay subprocess exited 0) and `False` on a
+  missing player, a non-zero exit, or a winsound exception -- it still prints its existing note
+  either way. `PipelinedPlayer._run` now records `time_to_first_sound_s` from the timestamp taken
+  just before a `play_wav` call only when that call returned `True`, instead of unconditionally on
+  the first queued item. `main.py` prints `"No audio was played (no working audio player)"` and no
+  number when `time_to_first_sound_s` stays `None`.
+- **Why:** On a box with no `aplay`/`afplay`, `play_wav` printed its "no player found" note but the
+  player still stamped a near-zero `time_to_first_sound_s` for sound that never played -- a fake
+  fast reading that could pass the M11 latency gate falsely (found reviewing #45).
+- **Result:** `tests/test_first_sound_honesty.py` (4 tests) exercises the missing-player,
+  failing-player and success cases through `PipelinedPlayer` and `play_wav` directly, with
+  `subprocess.run` mocked. Negative control: copied onto pre-fix commit `9f5a311`, the suite FAILs
+  (assertion on the stamped float, not an import error) because old `_run` stamps the time
+  unconditionally. Full suite: `Ran 183 tests in 4.049s OK (skipped=8)`. Did not push to GitHub or
+  close the issue directly -- this session follows the fleet's standing local-only git policy, so
+  the commit lands on `main` locally only; publishing/closing the issue is left for whoever has
+  the founder's "publish" go-ahead for this repo.
+
 ### 2026-10-12 (Issues #137, #143 - retention wording matches the code)
 - **What:** Fixed the webapp notice (two Markdown blocks) and `docs/PRIVACY.md` /
   `docs/SAFETY_AND_PRIVACY.md` so they never claim deletion the instant the tab

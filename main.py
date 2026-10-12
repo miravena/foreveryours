@@ -116,6 +116,8 @@ def beat2_senior_turn(transcript: str | None, audio_in: Path | None = None, play
     if result.time_to_first_sound_s is not None:
         tag = "OK" if result.time_to_first_sound_s < 2.0 else "SLOW"
         print(f"Time to first sound heard: {result.time_to_first_sound_s:.2f}s [{tag}]")
+    elif play:
+        print("No audio was played (no working audio player)")
     if result.memory_saved:
         print(f"New memory saved: {result.memory_saved}")
     if result.audit_verdict:
@@ -246,6 +248,8 @@ def chat_loop(play: bool = True) -> None:
         if result.time_to_first_sound_s is not None:
             tag = "OK" if result.time_to_first_sound_s < 2.0 else "SLOW"
             print(f"Time to first sound heard: {result.time_to_first_sound_s:.2f}s [{tag}]")
+        elif play:
+            print("No audio was played (no working audio player)")
         if result.memory_saved:
             print(f"[MEMORY] New memory saved: {result.memory_saved}")
         if result.audit_verdict and not result.caregiver_flag:

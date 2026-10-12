@@ -61,8 +61,12 @@ Dated measurements are in
 [`docs/WORK_LOG.md`](docs/WORK_LOG.md). The CLI (`main.py`/`chat`) now plays each reply sentence
 as soon as it is synthesized (pipelined playback, [#17](../../issues/17)), so it reports both
 **time to first WAV written** (synthesis) and **time to first sound heard** (the number a judge
-actually perceives). The browser demo still plays one combined clip; sentence-level browser
-streaming is tracked separately.
+actually perceives). Time to first sound heard is measured from player construction to the start
+of the first *successful* playback, and excludes speech-to-text (ASR happens before the player is
+constructed). On a box with no working audio player, the CLI reports **"No audio was played (no
+working audio player)"** and prints no number -- it never reports a fake near-zero reading for
+sound nobody heard ([#71](../../issues/71)). The browser demo still plays one combined clip;
+sentence-level browser streaming is tracked separately.
 
 ## Demo script
 

@@ -10,6 +10,12 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Fixed
+- Time-to-first-sound honesty (#71): `time_to_first_sound_s` is now stamped only when a WAV
+  actually finished playing (winsound/afplay/aplay reported success), instead of unconditionally
+  on the first queued chunk. With no working audio player the CLI now prints "No audio was played
+  (no working audio player)" and no number, instead of a fake near-zero reading.
+
 ### Changed
 - The companion's output voice is now an offline **neural** voice (Piper, `en_US-lessac-medium`) when its CLI and voice model are present, replacing the robotic espeak-ng/System.Speech voice that ADR-001 had accepted as a Design-score tradeoff (#52, ADR-008). It is auto-detected and optional: with no voice model installed the demo falls back automatically to the previous espeak-ng/System.Speech/pyttsx3 path, so no extra install is required to run `main`. Fully offline — no network or API key at runtime. Each sentence is synthesized in its own clean subprocess, so the #28 long-running-silence fix is preserved.
 
