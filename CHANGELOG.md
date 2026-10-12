@@ -17,6 +17,7 @@ rename `Unreleased` to the version and date, then tag it.
 - Model-level distress backstop (#56): the async AUDIT pass now evaluates the senior's transcript for long-tail distress phrasings and severe crisis, emitting `DISTRESS` or `CRISIS` verdicts to raise the caregiver flag with zero added latency on the critical path.
 
 ### Fixed
+- Session path validation (#147): a browser session id must be a server-made hex id under the sessions directory before any file is read, written or deleted for it. This closes the CodeQL path-injection alerts, and a tampered id can no longer make session cleanup delete anything else.
 - Session retention after restart (#136, #142): orphaned hosted-demo sessions are swept at startup and periodically, even when no new visitor arrives.
 - Hosted ASR safety fallback (#134): hosted transcription failures now retry local Whisper before the transcript reaches the safety fast-path, preserving spoken crisis handling during provider outages.
 - Proactive reminder dedup (#132): a caregiver reminder is now suppressed only when that specific schedule item was actually delivered to the senior in a recent turn, instead of whenever a couple of its words happened to appear in recent conversation. Time-sensitive reminders (e.g. "Sarah is dropping off groceries at 4 PM") are no longer silently dropped because of incidental word overlap with chit-chat.
