@@ -76,7 +76,7 @@ from pathlib import Path
 import gradio as gr
 
 from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags
-from memory.store import MemoryScope, MemoryStore, PrivacyLevel
+from memory.store import CAREGIVER_SOURCES, MemoryScope, MemoryStore, PrivacyLevel
 from pipeline import hear
 from pipeline.orchestrator import run_turn
 
@@ -114,6 +114,38 @@ _CLOSED_TAB_MIN = _GRADIO_CLOSED_STATE_TTL_S // 60
 _SESSION_TTL_MIN = SESSION_TTL_S // 60
 _CACHE_MAX_MIN = (GRADIO_CACHE_SWEEP[0] + GRADIO_CACHE_SWEEP[1] + 59) // 60
 HIGH_PRIORITY_SEVERITIES = ("crisis", "distress", "confusion")
+# Fixes #140: the caregiver panel's "Briefed memory" list is built from
+# MemoryStore.all(), which also holds EMOTIONAL-scope memories extracted from
+# the senior's own private words -- that is the surveillance #140 warns
+# about. Everything else (disclosed flags, caregiver memos/notes) stays
+# visible by design; only EMOTIONAL-scope / emotional-text items are kept
+# out of the panel. An unrecognised scope is treated as EMOTIONAL-like and
+# hidden too (fail closed, never fail open on a privacy boundary).
+_CAREGIVER_PANEL_NON_EMOTIONAL_SCOPES = frozenset(
+    s.value for s in MemoryScope if s is not MemoryScope.EMOTIONAL
+)
+
+
+# MemoryStore._decay_emotions() ages a 24h-expired EMOTIONAL item into
+# HISTORICAL scope, prefixing its (unchanged, still private) text with
+# "[PAST EMOTION - <date>]" instead of deleting it -- scope alone can't
+# tell a decayed emotional disclosure apart from an ordinary historical
+# fact, so the text prefix has to be checked too, same as "[EMOTIONAL
+# STATE]" is for a still-active one.
+_EMOTIONAL_TEXT_PREFIXES = ("[EMOTIONAL STATE]", "[PAST EMOTION")
+
+
+def _caregiver_panel_may_show(item) -> bool:
+    """True if `item` (a memory.store.MemoryItem) is safe to render in the
+    caregiver panel: caregiver-authored memos/notes always are; anything
+    else only if it is neither EMOTIONAL-scope nor EMOTIONAL-state text
+    (active or decayed), and its scope is one this code actually
+    recognises."""
+    if item.scope == MemoryScope.EMOTIONAL.value or item.text.startswith(_EMOTIONAL_TEXT_PREFIXES):
+        return False
+    if item.source in CAREGIVER_SOURCES:
+        return True
+    return item.scope in _CAREGIVER_PANEL_NON_EMOTIONAL_SCOPES
 
 _lock = threading.Lock()
 _request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._request_log.clear() still resolves; _rate_limit_ok() keeps its own local dict now
@@ -386,7 +418,7 @@ def _format_caregiver_panel(session_id: str | None) -> str:
         lines.append(f"- **({flag.severity})** {flag.text}\n  {disclosed}")
 
     lines.append("\n### Briefed memory")
-    items = store.all()
+    items = [item for item in store.all() if _caregiver_panel_may_show(item)]
     if not items:
         lines.append("_(nothing briefed yet)_")
     now = time.time()
