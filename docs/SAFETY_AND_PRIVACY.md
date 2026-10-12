@@ -86,11 +86,11 @@ visitor opens the demo after a process restart.
 - **Hosted web demo (`webapp.py`).** Each browser tab is its own throwaway
   household under `FY_SESSIONS_DIR`. The reply WAVs from one turn are deleted
   at the start of the next; the whole household (memory, flags, reply audio)
-  is deleted about `SESSION_TTL_S` (default 3600s / 1 hour) after the tab
-  disconnects — Gradio's `gr.State` `delete_callback` (`_end_session`) fires
-  once Gradio's own closed-session timer expires, which is a fixed 3600s in
-  the installed Gradio version regardless of `SESSION_TTL_S`, confirmed
-  against the `gradio` package in this repo's `.venv` — or after
+  is deleted about an hour (3600s) after the tab disconnects — Gradio's
+  `gr.State` `delete_callback` (`_end_session`) fires once Gradio's own
+  closed-session timer expires, which is a fixed 3600s in the installed
+  Gradio version (confirmed against the `gradio` package in this repo's
+  `.venv`) regardless of `SESSION_TTL_S` — or after
   `SESSION_TTL_S` of inactivity (the sweeper) if the close event never
   arrives. We never promise deletion the instant the tab closes. Uploaded or
   recorded input clips and served reply audio separately pass through

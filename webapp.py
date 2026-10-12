@@ -95,14 +95,22 @@ SESSIONS_DIR = Path(os.environ.get("FY_SESSIONS_DIR", Path(tempfile.gettempdir()
 SHARED_PROFILE = os.environ.get("FY_SHARED_PROFILE") == "1"
 SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
 GRADIO_CACHE_SWEEP = (600, SESSION_TTL_S)  # (check every N s, delete files older than M s)
-# Human-readable figures for the notices below, derived from the constants
-# above (never hand-typed literals) so the wording can't drift from the code
-# (#137, #143). Household deletion: ~SESSION_TTL_S after the tab closes
-# (Gradio's gr.State delete_callback, via its own fixed closed-session TTL —
-# confirmed 3600s in the installed gradio==6.29.1) or after SESSION_TTL_S of
-# inactivity if the close event never arrives. Input audio cache: swept every
-# GRADIO_CACHE_SWEEP[0]s, dropping files older than GRADIO_CACHE_SWEEP[1]s, so
-# up to GRADIO_CACHE_SWEEP[0] + GRADIO_CACHE_SWEEP[1] seconds.
+# Human-readable figures for the notices below (#137, #143). Two different
+# delays, from two different sources -- do not conflate them:
+#   - Tab-close path: when gr.State's delete_callback (_end_session) actually
+#     fires is governed by Gradio's OWN fixed closed-session TTL
+#     (StateHolder.STATE_TTL_WHEN_CLOSED in gradio/state_holder.py), which is
+#     3600s hardcoded in the installed gradio==6.29.1 regardless of our
+#     SESSION_TTL_S -- confirmed by reading that source, not assumed. If
+#     SESSION_TTL_S is overridden via env, this number does NOT move with it.
+#   - Inactivity-sweep path (close event never arrives): governed by our own
+#     SESSION_TTL_S, so this one does track the env override.
+#   - Input-audio cache: Gradio's delete_cache=GRADIO_CACHE_SWEEP sweeps every
+#     GRADIO_CACHE_SWEEP[0]s and drops files older than GRADIO_CACHE_SWEEP[1]s
+#     (== SESSION_TTL_S), so up to GRADIO_CACHE_SWEEP[0] + GRADIO_CACHE_SWEEP[1]
+#     seconds -- this part does track SESSION_TTL_S.
+_GRADIO_CLOSED_STATE_TTL_S = 3600  # Gradio's own fixed constant, not ours
+_CLOSED_TAB_MIN = _GRADIO_CLOSED_STATE_TTL_S // 60
 _SESSION_TTL_MIN = SESSION_TTL_S // 60
 _CACHE_MAX_MIN = (GRADIO_CACHE_SWEEP[0] + GRADIO_CACHE_SWEEP[1] + 59) // 60
 HIGH_PRIORITY_SEVERITIES = ("crisis", "distress", "confusion")
@@ -903,7 +911,7 @@ def build_demo() -> gr.Blocks:
                     "🎙️ *When you speak or type here, it is recorded and turned into text. "
                     "That text (not your voice recording) is sent to Nebius Token Factory to write a "
                     f"reply and run a safety check. Your household's memory, flags and audio are "
-                    f"removed about {_SESSION_TTL_MIN} minutes after you close this tab, or after "
+                    f"removed about {_CLOSED_TAB_MIN} minutes after you close this tab, or after "
                     f"{_SESSION_TTL_MIN} minutes of inactivity if the close never registers; your "
                     f"recorded/uploaded input audio sits in Gradio's own cache for up to "
                     f"{_CACHE_MAX_MIN} minutes.*"
@@ -968,7 +976,7 @@ def build_demo() -> gr.Blocks:
                 "Your tab is its own private demo household, already briefed by Dad's daughter "
                 "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
                 "this link sees it. Its memory, flags and reply audio are removed about "
-                f"{_SESSION_TTL_MIN} minutes after you close the tab, or after "
+                f"{_CLOSED_TAB_MIN} minutes after you close the tab, or after "
                 f"{_SESSION_TTL_MIN} minutes of inactivity if the close never registers. "
                 f"Recorded or uploaded input audio sits in Gradio's own cache for up to "
                 f"{_CACHE_MAX_MIN} minutes. We never promise deletion the instant the tab closes."
