@@ -20,6 +20,13 @@ from true to false:
 
 The senior is never meant to be monitored silently behind their back; the
 code's job is to make that true in both cases above, not just the easy one.
+The caregiver-facing panel in `webapp.py` applies the same rule to what it
+*shows*: it renders only caregiver-authored memos/notes and disclosed
+flags, never EMOTIONAL-scope memories extracted from the senior's own
+words (Fixes #140) — and any future caregiver summary or digest (the
+weekly digest `docs/PRD.md` describes) must be built the same way, only
+from counters and disclosed flags, never from model-written free text
+about the conversation.
 
 **Refinement (implemented 2026-10-03):** the fast-path reply today discloses this *one* instance ("I'm letting your family know right now so someone can check on you.") but also states the standing rule — i.e. when disclosure happens and when it doesn't. Spelling that rule out loud, e.g. *"I'll only tell them if I'm worried about your safety,"* answers the "elder surveillance" objection more directly than a single-instance disclosure can: it tells the senior the boundary up front, not just that this one thing got reported.
 
