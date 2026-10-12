@@ -45,13 +45,28 @@ SERVER_PID=$!
 base="http://127.0.0.1:$PORT"
 up=0
 for _ in $(seq 1 30); do
-  if curl -s -o /dev/null -w '' "$base/config" 2>/dev/null; then up=1; break; fi
   sleep 0.5
+  # A bind failure (port already taken by someone else's server) makes
+  # OUR process exit, but /config could still answer -- from that OTHER
+  # process, possibly a real ForeverYours instance with FY_SHARED_PROFILE=1,
+  # which this script must never write real demo data into. So two
+  # independent checks, both required: (1) our own pid is still alive,
+  # and (2) /config's body actually has Gradio's shape (a "dependencies"
+  # list), not just any HTTP response -- a 404 from an unrelated listener
+  # on that port would otherwise race us into a false "up" (Codex review,
+  # scripts/openai_review.sh).
+  if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    echo "FAIL our server process ($SERVER_PID) died before answering -- port $PORT may already be in use; log:"
+    cat "$LOG"; exit 1
+  fi
+  if curl -s "$base/config" 2>/dev/null | "$PYTHON" -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if isinstance(d.get("dependencies"), list) else 1)' 2>/dev/null; then
+    up=1; break
+  fi
 done
 if [[ "$up" -ne 1 ]]; then
   echo "FAIL server never came up; log:"; cat "$LOG"; exit 1
 fi
-echo "  ok   server answering on $base"
+echo "  ok   server answering on $base (our pid $SERVER_PID, still alive)"
 
 SESSION_HASH="demo$$-$RANDOM"  # Gradio State (session_id) is bound to session_hash, not
                                 # the explicit data payload -- every call in this script
