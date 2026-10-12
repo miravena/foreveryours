@@ -9,6 +9,26 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-12 (Issues #137, #143 follow-up - review-arm bounce addressed)
+- **What:** review-arm (Codex engine) bounced #14293 as `changes-requested`:
+  (1) the notices stated only the combined worst-case cache delay (~70 min)
+  without the sweep's own two numbers (10 min interval, 60 min age
+  threshold); (2) the fixed closed-tab delay had briefly been derived from
+  `SESSION_TTL_S` instead of Gradio's own fixed constant (also caught
+  separately by `scripts/openai_review.sh`, already fixed before this
+  bounce); (3) issue closure with GitHub evidence was flagged unmet.
+  Fixed (1): both webapp notices and `docs/PRIVACY.md` now state the 10-min
+  sweep interval and 60-min age threshold explicitly
+  (`_CACHE_SWEEP_INTERVAL_MIN`, `_CACHE_MAX_AGE_MIN`), plus 3 new assertions
+  in `tests/test_retention_notice.py` (now 7 tests).
+- **Not fixed, and not fixable by this worker:** (3) GitHub issue closure.
+  This repo's `AGENTS.md`/`HOW_TO_WORK_HERE.md` describe a push-to-`main`
+  workflow, but the fleet's standing, non-negotiable instruction is
+  local-only git (never push/PR/`gh`) except when the founder says
+  "publish" for a specific repo — a grant this session does not have for
+  `foreveryours`. Commits land on `main` locally; pushing + closing #137/#143
+  needs either that founder go-ahead or a human doing it by hand.
+
 ### 2026-10-12 (Issues #137, #143 - retention wording matches the code)
 - **What:** Fixed the webapp notice (two Markdown blocks) and `docs/PRIVACY.md` /
   `docs/SAFETY_AND_PRIVACY.md` so they never claim deletion the instant the tab
