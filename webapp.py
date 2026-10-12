@@ -186,7 +186,18 @@ def _session_dirs(session_id: str) -> tuple[Path, Path]:
     if SHARED_PROFILE:
         return DATA_DIR, AUDIO_DIR
     root = _session_root(session_id)
+    _touch_session(root)
     return root / "data", root / "audio"
+
+
+def _touch_session(root: Path) -> None:
+    """Every turn, memo save and panel poll goes through _session_dirs, so
+    this is the activity timestamp the sweeper reads (#146). Writes land in
+    data/ and audio/, which never change the root's own mtime."""
+    try:
+        os.utime(root)
+    except FileNotFoundError:
+        pass  # brand-new session; MemoryStore creates it
 
 
 def _next_turn_count(data_dir: Path) -> int:
@@ -221,7 +232,11 @@ def _sweep_stale_sessions() -> None:
     if SHARED_PROFILE or not SESSIONS_DIR.exists():
         return
     cutoff = time.time() - SESSION_TTL_S
+    with _bg_threads_lock:  # a turn's AUDIT/memory thread may still be writing (#146)
+        busy = {sid for sid, t in _bg_threads.items() if t.is_alive()}
     for child in SESSIONS_DIR.iterdir():
+        if child.name in busy:
+            continue
         try:
             if child.is_dir() and child.stat().st_mtime < cutoff:
                 shutil.rmtree(child, ignore_errors=True)

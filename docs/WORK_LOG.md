@@ -9,6 +9,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-12 (Issue #146 - sweeper kept away from active sessions)
+- **What:** `_session_dirs()` now refreshes the session root's mtime on every turn, memo save and panel poll, so the sweeper sees real activity. The sweeper also skips any session whose background AUDIT/memory thread is still running.
+- **Why:** Writes land in `data/` and `audio/`, which never changed the root's mtime. A household in use for more than an hour could be deleted mid-conversation, taking its memories and flags with it.
+- **Result:** Two tests in `tests/test_session_paths.py` both fail on the old code: a recent memo save keeps a session alive while an untouched one is swept, and an in-flight background thread keeps a stale-looking session until the thread ends. Known limit: a sweep that checks the time just before a turn starts can still race with it. The window is one `stat` long. Out of scope and unchanged: Gradio's State `time_to_live` resets only when a turn or memo reassigns `session_state`, not on panel polls, so a tab idle for an hour still expires through `_end_session`. That is the intended idle expiry (from the Codex review of this change).
+
 ### 2026-10-12 (Issue #147 - session id path validation)
 - **What:** `_session_root()` accepts only a 32-character lowercase hex id that resolves to a directory directly under `SESSIONS_DIR`, and every per-session path is now built from it. `_end_session` ignores an invalid id instead of passing it to `rmtree`.
 - **Why:** 14 open CodeQL `py/path-injection` alerts all traced to the session id going straight into a path. The id is server-made, so the risk was low, but the negative control showed it was real: the old `_end_session("../victim")` deleted a directory outside `SESSIONS_DIR`.
