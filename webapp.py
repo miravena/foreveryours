@@ -35,9 +35,16 @@ the whole Nebius credit balance (see VENDOR_DECISIONS.md).
 Public-URL isolation (issues #11, #18): every browser session gets its own
 throwaway household under FY_SESSIONS_DIR, pre-briefed with the same demo
 caregiver memo as `main.py beat1`. Two judges on the same link never see each
-other's flags, memories or voices. A session's directory is deleted when the
-tab closes (gr.State delete_callback) or after SESSION_TTL_S, and Gradio's own
-upload/output cache is expired by `delete_cache`. Set FY_SHARED_PROFILE=1 to
+other's flags, memories or voices. A session's directory is deleted roughly
+an hour after the tab disconnects (gr.State's delete_callback -> _end_session;
+Gradio holds closed-session state for its own fixed STATE_TTL_WHEN_CLOSED,
+3600s, confirmed against the installed gradio==6.29.1 source), or after
+SESSION_TTL_S of inactivity if no close event ever arrives (the sweeper).
+Gradio's own upload/output cache (`delete_cache=GRADIO_CACHE_SWEEP`) is swept
+every GRADIO_CACHE_SWEEP[0] seconds and drops files older than
+GRADIO_CACHE_SWEEP[1] seconds, so an input clip can live up to roughly
+SESSION_TTL_S + GRADIO_CACHE_SWEEP[0] seconds. Neither path promises deletion
+the instant the tab closes. Set FY_SHARED_PROFILE=1 to
 get the old single shared `data/dad.*` profile back -- useful locally when
 recording a video alongside `main.py` beats, never for a public deployment.
 """
@@ -88,6 +95,16 @@ SESSIONS_DIR = Path(os.environ.get("FY_SESSIONS_DIR", Path(tempfile.gettempdir()
 SHARED_PROFILE = os.environ.get("FY_SHARED_PROFILE") == "1"
 SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
 GRADIO_CACHE_SWEEP = (600, SESSION_TTL_S)  # (check every N s, delete files older than M s)
+# Human-readable figures for the notices below, derived from the constants
+# above (never hand-typed literals) so the wording can't drift from the code
+# (#137, #143). Household deletion: ~SESSION_TTL_S after the tab closes
+# (Gradio's gr.State delete_callback, via its own fixed closed-session TTL —
+# confirmed 3600s in the installed gradio==6.29.1) or after SESSION_TTL_S of
+# inactivity if the close event never arrives. Input audio cache: swept every
+# GRADIO_CACHE_SWEEP[0]s, dropping files older than GRADIO_CACHE_SWEEP[1]s, so
+# up to GRADIO_CACHE_SWEEP[0] + GRADIO_CACHE_SWEEP[1] seconds.
+_SESSION_TTL_MIN = SESSION_TTL_S // 60
+_CACHE_MAX_MIN = (GRADIO_CACHE_SWEEP[0] + GRADIO_CACHE_SWEEP[1] + 59) // 60
 HIGH_PRIORITY_SEVERITIES = ("crisis", "distress", "confusion")
 
 _lock = threading.Lock()
@@ -885,7 +902,11 @@ def build_demo() -> gr.Blocks:
                 gr.Markdown(
                     "🎙️ *When you speak or type here, it is recorded and turned into text. "
                     "That text (not your voice recording) is sent to Nebius Token Factory to write a "
-                    "reply and run a safety check, then deleted when you close this tab.*"
+                    f"reply and run a safety check. Your household's memory, flags and audio are "
+                    f"removed about {_SESSION_TTL_MIN} minutes after you close this tab, or after "
+                    f"{_SESSION_TTL_MIN} minutes of inactivity if the close never registers; your "
+                    f"recorded/uploaded input audio sits in Gradio's own cache for up to "
+                    f"{_CACHE_MAX_MIN} minutes.*"
                 )
                 audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Speak (as the senior)")
                 text_in = gr.Textbox(
@@ -946,8 +967,11 @@ def build_demo() -> gr.Blocks:
             gr.Markdown(
                 "Your tab is its own private demo household, already briefed by Dad's daughter "
                 "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
-                "this link sees it, and its memory, flags and audio are deleted when you close "
-                "the tab or after an hour."
+                "this link sees it. Its memory, flags and reply audio are removed about "
+                f"{_SESSION_TTL_MIN} minutes after you close the tab, or after "
+                f"{_SESSION_TTL_MIN} minutes of inactivity if the close never registers. "
+                f"Recorded or uploaded input audio sits in Gradio's own cache for up to "
+                f"{_CACHE_MAX_MIN} minutes. We never promise deletion the instant the tab closes."
             )
 
         if DEV_MODE:

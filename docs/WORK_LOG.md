@@ -9,6 +9,36 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-12 (Issues #137, #143 - retention wording matches the code)
+- **What:** Fixed the webapp notice (two Markdown blocks) and `docs/PRIVACY.md` /
+  `docs/SAFETY_AND_PRIVACY.md` so they never claim deletion the instant the tab
+  closes. Both now name the two separate mechanisms: (a) the household session
+  directory, removed via `gr.State`'s `delete_callback` roughly `SESSION_TTL_S`
+  after the browser disconnects (confirmed against the installed
+  `gradio==6.29.1` source: `StateHolder`'s `STATE_TTL_WHEN_CLOSED` is a fixed
+  3600s for a closed session, independent of the configured `time_to_live`),
+  or after `SESSION_TTL_S` of inactivity if the close event never arrives; (b)
+  recorded/uploaded input audio in Gradio's own file cache
+  (`delete_cache=GRADIO_CACHE_SWEEP`), swept every `GRADIO_CACHE_SWEEP[0]`
+  seconds and dropping files older than `GRADIO_CACHE_SWEEP[1]` seconds, so up
+  to roughly `SESSION_TTL_S + 600` seconds (~70 minutes by default). The webapp
+  notice text now derives its minute figures from `SESSION_TTL_S` and
+  `GRADIO_CACHE_SWEEP` at runtime (`_SESSION_TTL_MIN`, `_CACHE_MAX_MIN`)
+  instead of hand-typed numbers.
+- **Why:** The old wording ("deleted when you close this tab", "deleted
+  immediately ... or after 1 hour") promised deletion that doesn't happen —
+  the real deletion is delayed by Gradio's own closed-session TTL, and input
+  audio additionally outlives that in Gradio's file cache.
+- **Result:** New `tests/test_retention_notice.py` (6 tests) passes on this
+  commit and FAILs (not errors) against pre-fix commit `9f5a311` — verified
+  by copying the test into a detached worktree at that commit. Full suite
+  (`.venv/bin/python -m unittest discover tests`) still passes. Did not add a
+  `Blocks.unload` handler (out of scope per the ticket) and did not push to
+  GitHub or close the issues directly — this session follows the fleet's
+  standing local-only git policy, so the commit lands on `main` locally only;
+  publishing/closing the issues is left for whoever has the founder's
+  "publish" go-ahead for this repo.
+
 ### 2026-10-12 (Issue #146 - sweeper kept away from active sessions)
 - **What:** `_session_dirs()` now refreshes the session root's mtime on every turn, memo save and panel poll, so the sweeper sees real activity. The sweeper also skips any session whose background AUDIT/memory thread is still running.
 - **Why:** Writes land in `data/` and `audio/`, which never changed the root's mtime. A household in use for more than an hour could be deleted mid-conversation, taking its memories and flags with it.
