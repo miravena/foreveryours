@@ -20,22 +20,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Warn when an author email is not GitHub-linked
+      - name: Warn on attribution (author email, model, meta, cost -- shared checker)
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
           else
             range="${{ github.event.before }}..${{ github.sha }}"
           fi
-          authors=$(git log --format='%ae|%an|%h' "$range" 2>/dev/null || git log -1 --format='%ae|%an|%h')
-          printf '%s\n' "$authors" | while IFS='|' read -r email name sha; do
-            [ -z "$email" ] && continue
-            case "$email" in
-              *@users.noreply.github.com|elevenbaselab@gmail.com|mathewgc007@gmail.com) ;;
-              *)
-                echo "::warning::commit ${sha:-?} by '$name' has author email '$email', which is not GitHub-linked — it will not appear under an account in the Contributors graph (see CONTRIBUTING.md -> Commit attribution)"
-                ;;
-            esac
+          commits=$(git log --format='%H|%ae' "$range" 2>/dev/null || git log -1 --format='%H|%ae')
+          printf '%s\n' "$commits" | while IFS='|' read -r sha email; do
+            [ -z "$sha" ] && continue
+            msgfile=$(mktemp)
+            git log -1 --format=%B "$sha" > "$msgfile"
+            out=$(scripts/check_attribution.sh "$msgfile" "$email" 2>&1)
+            rm -f "$msgfile"
+            if [ -n "$out" ]; then
+              printf '%s\n' "$out" | while IFS= read -r line; do
+                [ -n "$line" ] && echo "::warning::commit ${sha} -- ${line#WARNING: }"
+              done
+            fi
           done
 
       - name: Warn when tracked files contain key-shaped strings

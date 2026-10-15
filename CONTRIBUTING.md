@@ -199,39 +199,66 @@ effort produced it*, because we need that for two jobs:
   vendor than the one that wrote it, because a second Claude shares the first one's blind
   spots. You cannot pick the other vendor if the author model is not recorded.
 
-The trailer format, one line per harness/model:
+The format (founder 2026-10-12, decision 912; [ADR-007](docs/decisions/ADR-007-attribution.md)
+amendment) is **three trailers, every AI-assisted commit**, one `Assisted-by` per harness/model:
 
 ```
-Assisted-by: <harness>:<model id> effort=<level>
+Assisted-by: <AGENT_NAME>:<MODEL_VERSION> [TOOL1] [TOOL2]
+Assisted-meta: provider=<Anthropic|OpenAI|Google|...> effort=<low|medium|high|xhigh|max|unknown>
+Cost-estimate: $X.XX (approximate[; in N, out N tokens])
 ```
 
 ```
-Assisted-by: ClaudeCode:claude-sonnet-5-5 effort=medium
-Assisted-by: OpenCode:mimo-v2.6-flash-free effort=unknown
-Assisted-by: Kiro:unknown effort=unknown
+Assisted-by: ClaudeCode:claude-sonnet-5-5
+Assisted-meta: provider=Anthropic effort=medium
+Cost-estimate: $0.85 (in 234, out 107K tokens, approximate)
+
+Assisted-by: OpenCode:mimo-v2.6-flash-free
+Assisted-meta: provider=unknown effort=unknown
+Cost-estimate: unknown
 ```
 
-- `<harness>:<model id>` follows the Linux kernel's `Assisted-by: AGENT_NAME:MODEL_VERSION`
-  ([coding-assistants doc](https://docs.kernel.org/7.0/process/coding-assistants.html);
-  its example is `Assisted-by: Claude:claude-3-opus coccinelle sparse`). Fedora's AI policy
-  uses the same trailer name with a bare tool name. Neither carries an email.
-- `effort=<level>` is **our extension**; neither source defines an effort field. Use the
-  level the tool was set to (`low`, `medium`, `high`, ...), or `unknown`.
-- Take the model id and effort from the tool's own config or session record (`/model`,
-  `codex exec`'s header, the session log), not from the model's description of itself.
+- **Line 1** (`Assisted-by`) follows the Linux kernel's *original*
+  `Assisted-by: AGENT_NAME:MODEL_VERSION [TOOL...]`
+  ([`Documentation/process/coding-assistants.rst`](https://docs.kernel.org/7.0/process/coding-assistants.html)
+  at `78d979db6c`, 2025-12-23; its example is `Assisted-by: Claude:claude-3-opus coccinelle
+  sparse`). `AGENT_NAME` is the harness (`ClaudeCode`, `Codex`, `Kiro`, `Antigravity`,
+  `CopilotApp`), `MODEL_VERSION` is the exact model id, and the optional bracketed tools are
+  specialised analysis tools used on the change (`codeql`, `openai_review`). Upstream
+  simplified this on 2026-07-01 (`816d9992d9`) to a bare `Assisted-by: LLM`, dropping the
+  model to avoid advertising vendors — **we deliberately keep the model**, for debugging and
+  cross-vendor review (below).
+- **Line 2** (`Assisted-meta`) is **our own extension**; neither the kernel nor Fedora's AI
+  policy defines it. `provider=` and `effort=` are not in the kernel trailer, so they get
+  their own line rather than being crammed onto line 1.
+- **Line 3** (`Cost-estimate`) — see "Recording what it cost" below.
+- **One `Assisted-by`/`Assisted-meta`/`Cost-estimate` group per harness/model** that wrote
+  part of the commit, in the order the harnesses touched it.
+- **A review** uses `Reviewed-by: <AGENT>:<MODEL> [tools]` in place of `Assisted-by` on line
+  1, with the same `Assisted-meta`/`Cost-estimate` lines ([`REVIEW.md`](REVIEW.md)).
+- **A merge commit made by an agent carries the same three trailers** — it is as much an
+  AI-produced artifact as any other commit (a trailer-less merge bounced review on #14294).
+- Take the model id, provider and effort from the tool's own config or session record
+  (`/model`, `codex exec`'s header, the session log), not from the model's description of
+  itself.
 - Machine-readable: `git log --format='%h %an %(trailers:key=Assisted-by,valueonly,separator=%x2C)'`
   lists who prepared each commit and with what.
 
 How to document yourself and the model:
 
 1. **You** are the author (see above) and are responsible for the commit. Never list
-   yourself or an AI as `Signed-off-by`.
-2. **Each harness/model that wrote part of the commit** gets one `Assisted-by` line.
-3. **`git commit -m` skips the commit template**, so add the line by hand when you use it.
+   yourself or an AI as `Signed-off-by` — the kernel reserves it for the human submitter.
+2. **Each harness/model that wrote part of the commit** gets one `Assisted-by` +
+   `Assisted-meta` + `Cost-estimate` group.
+3. **`git commit -m` skips the commit template**, so add the lines by hand when you use it.
 4. **Reviews** are not commit trailers. Put them in the PR's `Provenance` block and in the
-   review comment header (`Review by <model> (<effort> effort), runtime-checked`).
-5. **Unknown model?** Write `unknown` rather than leaving the line out: a visible
-   "unknown" is something we can chase, a gap is not.
+   review comment header (`Reviewed-by: <AGENT>:<MODEL> [tools]`, `REVIEW.md`).
+5. **Unknown model, provider or effort?** Write `unknown` rather than leaving the line out:
+   a visible "unknown" is something we can chase, a gap is not.
+6. **`scripts/check_attribution.sh <msgfile>`** is the shared advisory checker behind both
+   `.githooks/commit-msg` and `.github/workflows/attribution.yml` — it warns (never blocks)
+   when `Assisted-by` has no `:<model>`, when `Assisted-meta` is missing, or when
+   `Cost-estimate` is missing.
 
 ### Recording what it cost
 
