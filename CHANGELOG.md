@@ -11,6 +11,12 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Fixed
+- Memory-conflict privacy leak (#165 and duplicates #154, #156, #158, #160, #163, #166, #167): a
+  memory conflict's old fact, new fact and reason never reach the caregiver panel or stay on disk
+  once the conflict closes. Escalation now adds a fixed, content-free "a memory question was
+  asked and left unanswered" flag instead of the raw facts; pending/asked conflicts no longer
+  render under "Briefed memory"; resolving, escalating or clearing a conflict now scrubs its text
+  to `[DELETED]` on disk, the same as an explicit delete already did.
 - Time-to-first-sound honesty (#71): `time_to_first_sound_s` is now stamped only when a WAV
   actually finished playing (winsound/afplay/aplay reported success), instead of unconditionally
   on the first queued chunk. With no working audio player the CLI now prints "No audio was played
