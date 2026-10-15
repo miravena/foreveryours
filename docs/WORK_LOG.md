@@ -31,10 +31,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
   every lowercase alnum token at a stricter >= 0.8 threshold, so that question asked three times
   still flags. If only one side has content words, never a repeat. The perseveration block now
   also requires `_is_repeat_question(prev1, prev2)`; the confusion flag is recorded unconditionally
-  (not gated on `persev_paths`), with new text "Perseveration: the senior asked the same question
-  3 times within {N} minutes." (N from `PERSEVERATION_WINDOW_S`), quoting none of the senior's
-  words. Updated the matching assertions in `tests/test_orchestrator.py`'s
-  `test_perseveration_tracking_flags_loop` (substring check only, same semantics).
+  (not gated on `persev_paths`), with new text "Perseveration loop detected: the senior asked the
+  same question 3 times within {N} minutes." (N from `PERSEVERATION_WINDOW_S`), quoting none of
+  the senior's words but keeping the literal "Perseveration loop detected" prefix so
+  `tests/test_orchestrator.py`'s existing `test_perseveration_tracking_flags_loop` assertions stay
+  byte-identical to pre-fix (see review-bounce entry below).
 - **Tests (`tests/test_perseveration_window.py`):** added cases for dentist/cardiologist/
   optometrist (no flag, no family-note line in `reply_text` or in any `_speak_turn` call --
   verified via a `_speak_turn` mock `side_effect` that consumes and records its input text), Dr
@@ -47,6 +48,33 @@ Format: newest first. One entry per session: date, who, what, result, next.
   full `discover tests` -> `OK (skipped=8)`, 228 tests (was 222). Negative control: the new test
   file copied onto pre-fix `34e8426` gives `FAILED (failures=4)`, 0 `ERROR` lines --
   `grep FAIL && ! grep ERROR` exits 0.
+- **Known trade-off, not fixed (by design, per this ticket's own RULE):** a repeat where one side's
+  distinguishing-word set is empty and the other's is non-empty and non-overlapping (e.g. "...my
+  appointment?" vs "...my appointment, again?") no longer flags, even though it's a plausible real
+  repeat. This is exactly what RULE #2 specifies ("both distinguishing-word sets are empty" is the
+  only all-generic case that still flags), not an implementation slip; flagged by both a high-effort
+  safety subagent and `scripts/openai_review.sh` on the first round, kept as specified.
+- **Known pre-existing issue, not fixed (out of scope for this ticket):** `flags.add(...,
+  disclosed_to_senior=True)` runs before the THINK call; if THINK then raises `NebiusNotConfigured`
+  with `fast.triggered=False`, `run_turn` re-raises before returning `TurnResult`, which can leave a
+  flag recorded as disclosed when the final reply never reached the caller on the non-streaming
+  path. This ordering predates this change (previously gated behind `if persev_paths:`, which is
+  normally truthy); RULE #4 explicitly requires removing that gate. Recommend a follow-up issue to
+  move the flag-add to just before `run_turn` returns.
+- **Review-bounce round 2 (review-arm, `changes-requested`, failure_class=context):** flagged (1)
+  `tests/test_orchestrator.py`'s existing assertion was edited despite the "pass unchanged"
+  requirement, and (2) the new tests didn't explicitly catch exceptions from the code under test
+  per HOW TO WORK step 3. Fixed: reverted `tests/test_orchestrator.py` to be byte-identical to
+  pre-fix `9ab0a26` (confirmed via `git diff 9ab0a26 -- tests/test_orchestrator.py` -> empty) by
+  keeping the literal "Perseveration loop detected" prefix in the new flag text instead of changing
+  the test; wrapped the shared `_run()` helper and the direct `_is_repeat_question()` calls in
+  `test_cross_match_without_prev_pair_match_does_not_flag` in try/except -> `self.fail(...)`.
+  Re-verified: `tests.test_perseveration_window tests.test_orchestrator` -> `OK`, 43 tests; full
+  `discover tests` -> `OK (skipped=8)`, 228 tests; negative control against `34e8426` with the
+  updated test file -> `FAILED (failures=4)`, 0 `ERROR` lines. AC3's "GitHub evidence... CI green"
+  is unverifiable by the review-arm's own sandbox (no `api.github.com` reachability per its bounce
+  note) but `gh issue view 159 --json number,state` succeeds from this session -- same recurring
+  environment gap documented below for #165 and #148's rounds.
 
 ### 2026-10-15 (Issue #165 follow-up - review-arm bounce: GitHub closure/CI/live-invocation evidence)
 - **What:** review-arm bounced #16083 (`changes-requested`): "Runtime tests and negative control pass, but GitHub closure evidence, CI, and live invocation remain unverified." AC1 (unit tests) was already independently confirmed by the reviewer's own run. The same recurring environment gap documented in this file for #140's rounds above (reviewer's sandbox can't reach GitHub) looks like the cause for the closure/CI half; "live invocation" asked for the same kind of real-process, real-HTTP-API evidence #140 already has in `scripts/demo_caregiver_panel_live.sh`, which this ticket's work didn't produce an analogue of.
