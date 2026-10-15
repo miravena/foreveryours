@@ -468,21 +468,31 @@ def _end_session(session_id: str | None) -> None:
     resolved, never deleted -- and a BUSY session (a turn in progress, or any
     live tracked writer) is left fully alone, `_bg_threads` included, so the
     sweeper can still see it as busy and clean up the tracking once the TTL
-    and the writer both clear (#148, #150, #151)."""
+    and the writer both clear (#148, #150, #151).
+
+    `_session_root()` returns a REALPATH -- for a symlinked entry, that's
+    already the resolved target, not the entry itself, so checking
+    `os.path.islink()` on it is checking the wrong path (it is never a link).
+    The entry under `SESSIONS_DIR` has to be inspected and deleted by its own
+    (unresolved) path, exactly like the sweeper does, or a same-directory
+    alias (a symlink whose target is itself another real session under
+    `SESSIONS_DIR`) sails through the realpath+containment check in
+    `_session_root()` and gets its *target* deleted."""
     if not session_id or SHARED_PROFILE:
         return
     try:
-        root = _session_root(session_id)
+        _session_root(session_id)  # validates id shape and resolved containment only
     except ValueError:
         return  # a Gradio delete callback: never raise, never delete outside SESSIONS_DIR
+    entry = SESSIONS_DIR / session_id  # the literal, unresolved directory entry
     with _session_fs_lock:
-        if os.path.islink(root):
+        if os.path.islink(entry):
             return
         if _is_session_busy(session_id):
             return
         with _bg_threads_lock:
             _bg_threads.pop(session_id, None)
-        shutil.rmtree(root, ignore_errors=True)
+        shutil.rmtree(entry, ignore_errors=True)
 
 
 def _clear_session_audio(audio_dir: Path) -> None:
