@@ -145,10 +145,41 @@ class TestSweepAndEndSessionRaceFree(unittest.TestCase):
         os.utime(self.sessions_dir / sid, (old, old))
 
     def test_symlink_alias_with_valid_hex_name_survives_sweep_and_end_session(self):
-        target = Path(self.temp_dir.name) / "other-household"
+        # The target is itself another real session UNDER sessions_dir, not an
+        # external directory: `_session_root()` returns a realpath, and a
+        # same-directory alias resolves to a path that still passes its
+        # containment check (base/<other-real-id>), so the alias/target
+        # distinction has to be made on the literal, unresolved entry -- an
+        # external target would instead just fail `_session_root()`'s
+        # containment check outright and prove nothing about that path.
+        target_id = "99998888777766665555444433332222"
+        target = self.sessions_dir / target_id
         target.mkdir()
         (target / "keep.txt").write_text("precious")
         alias = "11112222333344445555666677778888"
+        (self.sessions_dir / alias).symlink_to(target, target_is_directory=True)
+
+        # `target` is a fresh, ordinary session -- NOT aged, and SESSION_TTL_S
+        # is left at its default (not patched to 0): a direct sweep of ITS OWN
+        # entry would never reap it on TTL grounds either, which isolates the
+        # alias-resolution bug (the thing under test) from ordinary
+        # TTL-expiry sweeping of the target's own ordinary entry.
+        webapp._sweep_stale_sessions()
+        self.assertTrue(target.exists())
+        self.assertTrue((target / "keep.txt").exists())
+
+        webapp._end_session(alias)
+        self.assertTrue(target.exists())
+        self.assertTrue((target / "keep.txt").exists())
+
+    def test_symlink_alias_to_an_external_directory_also_survives(self):
+        # Belt-and-suspenders: an alias pointing OUTSIDE sessions_dir entirely
+        # must also never be followed, even though `_session_root()` would
+        # reject it anyway via the containment check.
+        target = Path(self.temp_dir.name) / "other-household"
+        target.mkdir()
+        (target / "keep.txt").write_text("precious")
+        alias = "aaaa2222333344445555666677778888"
         (self.sessions_dir / alias).symlink_to(target, target_is_directory=True)
 
         with patch.object(webapp, "SESSION_TTL_S", 0):
