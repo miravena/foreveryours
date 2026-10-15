@@ -48,9 +48,11 @@ missing or logged out, stop and tell the founder.
 - **Plan before code** for non-trivial work: put the plan in the Issue's acceptance
   criteria (or commit a `plan.md` with the change) — a plan an assistant can read beats
   a plan in someone's head.
-- **Attribution:** author = the human with a GitHub-linked email; AI help appears only
-  as `Assisted-by: <harness>:<model id> effort=<level>` trailers, one per model, no email
-  and no `Co-Authored-By` for AI. See CONTRIBUTING.md → "Commit attribution".
+- **Attribution:** author = the human with a GitHub-linked email; AI help appears only as
+  three trailers per model — `Assisted-by: <AGENT_NAME>:<MODEL_VERSION> [tools]` (kernel
+  shape, no effort on this line), `Assisted-meta: provider=<...> effort=<...>`, and
+  `Cost-estimate: ...` — no email and no `Co-Authored-By` for AI. Same three lines open an
+  AI-assisted issue or comment. See CONTRIBUTING.md → "Recording which model did what".
 - **State never goes in a doc** — status, dates, blockers and "next" live only on
   GitHub Issues/milestones. Docs describe what, why and how.
 - **Never read, print, quote or ask for `.env` contents or any key** — assistant configs (`.claude/settings.json`, `opencode.jsonc`) deny it. Verify a key with `scripts/key_status.sh` (prints an HTTP code only); if a key ever reaches a chat, Issue or commit, it is leaked: rotate it (#67).

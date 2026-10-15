@@ -8,12 +8,18 @@
 #   287302999+elevenbaselab@users.noreply.github.com   (Settings -> Emails -> "Keep my
 #   email addresses private"). Never put an AI identity in the author field.
 #
-# AI help goes below as `Assisted-by` trailers only: harness:model id and effort, one per
-# model, no email, and NO Co-Authored-By for AI (CONTRIBUTING.md -> "Recording which model
-# did what"). Write `unknown` if you can't tell; never leave the line out. Uncomment:
+# AI help goes below as three trailers per harness/model: Assisted-by (kernel
+# AGENT_NAME:MODEL_VERSION [tools] shape), Assisted-meta (provider + effort, our own
+# addition), Cost-estimate. No email, no Co-Authored-By for AI, no Signed-off-by from an
+# agent (CONTRIBUTING.md -> "Recording which model did what"; ADR-007). Write `unknown`
+# for anything you can't tell; never leave a line out. Uncomment:
 #
-# Assisted-by: ClaudeCode:claude-sonnet-5-5 effort=medium
+# Assisted-by: ClaudeCode:claude-sonnet-5-5
+# Assisted-meta: provider=Anthropic effort=medium
 # Cost-estimate: $0.85 (in 234, out 107K tokens, approximate)   <- or `unknown`; never omit
-# Assisted-by: OpenCode:mimo-v2.6-flash-free effort=unknown
+#
+# Assisted-by: OpenCode:mimo-v2.6-flash-free
+# Assisted-meta: provider=unknown effort=unknown
+# Cost-estimate: unknown
 #
 # (Commented lines are stripped automatically by git.)

@@ -69,17 +69,23 @@ reviewing, see [`CONTRIBUTING.md`](CONTRIBUTING.md)'s "Which model and effort fo
 ### The review comment
 
 - One comment per PR (`gh pr comment`, not an approval or change-request).
-- Start with a header in the same shape as the `Assisted-by` commit trailer
-  ([CONTRIBUTING.md](CONTRIBUTING.md) -> "Recording which model did what"), e.g.
-  `Reviewed-by: ClaudeCode:claude-sonnet-5-5 effort=high, runtime-checked`.
+- Start with the same three lines as a commit's attribution trailers
+  ([CONTRIBUTING.md](CONTRIBUTING.md) -> "Recording which model did what"), with line 1
+  written `Reviewed-by:` in place of `Assisted-by`, plus `, runtime-checked` (or what was
+  skipped and why) appended to line 1:
+  ```
+  Reviewed-by: ClaudeCode:claude-sonnet-5-5, runtime-checked
+  Assisted-meta: provider=Anthropic effort=high
+  Cost-estimate: $0.66 (approximate)
+  ```
   **runtime-checked** means the reviewer ran the test suite and the README demo beats against the
   PR's merge commit and exercised the specific risk, not only read the diff. If something could not
   be run, say what was skipped, e.g. `runtime-checked (no live key)`.
 - Findings carry `file:line` and the exact input/output that proves them, and are tagged
   **reproduced** (ran it, saw it fail) or **read only** (seen in the diff, not run).
 - End with a verdict line. Tag the PR's author (`@SirTehTarik`) when a finding concerns their PR.
-- End with a `Provenance` section: model, effort, and the approximate cost of the review
-  (`Estimated cost of this review: about $0.66, approximate list prices`), or `unknown`.
+- End with a `Provenance` section repeating the same three lines (model, effort, and the
+  approximate cost of the review), or `unknown` for any of them.
   See [CONTRIBUTING.md](CONTRIBUTING.md) -> "Recording what it cost".
 - No fleet, host or session details: the repo is public.
 

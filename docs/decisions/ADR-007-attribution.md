@@ -125,3 +125,56 @@ harness that adds it by default would put it back unnoticed. The cost line makes
 model/effort trail say what the work took.
 
 **Unchanged.** Advisory only (exit 0); old commits stay as they are; no history rewrite.
+
+## Amendment 2026-10-12: a kernel-shaped three-line format, one shared checker
+
+**Decided by:** founder, 2026-10-12 (decision 912). **Related issues:** [#146](../../issues/146),
+[#147](../../issues/147).
+
+**Change.** Every AI-assisted commit, GitHub issue and comment now carries exactly three lines:
+
+```
+Assisted-by: <AGENT_NAME>:<MODEL_VERSION> [TOOL1] [TOOL2]
+Assisted-meta: provider=<Anthropic|OpenAI|Google|...> effort=<low|medium|high|xhigh|max|unknown>
+Cost-estimate: $X.XX (approximate[; in N, out N tokens])
+```
+
+- **Line 1** is the Linux kernel's *original* trailer shape
+  (`Documentation/process/coding-assistants.rst` at
+  [78d979db6c](https://github.com/torvalds/linux/commit/78d979db6c), 2025-12-23):
+  `AGENT_NAME` is the harness (`ClaudeCode`, `Codex`, `Kiro`, `Antigravity`, `CopilotApp`),
+  `MODEL_VERSION` is the exact model id, and the optional bracketed tools are specialised
+  analysis tools used on the change (`codeql`, `openai_review`). Upstream simplified this on
+  2026-07-01 ([816d9992d9](https://github.com/torvalds/linux/commit/816d9992d9)) to a bare
+  `Assisted-by: LLM`, dropping the model, with the stated rationale of not advertising
+  vendors. **We deliberately diverge and keep the model**: this repo needs per-model
+  debugging and cross-vendor review (`REVIEW.md`), which a vendor-anonymous trailer cannot
+  support, and we accept the tradeoff of naming the vendor in a public history.
+- **Line 2** (`Assisted-meta`) is our own addition — the kernel format has no field for
+  provider or effort, and we need both (`CONTRIBUTING.md` -> "Which model and effort for
+  what", "Recording which model did what").
+- **Line 3** (`Cost-estimate`) is unchanged from the previous amendment.
+- A **review comment** uses the same three lines, with line 1 written
+  `Reviewed-by: <AGENT>:<MODEL> [tools]` in place of `Assisted-by` (`REVIEW.md`).
+- A **GitHub issue or comment** written with AI help opens with the same three lines (one
+  per line, or `·`-separated on one line).
+- **Merge commits made by an agent carry the same three trailers.** A trailer-less merge
+  commit bounced review on #14294 — a merge is as much an AI-produced artifact as any other
+  commit, so it is not exempt.
+- **No `Co-Authored-By` for AI, no `Claude-Session` link, and no `Signed-off-by` from an
+  agent** (the kernel reserves `Signed-off-by` for the human submitter) — all unchanged from
+  the prior amendments, now stated together in one place.
+
+**Checker consolidation.** The attribution checks (author email, AI `Co-Authored-By`,
+session link, missing model, missing `Assisted-meta`, missing `Cost-estimate`) now live in
+one script, `scripts/check_attribution.sh <msgfile> [author_email]`, called by both
+`.githooks/commit-msg` and `.github/workflows/attribution.yml`, so
+`tests/test_attribution_hook.py` exercises exactly what CI runs instead of two
+hand-maintained copies drifting apart.
+
+**Unchanged.** Advisory only (exit 0, every check); old commits stay as they are, no history
+rewrite (ADR-006); author = the human with a GitHub-linked email.
+
+**Revisit if** the kernel's `Assisted-by: LLM` simplification is adopted upstream widely
+enough that naming the model becomes a liability rather than an asset, or the warn-only
+checker needs to become a hard failure.
