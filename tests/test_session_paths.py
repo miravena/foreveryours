@@ -1,10 +1,12 @@
 """Session ids are checked before they become file paths (#147)."""
 import os
+import queue
 import tempfile
 import threading
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import webapp
@@ -107,6 +109,333 @@ class TestSweepKeepsActiveSessions(unittest.TestCase):
         self.assertFalse((self.sessions_dir / sid).exists())
         with webapp._bg_threads_lock:
             webapp._bg_threads.pop(sid, None)
+
+
+class TestSweepAndEndSessionRaceFree(unittest.TestCase):
+    """#148, #150, #151: the sweeper and `_end_session` share one protocol
+    (`_session_fs_lock`, `_active_turns`, a per-session list of live writer
+    threads) so neither can race a touch/turn, follow a symlink alias, or
+    sweep a stray non-session directory."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.sessions_dir = Path(self.temp_dir.name) / "sessions"
+        self.sessions_dir.mkdir()
+        self.patches = [
+            patch.object(webapp, "SESSIONS_DIR", self.sessions_dir),
+            patch.object(webapp, "SHARED_PROFILE", False),
+            patch.dict(os.environ, {"NEBIUS_API_KEY": ""}),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.temp_dir.cleanup()
+
+    def _require(self, name):
+        val = getattr(webapp, name, None)
+        if val is None:
+            self.fail(f"webapp.{name} does not exist (pre-fix code)")
+        return val
+
+    def _age(self, sid):
+        old = time.time() - webapp.SESSION_TTL_S - 60
+        os.utime(self.sessions_dir / sid, (old, old))
+
+    def test_symlink_alias_with_valid_hex_name_survives_sweep_and_end_session(self):
+        target = Path(self.temp_dir.name) / "other-household"
+        target.mkdir()
+        (target / "keep.txt").write_text("precious")
+        alias = "11112222333344445555666677778888"
+        (self.sessions_dir / alias).symlink_to(target, target_is_directory=True)
+
+        with patch.object(webapp, "SESSION_TTL_S", 0):
+            webapp._sweep_stale_sessions()
+            self.assertTrue(target.exists())
+            self.assertTrue((target / "keep.txt").exists())
+
+            webapp._end_session(alias)
+            self.assertTrue(target.exists())
+            self.assertTrue((target / "keep.txt").exists())
+
+    def test_stray_non_hex_dir_survives_sweep_and_end_session(self):
+        stray = self.sessions_dir / "not-a-session-id"
+        stray.mkdir()
+        (stray / "keep.txt").write_text("precious")
+        old = time.time() - 999999
+        os.utime(stray, (old, old))
+
+        with patch.object(webapp, "SESSION_TTL_S", 0):
+            webapp._sweep_stale_sessions()
+            self.assertTrue(stray.exists())
+
+            webapp._end_session("not-a-session-id")  # must not raise
+            self.assertTrue(stray.exists())
+            self.assertTrue((stray / "keep.txt").exists())
+
+    def test_touch_race_keeps_session_alive_through_sweep(self):
+        fs_lock = self._require("_session_fs_lock")
+        sid, _ = webapp.init_session()
+        root = self.sessions_dir / sid
+        old = time.time() - 2 * 3600
+        os.utime(root, (old, old))
+
+        with patch.object(webapp, "SESSION_TTL_S", 3600):
+            fs_lock.acquire()
+            try:
+                t = threading.Thread(target=webapp._sweep_stale_sessions)
+                t.start()
+                time.sleep(0.2)  # give the sweeper a chance to block on this entry
+                os.utime(root, None)  # touch: mtime -> now, while the sweeper is still waiting on the lock
+            finally:
+                fs_lock.release()
+            t.join(timeout=2)
+
+        self.assertTrue(root.exists())
+
+    def test_two_writers_one_slow_tracking_does_not_leak(self):
+        self._require("_BG_JOIN_TIMEOUT_S")
+        sid, _ = webapp.init_session()
+        session_dir = self.sessions_dir / sid
+
+        event_a = threading.Event()
+        thread_a = threading.Thread(target=event_a.wait, daemon=True)
+        thread_a.start()
+        webapp._remember_background_thread(sid, thread_a)
+
+        thread_b = threading.Thread(target=lambda: None)
+        thread_b.start()
+        thread_b.join(timeout=2)
+        webapp._remember_background_thread(sid, thread_b)
+
+        try:
+            with patch.object(webapp, "SESSION_TTL_S", 0):
+                webapp._sweep_stale_sessions()
+                self.assertTrue(session_dir.exists(), "A still alive: sweep must not delete")
+                webapp._end_session(sid)
+                self.assertTrue(session_dir.exists(), "A still alive: _end_session must not delete")
+
+                with patch.object(webapp, "_BG_JOIN_TIMEOUT_S", 0.1):
+                    webapp._join_previous_turn(sid)  # times out: A is still blocked
+
+                webapp._sweep_stale_sessions()
+                self.assertTrue(session_dir.exists(), "join timeout must not drop A from tracking")
+                webapp._end_session(sid)
+                self.assertTrue(session_dir.exists())
+        finally:
+            event_a.set()
+            thread_a.join(timeout=2)
+
+        with patch.object(webapp, "SESSION_TTL_S", 0):
+            webapp._sweep_stale_sessions()
+        self.assertFalse(session_dir.exists(), "tracking leaked: session never got swept after A finished")
+
+    def test_blocked_foreground_turn_survives_sweep_and_end_session(self):
+        active_turns = self._require("_active_turns")
+        sid, _ = webapp.init_session()
+        session_dir = self.sessions_dir / sid
+
+        block = threading.Event()
+        release = threading.Event()
+
+        def fake_run_turn(*a, **k):
+            block.set()
+            release.wait()
+            return SimpleNamespace(
+                reply_text="ok", audio_paths=[], caregiver_flag=None,
+                is_fallback=False, background_thread=None,
+            )
+
+        with patch.object(webapp, "run_turn", side_effect=fake_run_turn), \
+             patch.object(webapp, "SESSION_TTL_S", 0):
+            worker = threading.Thread(target=webapp._run_demo_turn, args=(None, "hello", [], sid))
+            worker.start()
+            self.assertTrue(block.wait(timeout=2))
+
+            webapp._sweep_stale_sessions()
+            self.assertTrue(session_dir.exists())
+            webapp._end_session(sid)
+            self.assertTrue(session_dir.exists())
+
+            release.set()
+            worker.join(timeout=2)
+
+        self.assertNotIn(sid, active_turns, "_active_turns entry must be cleaned up in finally")
+
+    def test_two_overlapping_blocked_turns_one_released_still_survives_sweep(self):
+        active_turns = self._require("_active_turns")
+        sid, _ = webapp.init_session()
+        session_dir = self.sessions_dir / sid
+
+        pairs = queue.Queue()
+        block1, release1 = threading.Event(), threading.Event()
+        block2, release2 = threading.Event(), threading.Event()
+        pairs.put((block1, release1))
+        pairs.put((block2, release2))
+
+        def fake_run_turn(*a, **k):
+            block_evt, release_evt = pairs.get()
+            block_evt.set()
+            release_evt.wait()
+            return SimpleNamespace(
+                reply_text="ok", audio_paths=[], caregiver_flag=None,
+                is_fallback=False, background_thread=None,
+            )
+
+        with patch.object(webapp, "run_turn", side_effect=fake_run_turn), \
+             patch.object(webapp, "SESSION_TTL_S", 0):
+            worker1 = threading.Thread(target=webapp._run_demo_turn, args=(None, "hello", [], sid))
+            worker1.start()
+            self.assertTrue(block1.wait(timeout=2))
+
+            worker2 = threading.Thread(target=webapp._run_demo_turn, args=(None, "hello again", [], sid))
+            worker2.start()
+            self.assertTrue(block2.wait(timeout=2))
+
+            self.assertEqual(active_turns.get(sid), 2)
+
+            release1.set()
+            worker1.join(timeout=2)
+
+            webapp._sweep_stale_sessions()
+            self.assertTrue(session_dir.exists(), "turn 2 still in progress: sweep must not delete")
+
+            release2.set()
+            worker2.join(timeout=2)
+
+        self.assertNotIn(sid, active_turns)
+
+    def test_streaming_disconnect_handoff_keeps_worker_then_writer_tracked(self):
+        sid, _ = webapp.init_session()
+        session_dir = self.sessions_dir / sid
+
+        recorded = {}
+        run_turn_block = threading.Event()
+        run_turn_release = threading.Event()
+        c_event = threading.Event()
+        writer_c = threading.Thread(target=c_event.wait, daemon=True)
+
+        def fake_run_turn(*a, **k):
+            recorded["worker_thread"] = threading.current_thread()
+            on_chunk = k.get("on_chunk")
+            if on_chunk:
+                on_chunk("Hello there.", Path(self.temp_dir.name) / "chunk0.wav")
+            run_turn_block.set()
+            run_turn_release.wait()
+            writer_c.start()
+            return SimpleNamespace(
+                reply_text="Hello there.", audio_paths=[], caregiver_flag=None,
+                is_fallback=False, background_thread=writer_c,
+            )
+
+        with patch.object(webapp, "run_turn", side_effect=fake_run_turn), \
+             patch.object(webapp, "_combine_audio_chunks", return_value=None), \
+             patch.object(webapp, "SESSION_TTL_S", 0):
+            gen = webapp.run_demo_turn_streaming(None, "hello", [], sid)
+            next(gen)  # "Companion is thinking..."
+            next(gen)  # the chunk update -- blocks until fake_run_turn calls on_chunk
+            self.assertTrue(run_turn_block.wait(timeout=2))
+
+            gen.close()  # simulates the browser disconnecting mid-turn
+
+            webapp._sweep_stale_sessions()
+            self.assertTrue(session_dir.exists(), "worker thread still tracked and alive")
+            webapp._end_session(sid)
+            self.assertTrue(session_dir.exists())
+
+            run_turn_release.set()
+            recorded["worker_thread"].join(timeout=2)
+
+            webapp._sweep_stale_sessions()
+            self.assertTrue(session_dir.exists(), "writer C still alive")
+            webapp._end_session(sid)
+            self.assertTrue(session_dir.exists())
+
+            c_event.set()
+            writer_c.join(timeout=2)
+            webapp._sweep_stale_sessions()
+
+        self.assertFalse(session_dir.exists(), "tracking leaked: session never got swept after C finished")
+
+    def test_live_background_thread_blocks_end_session(self):
+        sid, _ = webapp.init_session()
+        session_dir = self.sessions_dir / sid
+        ev = threading.Event()
+        worker = threading.Thread(target=ev.wait, daemon=True)
+        worker.start()
+        webapp._remember_background_thread(sid, worker)
+        try:
+            webapp._end_session(sid)
+            self.assertTrue(session_dir.exists())
+        finally:
+            ev.set()
+            worker.join(timeout=2)
+        webapp._end_session(sid)
+        self.assertFalse(session_dir.exists())
+
+
+class TestBadSessionIdNeverBlocksCrisisFastPath(unittest.TestCase):
+    """#149: a malformed/foreign session id must never raise its way past
+    the offline safety fast-path, and every read-only helper must degrade to
+    its normal placeholder instead of raising."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.sessions_dir = Path(self.temp_dir.name) / "sessions"
+        self.sessions_dir.mkdir()
+        self.patches = [
+            patch.object(webapp, "SESSIONS_DIR", self.sessions_dir),
+            patch.object(webapp, "SHARED_PROFILE", False),
+            patch.dict(os.environ, {"NEBIUS_API_KEY": ""}),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.temp_dir.cleanup()
+
+    def _assert_new_valid_session_id(self, new_sid):
+        self.assertIsInstance(new_sid, str)
+        self.assertRegex(new_sid, r"^[0-9a-f]{32}$")
+
+    def _assert_nothing_written_outside_sessions_dir(self):
+        self.assertFalse((self.sessions_dir.parent / "x").exists())
+        self.assertEqual(sorted(p.name for p in self.sessions_dir.parent.iterdir()), ["sessions"])
+
+    def test_run_demo_turn_with_bad_id_hits_crisis_fastpath(self):
+        result = webapp.run_demo_turn(None, "I want to die", [], "../x")
+        self.assertIn("988", result[0])
+        self._assert_new_valid_session_id(result[5])
+        self._assert_nothing_written_outside_sessions_dir()
+
+    def test_run_demo_turn_streaming_with_bad_id_hits_crisis_fastpath(self):
+        outputs = list(webapp.run_demo_turn_streaming(None, "I want to die", [], "../x"))
+        self.assertTrue(outputs)
+        final = outputs[-1]
+        self.assertIn("988", final[0])
+        self._assert_new_valid_session_id(final[5])
+        self._assert_nothing_written_outside_sessions_dir()
+
+    def test_format_caregiver_panel_and_mobile_alert_strip_handle_bad_id(self):
+        panel = webapp._format_caregiver_panel("../x")
+        strip = webapp._format_mobile_alert_strip("../x")
+        self.assertIsInstance(panel, str)
+        self.assertIsInstance(strip, str)
+        self._assert_nothing_written_outside_sessions_dir()
+
+    def test_memo_savers_handle_bad_id_without_raising(self):
+        text_result = webapp.save_caregiver_text_memo("Dad has physio Tuesday.", "../x")
+        self.assertIsInstance(text_result[0], str)
+        self.assertEqual(text_result[2], "")
+
+        with patch.object(webapp.hear, "transcribe", return_value="Dad has physio Tuesday."):
+            voice_result = webapp.save_caregiver_voice_memo("fake.wav", "../x")
+        self.assertIsInstance(voice_result[0], str)
+        self._assert_nothing_written_outside_sessions_dir()
 
 
 if __name__ == "__main__":

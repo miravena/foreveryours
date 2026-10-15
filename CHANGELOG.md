@@ -11,6 +11,13 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Fixed
+- Session cleanup races and symlink safety (#148, #150, #151): the stale-session sweeper and
+  tab-close cleanup now share one lock-protected protocol that never deletes a session with a
+  turn or background writer still in flight, never follows a symlinked alias into another
+  session's directory, and never sweeps a directory whose name isn't a real session id.
+- Bad session id no longer blocks the crisis fast-path (#149): a malformed or expired session id
+  (e.g. after the browser tab's state expires) now gets a fresh session and still receives the
+  offline safety fast-path reply, instead of an unhandled error.
 - Memory-conflict privacy leak (#165 and duplicates #154, #156, #158, #160, #163, #166, #167): a
   memory conflict's old fact, new fact and reason never reach the caregiver panel or stay on disk
   once the conflict closes. Escalation now adds a fixed, content-free "a memory question was

@@ -94,6 +94,15 @@ PRIVACY_NOTICE_URL = "https://github.com/miravena/foreveryours/blob/main/docs/SA
 SESSIONS_DIR = Path(os.environ.get("FY_SESSIONS_DIR", Path(tempfile.gettempdir()) / "foreveryours-sessions"))
 SHARED_PROFILE = os.environ.get("FY_SHARED_PROFILE") == "1"
 SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
+# Sweeper/_end_session assume CPython's symlink-safe, fd-based rmtree (true on
+# Linux); only this process writes SESSIONS_DIR, so another local writer
+# swapping an entry mid-delete is out of scope (#150, #151 ASSUMPTIONS).
+if not shutil.rmtree.avoids_symlink_attacks:
+    print(
+        "WARNING: shutil.rmtree on this platform is not symlink-attack-safe "
+        "(shutil.rmtree.avoids_symlink_attacks is False); session cleanup "
+        "may not be safe against a symlinked session directory."
+    )
 GRADIO_CACHE_SWEEP = (600, SESSION_TTL_S)  # (check every N s, delete files older than M s)
 # Human-readable figures for the notices below (#137, #143). Two different
 # delays, from two different sources -- do not conflate them:
@@ -171,9 +180,16 @@ _lock = threading.Lock()
 _request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._request_log.clear() still resolves; _rate_limit_ok() keeps its own local dict now
 
 _bg_threads_lock = threading.Lock()
-_bg_threads: dict[str, threading.Thread] = {}  # session_id -> that session's in-flight AUDIT/memory-extraction thread, if any
+_bg_threads: dict[str, list[threading.Thread]] = {}  # session_id -> every outstanding writer thread for that session, if any (#148: a single slot let a later turn's thread overwrite tracking of a still-running earlier writer)
 _session_sweeper_started = False
 _session_sweeper_lock = threading.Lock()
+
+# Guards session filesystem state: _active_turns, and every stat/delete the
+# sweeper and _end_session perform. Lock order is always _session_fs_lock
+# FIRST, then _bg_threads_lock -- never the reverse (#148).
+_session_fs_lock = threading.RLock()
+_active_turns: dict[str, int] = {}  # session_id -> number of turns currently in progress (#148)
+_BG_JOIN_TIMEOUT_S = 10
 
 
 def _join_previous_turn(session_id: str) -> None:
@@ -184,18 +200,52 @@ def _join_previous_turn(session_id: str) -> None:
     `MemoryStore`: turn B's store can load from disk before turn A's
     background task calls `_flush()`, so B's own later `_flush()` writes a
     stale snapshot that silently drops A's save (Codex review, PR #90). Join
-    the PREVIOUS turn's thread, bounded, before this turn does anything, so
-    writes stay ordered without blocking the turn that's actually in flight."""
+    the PREVIOUS turn's thread(s), bounded, before this turn does anything, so
+    writes stay ordered without blocking the turn that's actually in flight.
+
+    Takes a snapshot of every writer currently tracked for this session,
+    joins each live one with a bounded timeout, then removes only the ones
+    that finished (by identity) -- a writer still alive after the timeout
+    stays tracked, so later sweeps/deletes still see it as busy (#148)."""
     with _bg_threads_lock:
-        prev = _bg_threads.pop(session_id, None)
-    if prev is not None and prev.is_alive():
-        prev.join(timeout=10)
+        snapshot = list(_bg_threads.get(session_id, []))
+    for t in snapshot:
+        if t.is_alive():
+            t.join(timeout=_BG_JOIN_TIMEOUT_S)
+    with _bg_threads_lock:
+        lst = _bg_threads.get(session_id)
+        if lst is not None:
+            finished = [t for t in snapshot if not t.is_alive()]
+            lst[:] = [t for t in lst if not any(t is f for f in finished)]
+            if not lst:
+                _bg_threads.pop(session_id, None)
 
 
 def _remember_background_thread(session_id: str, thread: threading.Thread | None) -> None:
-    if thread is not None:
-        with _bg_threads_lock:
-            _bg_threads[session_id] = thread
+    """Appends `thread` to this session's list of live writers, pruning any
+    that have already finished. Never replaces a still-live writer (#148: the
+    old single-slot dict let a later turn's thread silently overwrite
+    tracking of a still-running earlier one). Ignores None and a thread
+    already tracked (compared by identity), so registering the same thread
+    twice -- e.g. once right after start() and again after it returns -- is a
+    no-op."""
+    if thread is None:
+        return
+    with _bg_threads_lock:
+        lst = _bg_threads.setdefault(session_id, [])
+        lst[:] = [t for t in lst if t.is_alive()]
+        if not any(t is thread for t in lst):
+            lst.append(thread)
+
+
+def _is_session_busy(session_id: str) -> bool:
+    """A session is BUSY when a turn is in progress on it or any tracked
+    background writer for it is still alive (#148)."""
+    if _active_turns.get(session_id, 0) > 0:
+        return True
+    with _bg_threads_lock:
+        threads = list(_bg_threads.get(session_id, []))
+    return any(t.is_alive() for t in threads)
 
 
 def _rate_limit_ok(data_dir: Path) -> bool:
@@ -262,6 +312,19 @@ def _session_root(session_id: str) -> Path:
     return Path(root)
 
 
+def _normalize_or_new_session(session_id: str) -> str:
+    """A non-empty but malformed/foreign id (e.g. "../x") must not raise its
+    way past the crisis fast-path (#149): the public entry points call this
+    right after the `session_id_val or _new_session()` line (which only
+    catches the falsy/None case) so a bad id is replaced by a fresh session
+    before any pipeline work runs, and the turn proceeds normally on it."""
+    try:
+        _session_root(session_id)
+    except ValueError:
+        return _new_session()
+    return session_id
+
+
 def _session_dirs(session_id: str) -> tuple[Path, Path]:
     """(data_dir, audio_dir) for one browser session."""
     if SHARED_PROFILE:
@@ -274,11 +337,16 @@ def _session_dirs(session_id: str) -> tuple[Path, Path]:
 def _touch_session(root: Path) -> None:
     """Every turn, memo save and panel poll goes through _session_dirs, so
     this is the activity timestamp the sweeper reads (#146). Writes land in
-    data/ and audio/, which never change the root's own mtime."""
-    try:
-        os.utime(root)
-    except FileNotFoundError:
-        pass  # brand-new session; MemoryStore creates it
+    data/ and audio/, which never change the root's own mtime.
+
+    Takes `_session_fs_lock` (#148) so a touch landing while the sweeper is
+    mid-decision on this same entry waits for the sweeper, rather than racing
+    a stat the sweeper already took."""
+    with _session_fs_lock:
+        try:
+            os.utime(root)
+        except FileNotFoundError:
+            pass  # brand-new session; MemoryStore creates it
 
 
 def _next_turn_count(data_dir: Path) -> int:
@@ -307,22 +375,48 @@ def _get_turn_count(data_dir: Path) -> int:
         return 0
 
 
+def _log_rmtree_error(func, path, exc_info) -> None:
+    """onerror handler for the sweeper's rmtree (#150, #151): log and move on
+    to the next entry instead of silently swallowing every failure
+    (ignore_errors=True) or letting one bad entry abort the whole sweep."""
+    print(f"Session sweeper: failed to remove {path!r} via {func}: {exc_info}")
+
+
 def _sweep_stale_sessions() -> None:
     """Backstop for sessions whose delete_callback never ran (process
-    restart, crashed tab): anything untouched for SESSION_TTL_S goes."""
+    restart, crashed tab): anything untouched for SESSION_TTL_S goes.
+
+    Each entry is examined and deleted under `_session_fs_lock` (#148, #150,
+    #151): a symlinked alias into another session (even with a valid hex
+    name) is skipped before anything resolves it, a stray non-hex-named
+    directory is left alone, and a session that is BUSY (a turn in progress
+    or a live tracked writer) is skipped regardless of mtime. Only a real,
+    non-symlink, correctly-named, idle directory gets stat'd and, if stale,
+    removed -- by its own entry path, never a resolved target. Holding the
+    lock across the stat+delete is intentional: a touch or turn registration
+    for that same entry waits for the sweeper to finish deciding."""
     if SHARED_PROFILE or not SESSIONS_DIR.exists():
         return
     cutoff = time.time() - SESSION_TTL_S
-    with _bg_threads_lock:  # a turn's AUDIT/memory thread may still be writing (#146)
-        busy = {sid for sid, t in _bg_threads.items() if t.is_alive()}
-    for child in SESSIONS_DIR.iterdir():
-        if child.name in busy:
-            continue
-        try:
-            if child.is_dir() and child.stat().st_mtime < cutoff:
-                shutil.rmtree(child, ignore_errors=True)
-        except FileNotFoundError:
-            pass
+    try:
+        entries = list(SESSIONS_DIR.iterdir())
+    except FileNotFoundError:
+        return
+    for child in entries:
+        with _session_fs_lock:
+            if os.path.islink(child):
+                continue
+            if not _SESSION_ID_RE.fullmatch(child.name):
+                continue
+            try:
+                if not child.is_dir():
+                    continue
+                if _is_session_busy(child.name):
+                    continue
+                if child.stat().st_mtime < cutoff:
+                    shutil.rmtree(child, onerror=_log_rmtree_error)
+            except FileNotFoundError:
+                pass
 
 
 def _start_session_sweeper(
@@ -367,14 +461,27 @@ def _new_session() -> str:
 
 
 def _end_session(session_id: str | None) -> None:
-    if session_id:
+    """Gradio's delete_callback on tab close. Validates the id BEFORE
+    touching `_bg_threads` (#148: the old code popped the tracking entry even
+    for an id that then failed validation). Under `_session_fs_lock`: a
+    symlinked alias (even with a valid hex name) is left untouched -- never
+    resolved, never deleted -- and a BUSY session (a turn in progress, or any
+    live tracked writer) is left fully alone, `_bg_threads` included, so the
+    sweeper can still see it as busy and clean up the tracking once the TTL
+    and the writer both clear (#148, #150, #151)."""
+    if not session_id or SHARED_PROFILE:
+        return
+    try:
+        root = _session_root(session_id)
+    except ValueError:
+        return  # a Gradio delete callback: never raise, never delete outside SESSIONS_DIR
+    with _session_fs_lock:
+        if os.path.islink(root):
+            return
+        if _is_session_busy(session_id):
+            return
         with _bg_threads_lock:
             _bg_threads.pop(session_id, None)
-    if session_id and not SHARED_PROFILE:
-        try:
-            root = _session_root(session_id)
-        except ValueError:
-            return  # a Gradio delete callback: never raise, never delete outside SESSIONS_DIR
         shutil.rmtree(root, ignore_errors=True)
 
 
@@ -399,7 +506,12 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     interval (see the Timer below)."""
     if not session_id:
         return "_Setting up your demo household..._"
-    data_dir, _ = _session_dirs(session_id)
+    try:
+        data_dir, _ = _session_dirs(session_id)
+    except ValueError:
+        # Malformed/foreign id (#149) -- same placeholder as "no session yet",
+        # never an exception out of a polled panel.
+        return "_Setting up your demo household..._"
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
 
@@ -483,7 +595,10 @@ def _format_mobile_alert_strip(session_id: str | None) -> str:
     until the judge scrolls past everything (#83, #80 2.B2)."""
     if not session_id:
         return ""
-    data_dir, _ = _session_dirs(session_id)
+    try:
+        data_dir, _ = _session_dirs(session_id)
+    except ValueError:
+        return ""  # malformed/foreign id (#149) -- never raise out of a polled strip
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
     distress_flags = [f for f in flags.all() if f.severity in HIGH_PRIORITY_SEVERITIES]
     if not distress_flags:
@@ -541,6 +656,7 @@ def run_demo_turn(
     # rather than silently looking like a reset conversation.
     session_expired = session_id_val is None
     session_id_val = session_id_val or _new_session()
+    session_id_val = _normalize_or_new_session(session_id_val)
 
     simulated_hour = 10
     if "Sundowning" in simulated_time_str:
@@ -575,10 +691,13 @@ def run_demo_turn_streaming(
     is_proactive: bool = False,
     trigger_type: str = "silence",
 ):
-    import queue
-    import threading
-    from pathlib import Path
-    
+    """Public Gradio entry point. Normalizes the session id and registers the
+    turn as in-progress (#148, #149) BEFORE any other work, including the
+    "thinking" yield -- then delegates to `_run_demo_turn_streaming_impl` for
+    the actual turn. The `finally` here runs even if the browser disconnects
+    and Gradio closes this generator mid-turn (`gen.close()` throws
+    GeneratorExit at the suspended yield, which unwinds through this
+    `finally` on its way out), so `_active_turns` is always cleaned up."""
     if isinstance(text_in_or_history, list):
         history = text_in_or_history
         session_id_val = history_or_session if isinstance(history_or_session, str) else session_id
@@ -592,12 +711,45 @@ def run_demo_turn_streaming(
 
     session_expired = session_id_val is None
     session_id_val = session_id_val or _new_session()
+    session_id_val = _normalize_or_new_session(session_id_val)
 
     simulated_hour = 10
     if "Sundowning" in simulated_time_str:
         simulated_hour = 18
     elif "Night" in simulated_time_str:
         simulated_hour = 23
+
+    root = _session_root(session_id_val)
+    with _session_fs_lock:
+        _active_turns[session_id_val] = _active_turns.get(session_id_val, 0) + 1
+        _touch_session(root)
+    try:
+        yield from _run_demo_turn_streaming_impl(
+            audio_in, actual_text, history, session_id_val, simulated_hour,
+            session_expired, is_proactive, trigger_type,
+        )
+    finally:
+        with _session_fs_lock:
+            n = _active_turns.get(session_id_val, 0) - 1
+            if n <= 0:
+                _active_turns.pop(session_id_val, None)
+            else:
+                _active_turns[session_id_val] = n
+
+
+def _run_demo_turn_streaming_impl(
+    audio_in: str | None,
+    actual_text: str | None,
+    history: list[dict],
+    session_id_val: str,
+    simulated_hour: int,
+    session_expired: bool,
+    is_proactive: bool,
+    trigger_type: str,
+):
+    import queue
+    import threading
+    from pathlib import Path
 
     yield (
         "_Companion is thinking..._",
@@ -650,12 +802,20 @@ def run_demo_turn_streaming(
                 enable_perseveration_flag=DEV_MODE,
                 on_chunk=_on_chunk
             )
+            # Hand off to the background AUDIT/memory-extraction thread BEFORE
+            # q.put(("DONE", ...)) (#148): if the generator was already closed
+            # (browser disconnected) and nothing ever reads "DONE", that
+            # writer must still be tracked. _remember_background_thread
+            # ignores a thread already tracked (identity), so the later
+            # registration below (after DONE) is a no-op.
+            _remember_background_thread(session_id_val, res.background_thread)
             q.put(("DONE", res))
         except Exception as exc:
             q.put(("ERROR", exc))
 
     t = threading.Thread(target=_worker)
     t.start()
+    _remember_background_thread(session_id_val, t)
 
     current_reply_text = ""
     while True:
@@ -759,6 +919,35 @@ def run_proactive_turn_streaming(history, session, sim_time, trigger_type):
 
 
 def _run_demo_turn(
+    audio_in: str | None,
+    text_in: str | None,
+    history: list[dict],
+    session_id: str,
+    simulated_hour: int = 10,
+    is_proactive: bool = False,
+    trigger_type: str = "silence",
+) -> tuple[str, str | None, list[dict], str, str]:
+    """Registers the turn as in-progress (#148) before any other work, and
+    always deregisters it in `finally` -- every branch below returns a
+    value, so `finally` covers every one of them, including the early
+    "no speech detected" returns. `session_id` must already be a validated
+    id by this point (the public wrappers normalize before calling in)."""
+    root = _session_root(session_id)
+    with _session_fs_lock:
+        _active_turns[session_id] = _active_turns.get(session_id, 0) + 1
+        _touch_session(root)
+    try:
+        return _run_demo_turn_impl(audio_in, text_in, history, session_id, simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type)
+    finally:
+        with _session_fs_lock:
+            n = _active_turns.get(session_id, 0) - 1
+            if n <= 0:
+                _active_turns.pop(session_id, None)
+            else:
+                _active_turns[session_id] = n
+
+
+def _run_demo_turn_impl(
     audio_in: str | None,
     text_in: str | None,
     history: list[dict],
@@ -888,7 +1077,12 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
     session_id = session_id or _new_session()
     if not memo_text or not memo_text.strip():
         return _format_caregiver_panel(session_id), session_id, ""
-    data_dir, _ = _session_dirs(session_id)
+    try:
+        data_dir, _ = _session_dirs(session_id)
+    except ValueError:
+        # Malformed/foreign id (#149): nothing to write to, so return the
+        # same placeholder panel text rather than raise.
+        return _format_caregiver_panel(session_id), session_id, ""
     # A conversation turn's background extraction can still be writing this
     # session's MemoryStore; join it first so this save doesn't get wiped by
     # that thread's later _flush() of a now-stale snapshot (Codex review, PR #90).
@@ -907,7 +1101,10 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
     if not memo_audio:
         return _format_caregiver_panel(session_id), session_id
     transcript = hear.transcribe(Path(memo_audio))
-    data_dir, _ = _session_dirs(session_id)
+    try:
+        data_dir, _ = _session_dirs(session_id)
+    except ValueError:
+        return _format_caregiver_panel(session_id), session_id  # malformed/foreign id (#149)
     _join_previous_turn(session_id)  # see save_caregiver_text_memo
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     for line in transcript.split(". "):
