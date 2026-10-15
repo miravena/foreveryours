@@ -9,6 +9,23 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-15 (Issue #165 follow-up - review-arm bounce: GitHub closure/CI/live-invocation evidence)
+- **What:** review-arm bounced #16083 (`changes-requested`): "Runtime tests and negative control pass, but GitHub closure evidence, CI, and live invocation remain unverified." AC1 (unit tests) was already independently confirmed by the reviewer's own run. The same recurring environment gap documented in this file for #140's rounds above (reviewer's sandbox can't reach GitHub) looks like the cause for the closure/CI half; "live invocation" asked for the same kind of real-process, real-HTTP-API evidence #140 already has in `scripts/demo_caregiver_panel_live.sh`, which this ticket's work didn't produce an analogue of.
+- **Re-confirmed from this session (network reachable here):** `git rev-parse HEAD origin/main` both `a1f65c6`; all 8 issues (`#165` + duplicates `#154,#156,#158,#160,#163,#166,#167`) `CLOSED` via `gh issue view --json state,closedAt`; CI on `a1f65c6` -- `attribution`, `tests`, `CodeQL` all `completed success` via `gh run list --json`.
+- **Fixed (new live-invocation evidence):** added `scripts/demo_memory_conflict_privacy_live.sh`, the same pattern as `scripts/demo_caregiver_panel_live.sh` (real `webapp.py` process, real HTTP API, `ss`-verified socket ownership) but exercising the memory-conflict path end to end: `add_conflict()` -> live panel check, `mark_conflicts_asked()` -> live panel check, `escalate_asked_conflicts()` -> live panel check (private text absent, fixed content-free flag present), then the raw on-disk store file read directly to confirm the scrub. Re-run for this entry:
+  ```
+  $ PORT=7915 scripts/demo_memory_conflict_privacy_live.sh
+  ...
+  ok   private conflict text is absent from the live-rendered panel after add_conflict()
+  ok   private conflict text is absent from the live-rendered panel after mark_conflicts_asked()
+  ok   private conflict text is absent from the live-rendered panel after escalate_asked_conflicts()
+  ok   the fixed, content-free escalation flag is shown
+  ok   private conflict text is absent from the raw on-disk store file
+  $ echo $?
+  0
+  ```
+- **Result:** no production-code change this round (the finding was evidence, not behaviour); full suite unchanged, `OK (skipped=8)`, 209 tests.
+
 ### 2026-10-15 (Issues #165, #154, #156, #158, #160, #163, #166, #167 - memory-conflict text never reaches the caregiver)
 - **What:** eight filings of one bug: `add_conflict()` stores `old|new|reason` as a `conversation_extract` item with `status=conflict`; `escalate_asked_conflicts()` put the raw old/new fact text into the caregiver flag it raises; `_caregiver_panel_may_show()` let pending/asked conflict items through into "Briefed memory" (no rule excluded `status in (conflict, conflict_asked)`); and `resolve_asked_conflicts()`/`escalate_asked_conflicts()`/`clear_conflicts()` moved conflicts to `status=deleted` without scrubbing `item.text`, so the private old/new/reason stayed on disk (`delete()` already scrubbed to `[DELETED]`, these three didn't).
 - **Fixed (`memory/store.py`):** `escalate_asked_conflicts()` now adds exactly one flag per escalated conflict with the fixed, content-free text `"Unresolved Memory Ambiguity: a memory question was asked and left unanswered."` (severity `info`, `disclosed_to_senior=False`), never the old fact, new fact, reason, or a category word -- we can't reliably tell which side of a conflict is private, so a content-free flag needing no source lookup is the only safe answer for every conflict, not just emotional ones. All three conflict-closing methods (`resolve_asked_conflicts`, `escalate_asked_conflicts`, `clear_conflicts`) now set `item.text = "[DELETED]"` on every item they move to `deleted`, matching `delete()`.
