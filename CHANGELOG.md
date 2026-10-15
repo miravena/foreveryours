@@ -11,6 +11,14 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Fixed
+- Repeat-question (perseveration) check no longer flags distinct questions (#159, #153, #155,
+  #157): the confusion flag now requires a shared DISTINGUISHING word, not just generic logistics
+  overlap ("appointment", "dr", ...), so "dentist" vs "cardiologist" vs "optometrist" appointments
+  and "Dr Li" vs "Dr Wu" vs "Dr Ng" (short names are no longer dropped) never flag, while true and
+  lightly reworded repeats still do. The perseveration check now also requires the two prior
+  questions to be repeats of EACH OTHER, not just each a repeat of the current one. The confusion
+  flag is now recorded whether or not text-to-speech produced audio, and its text describes the
+  repeated question rather than the old intent-only wording.
 - Session cleanup races and symlink safety (#148, #150, #151): the stale-session sweeper and
   tab-close cleanup now share one lock-protected protocol that never deletes a session with a
   turn or background writer still in flight, never follows a symlinked alias into another

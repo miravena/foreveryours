@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 from caregiver import CaregiverFlags
 from memory.store import MemoryStore
-from pipeline.orchestrator import run_turn
+from pipeline.orchestrator import _is_repeat_question, run_turn
 from safety.fastpath import FastPathResult
 
 # The three paraphrases from the Issue: same LOGISTICAL intent, same subject
@@ -140,6 +140,119 @@ class TestPerseverationWindow(unittest.TestCase):
 
         self.assertEqual(self._perseveration_flags(), [])
         self.assertNotIn("make a note for your family", res.reply_text)
+
+    # ---------------------------------------------------------------
+    # Fixes #159/#153/#155/#157: generic logistics wording ("appointment",
+    # "dr", ...) must not make distinct questions look like one repeated
+    # question.
+    # ---------------------------------------------------------------
+
+    def _speak_turn_recorder(self, mock_speak_turn):
+        """Installs a side_effect on the (already-patched) _speak_turn mock
+        that fully consumes its sentence iterator (so a real generator is
+        never left unexhausted) and records the joined text, while still
+        returning the usual (text, [wav_path], latency) tuple."""
+        spoken_texts: list[str] = []
+
+        def _side_effect(sentences, audio_out_dir, on_chunk=None):
+            text = " ".join(list(sentences))
+            spoken_texts.append(text)
+            return (text, [Path("reply.wav")], 0.1)
+
+        mock_speak_turn.side_effect = _side_effect
+        return spoken_texts
+
+    def test_dentist_cardiologist_optometrist_do_not_flag(self, mock_stream_reply, mock_speak_turn, mock_fastpath_check):
+        spoken_texts = self._speak_turn_recorder(mock_speak_turn)
+        now = time.time()
+        history = _history(
+            [
+                "What time is my dentist appointment?",
+                "What time is my cardiologist appointment?",
+            ],
+            [now - 600, now - 300],
+        )
+        res = self._run("What time is my optometrist appointment?", history)
+
+        self.assertEqual(self._perseveration_flags(), [])
+        self.assertNotIn("make a note for your family", res.reply_text)
+        for text in spoken_texts:
+            self.assertNotIn("make a note for your family", text)
+
+    def test_dr_li_wu_ng_do_not_flag(self, mock_stream_reply, mock_speak_turn, mock_fastpath_check):
+        spoken_texts = self._speak_turn_recorder(mock_speak_turn)
+        now = time.time()
+        history = _history(
+            [
+                "When is my appointment with Dr Li?",
+                "When is my appointment with Dr Wu?",
+            ],
+            [now - 600, now - 300],
+        )
+        res = self._run("When is my appointment with Dr Ng?", history)
+
+        self.assertEqual(self._perseveration_flags(), [])
+        self.assertNotIn("make a note for your family", res.reply_text)
+        for text in spoken_texts:
+            self.assertNotIn("make a note for your family", text)
+
+    def test_reworded_dentist_repeats_flag_once(self, *_mocks):
+        now = time.time()
+        history = _history(
+            [
+                "what time is my dentist appointment",
+                "when is the dentist appointment",
+            ],
+            [now - 600, now - 300],
+        )
+        res = self._run("dentist appointment time?", history)
+
+        flagged = self._perseveration_flags()
+        self.assertEqual(len(flagged), 1)
+        self.assertTrue(flagged[0].disclosed_to_senior)
+
+    def test_what_time_is_it_three_times_flags_once(self, *_mocks):
+        question = "what time is it"
+        now = time.time()
+        history = _history([question, question], [now - 600, now - 300])
+        res = self._run(question, history)
+
+        flagged = self._perseveration_flags()
+        self.assertEqual(len(flagged), 1)
+        self.assertTrue(flagged[0].disclosed_to_senior)
+
+    def test_cross_match_without_prev_pair_match_does_not_flag(self, *_mocks):
+        # prev2 and prev1 each individually look like a repeat of `current`
+        # (shared distinguishing word, Jaccard >= 0.5), but prev1 and prev2
+        # are not repeats of EACH OTHER under the new rule -- so the trio is
+        # not a genuine 3-in-a-row perseveration loop.
+        prev2_text = "What time is my dentist appointment?"
+        prev1_text = "What time is my cardiologist appointment?"
+        current = "What time is my dentist and cardiologist appointment?"
+
+        self.assertTrue(_is_repeat_question(prev2_text, current))
+        self.assertTrue(_is_repeat_question(prev1_text, current))
+        self.assertFalse(_is_repeat_question(prev1_text, prev2_text))
+
+        now = time.time()
+        history = _history([prev2_text, prev1_text], [now - 600, now - 300])
+        res = self._run(current, history)
+
+        self.assertEqual(self._perseveration_flags(), [])
+        self.assertNotIn("make a note for your family", res.reply_text)
+
+    def test_verbatim_repeat_flags_even_with_no_tts_audio(self, mock_stream_reply, mock_speak_turn, mock_fastpath_check):
+        # #159: the flag must be recorded whether or not TTS produced audio --
+        # the disclosure line is already in the text reply either way.
+        mock_speak_turn.return_value = ("spoken", [], 0.1)
+        question = "What time is my appointment?"
+        now = time.time()
+        history = _history([question, question], [now - 600, now - 300])
+        res = self._run(question, history)
+
+        flagged = self._perseveration_flags()
+        self.assertEqual(len(flagged), 1)
+        self.assertTrue(flagged[0].disclosed_to_senior)
 
 
 if __name__ == "__main__":

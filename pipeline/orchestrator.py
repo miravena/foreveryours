@@ -54,27 +54,60 @@ PERSEVERATION_WINDOW_S = 1800  # 30 minutes
 
 _CONTENT_WORD_RE = re.compile(r"[a-z0-9]+")
 
+# Fixes #159/#153/#155/#157: generic logistics vocabulary ("appointment",
+# "schedule", "dr", ...) is content, but it is not DISTINGUISHING -- three
+# different appointments ("dentist" / "cardiologist" / "optometrist") or
+# three different doctors ("Dr Li" / "Dr Wu" / "Dr Ng") all say "appointment"
+# or "dr", so that overlap alone must never look like a repeated question.
+GENERIC_LOGISTICS_WORDS = {"appointment", "appointments", "schedule", "scheduled", "coming", "dr"}
+
 
 def _content_words(text: str) -> set[str]:
-    """Lowercase alnum tokens longer than 2 chars, minus memory.store.STOPWORDS --
-    the same stop-word source RECALL's own keyword matching uses, so "is this a
+    """Lowercase alnum tokens of length >= 2, minus memory.store.STOPWORDS (the
+    same stop-word source RECALL's own keyword matching uses, so "is this a
     repeated question" and "is this a relevant memory" agree on what counts as
-    content."""
+    content) and minus this module's own MATCH_IGNORE_WORDS (the stop-word
+    source used elsewhere in this file for fact/reminder matching)."""
     return {
         w for w in _CONTENT_WORD_RE.findall(text.lower())
-        if len(w) > 2 and w not in STOPWORDS
+        if len(w) >= 2 and w not in STOPWORDS and w not in MATCH_IGNORE_WORDS
     }
 
 
 def _is_repeat_question(a: str, b: str) -> bool:
-    """Jaccard overlap of content words >= 0.5. Two messages with no content
-    words in common (or none at all) are never a repeat -- an empty overlap
-    must not look like a 100% match."""
+    """Two messages are the same repeated question when their CONTENT words
+    overlap (Jaccard >= 0.5) AND they share a DISTINGUISHING word -- a content
+    word that isn't generic logistics vocabulary (GENERIC_LOGISTICS_WORDS).
+    "What time is my dentist appointment?" vs "...cardiologist appointment?"
+    share {appointment} but no distinguishing word, so they do not flag; "Dr
+    Li" vs "Dr Wu" share {dr} but not {li}/{wu}, so they do not flag either.
+    When both distinguishing-word sets are empty (e.g. every PARAPHRASE
+    reduces to the bare content word {appointment}), the content-word overlap
+    alone decides it -- there's nothing more specific to disagree on.
+
+    If both messages have NO content words at all (pure stop-word sentences
+    like "What time is it?"), fall back to Jaccard over every lowercase
+    alnum token at a stricter 0.8 threshold, so asking that three times still
+    flags. If only one message has content words, they are never a repeat --
+    an empty overlap must not look like a match."""
     words_a, words_b = _content_words(a), _content_words(b)
-    if not words_a or not words_b:
-        return False
-    union = words_a | words_b
-    return len(words_a & words_b) / len(union) >= 0.5
+    if words_a and words_b:
+        union = words_a | words_b
+        if len(words_a & words_b) / len(union) < 0.5:
+            return False
+        dist_a = words_a - GENERIC_LOGISTICS_WORDS
+        dist_b = words_b - GENERIC_LOGISTICS_WORDS
+        if not dist_a and not dist_b:
+            return True
+        return bool(dist_a & dist_b)
+    if not words_a and not words_b:
+        all_a = set(_CONTENT_WORD_RE.findall(a.lower()))
+        all_b = set(_CONTENT_WORD_RE.findall(b.lower()))
+        if not all_a or not all_b:
+            return False
+        union = all_a | all_b
+        return len(all_a & all_b) / len(union) >= 0.8
+    return False
 
 
 def _sanitize_caregiver_update(text: str, caregiver_name: str) -> str:
@@ -327,17 +360,24 @@ def run_turn(
                 and detect_intent(prev2["content"]) == intent
                 and _is_repeat_question(prev1["content"], transcript)
                 and _is_repeat_question(prev2["content"], transcript)
+                and _is_repeat_question(prev1["content"], prev2["content"])
             )
             if is_repeat:
                 persev_reply = "I'm going to make a note for your family that we've talked about this a few times today."
-                
+
                 _, persev_paths, persev_first_time = _speak_turn(iter([persev_reply]), audio_out_dir, on_chunk=on_chunk)
-                if persev_paths:
-                    flags.add(
-                        text=f"Perseveration loop detected: Senior exhibited {intent.value} intent 3 times in a row.",
-                        severity="confusion",
-                        disclosed_to_senior=True,
-                    )
+                # Fixes #159: the disclosure line is already in the text reply
+                # (immediate_reply_text below), so disclosed_to_senior stays
+                # True whether or not TTS actually produced audio -- the flag
+                # must be recorded either way, not only when audio exists.
+                flags.add(
+                    text=(
+                        "Perseveration: the senior asked the same question "
+                        f"3 times within {PERSEVERATION_WINDOW_S // 60} minutes."
+                    ),
+                    severity="confusion",
+                    disclosed_to_senior=True,
+                )
                 immediate_audio_paths.extend(persev_paths)
                 if first_audio_time is None:
                     first_audio_time = persev_first_time

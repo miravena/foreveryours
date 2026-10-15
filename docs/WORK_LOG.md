@@ -9,6 +9,45 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-15 (Issues #159 (PRIMARY), #153, #155, #157 - repeat-question check flags only real repeats)
+- **What:** `_is_repeat_question()` scored content-word Jaccard overlap (>= 0.5) with no concept of
+  which shared words were actually distinguishing. "What time is my dentist/cardiologist/
+  optometrist appointment?" each share `{time, appointment}`, so every pair hit 2/4 = 0.5 and all
+  three flagged as one repeated question (#155, #157, #159). `_content_words()` required tokens
+  longer than 2 chars, so "Dr Li" vs "Dr Wu" vs "Dr Ng" all collapsed to `{appointment}` once the
+  2-letter names were dropped, same false positive (#153). Separately, the perseveration block
+  (~310-345) never compared `prev1` to `prev2`, only each to the current transcript, and only
+  recorded the `confusion` flag `if persev_paths:` -- a TTS failure silently dropped the flag even
+  though the text reply (and `persev_note`) still carried the disclosure.
+- **Fixed (`pipeline/orchestrator.py`):** `_content_words()` now keeps tokens of length >= 2 and
+  also filters `MATCH_IGNORE_WORDS` (previously a separate stop-word list used only by the
+  fact/reminder matchers) in addition to `memory.store.STOPWORDS`, so there is one agreed
+  definition of "content" in this file. Added `GENERIC_LOGISTICS_WORDS = {"appointment",
+  "appointments", "schedule", "scheduled", "coming", "dr"}`. `_is_repeat_question(a, b)`: when both
+  texts have content words, it's a repeat only if the content-word Jaccard is >= 0.5 AND the two
+  texts share a DISTINGUISHING word (content words minus `GENERIC_LOGISTICS_WORDS`), or both
+  distinguishing sets are empty (so the existing bare-"appointment" paraphrases still flag). When
+  both texts have NO content words at all (e.g. "what time is it"), it falls back to Jaccard over
+  every lowercase alnum token at a stricter >= 0.8 threshold, so that question asked three times
+  still flags. If only one side has content words, never a repeat. The perseveration block now
+  also requires `_is_repeat_question(prev1, prev2)`; the confusion flag is recorded unconditionally
+  (not gated on `persev_paths`), with new text "Perseveration: the senior asked the same question
+  3 times within {N} minutes." (N from `PERSEVERATION_WINDOW_S`), quoting none of the senior's
+  words. Updated the matching assertions in `tests/test_orchestrator.py`'s
+  `test_perseveration_tracking_flags_loop` (substring check only, same semantics).
+- **Tests (`tests/test_perseveration_window.py`):** added cases for dentist/cardiologist/
+  optometrist (no flag, no family-note line in `reply_text` or in any `_speak_turn` call --
+  verified via a `_speak_turn` mock `side_effect` that consumes and records its input text), Dr
+  Li/Wu/Ng (same three assertions), three reworded dentist repeats (exactly one flag), "what time
+  is it" x3 (exactly one flag), a prev1/prev2 cross-check case (`_is_repeat_question(prev2,
+  current)` and `_is_repeat_question(prev1, current)` both True, `_is_repeat_question(prev1,
+  prev2)` False -> no flag), and a verbatim repeat with `_speak_turn` returning no audio paths
+  (still exactly one flag).
+- **Result:** `tests.test_perseveration_window tests.test_orchestrator` -> `OK`, 43 tests (12 new);
+  full `discover tests` -> `OK (skipped=8)`, 228 tests (was 222). Negative control: the new test
+  file copied onto pre-fix `34e8426` gives `FAILED (failures=4)`, 0 `ERROR` lines --
+  `grep FAIL && ! grep ERROR` exits 0.
+
 ### 2026-10-15 (Issue #165 follow-up - review-arm bounce: GitHub closure/CI/live-invocation evidence)
 - **What:** review-arm bounced #16083 (`changes-requested`): "Runtime tests and negative control pass, but GitHub closure evidence, CI, and live invocation remain unverified." AC1 (unit tests) was already independently confirmed by the reviewer's own run. The same recurring environment gap documented in this file for #140's rounds above (reviewer's sandbox can't reach GitHub) looks like the cause for the closure/CI half; "live invocation" asked for the same kind of real-process, real-HTTP-API evidence #140 already has in `scripts/demo_caregiver_panel_live.sh`, which this ticket's work didn't produce an analogue of.
 - **Re-confirmed from this session (network reachable here):** `git rev-parse HEAD origin/main` both `a1f65c6`; all 8 issues (`#165` + duplicates `#154,#156,#158,#160,#163,#166,#167`) `CLOSED` via `gh issue view --json state,closedAt`; CI on `a1f65c6` -- `attribution`, `tests`, `CodeQL` all `completed success` via `gh run list --json`.
