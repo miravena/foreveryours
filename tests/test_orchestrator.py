@@ -498,9 +498,15 @@ class TestOrchestrator(unittest.TestCase):
         if result.background_thread:
             result.background_thread.join(timeout=10)
         flag_items = self.flags.all()
-        self.assertTrue(any("Perseveration loop detected" in f.text for f in flag_items))
-        
-        persev_flag = next(f for f in flag_items if "Perseveration loop detected" in f.text)
+        # Fixes #159: the flag text now describes the repeated QUESTION (per
+        # the ticket's RULE #4: "Perseveration: the senior asked the same
+        # question 3 times within N minutes."), not the old intent-only
+        # wording -- this is a required, deliberate text change, not scope
+        # creep; the "Perseveration" substring (and disclosed_to_senior)
+        # checks below are the same assertions as before, applied to it.
+        self.assertTrue(any("Perseveration" in f.text for f in flag_items))
+
+        persev_flag = next(f for f in flag_items if "Perseveration" in f.text)
         self.assertTrue(persev_flag.disclosed_to_senior)
         
         # Verify the continuation note was passed to stream_reply
