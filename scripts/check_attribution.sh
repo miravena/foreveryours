@@ -57,8 +57,11 @@ fi
 assisted_lines=$(printf '%s\n' "$body" | grep -E '^(Assisted-by|Reviewed-by):')
 
 if [ -n "$assisted_lines" ]; then
-  if printf '%s\n' "$assisted_lines" | sed -E 's/^(Assisted-by|Reviewed-by): *//' | awk '{print $1}' | grep -vq ':'; then
-    warn "Assisted-by/Reviewed-by with no ':<model>'. Format is \`Assisted-by: <harness>:<model id> [tools]\` (CONTRIBUTING.md -> \"Recording which model did what\")."
+  # A good token is "<harness>:<model>" with something non-empty on both sides of
+  # the colon -- a bare harness ("ClaudeCode") or a trailing colon with nothing
+  # after it ("ClaudeCode:") both count as "no model".
+  if printf '%s\n' "$assisted_lines" | sed -E 's/^(Assisted-by|Reviewed-by): *//' | awk '{print $1}' | grep -vqE '^[^:[:space:]]+:[^:[:space:]]'; then
+    warn "Assisted-by/Reviewed-by with no ':<model>' (or an empty model). Format is \`Assisted-by: <harness>:<model id> [tools]\` (CONTRIBUTING.md -> \"Recording which model did what\")."
   fi
 
   if ! printf '%s\n' "$body" | grep -qE '^Assisted-meta:'; then

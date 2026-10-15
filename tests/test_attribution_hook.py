@@ -56,6 +56,16 @@ Assisted-meta: provider=Anthropic effort=medium
 Cost-estimate: unknown
 """
 
+# a trailing colon with nothing after it -- review-arm bounce #14357 round 2:
+# the first draft of the checker treated "harness:" as a valid "harness:model".
+EMPTY_MODEL = """\
+fix: thing
+
+Assisted-by: ClaudeCode:
+Assisted-meta: provider=Anthropic effort=medium
+Cost-estimate: unknown
+"""
+
 NO_COST = """\
 fix: thing
 
@@ -126,6 +136,13 @@ class TestChecker(unittest.TestCase):
         self.assertIn("WARNING", result.stderr)
         self.assertIn(":<model>", result.stderr)
 
+    def test_empty_model_warns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = _run_checker(tmp, EMPTY_MODEL)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("WARNING", result.stderr)
+        self.assertIn(":<model>", result.stderr)
+
     def test_no_cost_estimate_warns(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = _run_checker(tmp, NO_COST)
@@ -149,6 +166,13 @@ class TestHook(unittest.TestCase):
     def test_hook_warns_on_no_model(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = _run_hook(tmp, NO_MODEL)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("WARNING", result.stderr)
+        self.assertIn(":<model>", result.stderr)
+
+    def test_hook_warns_on_empty_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = _run_hook(tmp, EMPTY_MODEL)
         self.assertEqual(result.returncode, 0)
         self.assertIn("WARNING", result.stderr)
         self.assertIn(":<model>", result.stderr)
