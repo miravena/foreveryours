@@ -196,7 +196,11 @@ class TestWebappSessions(unittest.TestCase):
         self.assertTrue((self.sessions_dir / fresh).exists())
 
     def test_session_sweeper_expires_orphan_without_new_visitor(self):
-        orphan = "orphan-no-visitor"
+        # Must be a valid 32-hex session id: ticket #16085 (#150/#151) makes
+        # the sweeper skip any entry whose name isn't one, so a non-hex name
+        # here would no longer be swept and this test would be checking the
+        # wrong thing.
+        orphan = "aa00bb11cc22dd33ee44ff5500112233"
         root = self.sessions_dir / orphan
         root.mkdir(parents=True, exist_ok=True)
         old = time.time() - webapp.SESSION_TTL_S - 60
