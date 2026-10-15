@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import webapp
+from caregiver import CaregiverFlags
 from memory.store import MemoryScope, MemoryStore
 
 
@@ -163,6 +164,182 @@ class TestCaregiverPanelPrivacy(unittest.TestCase):
 
         panel = webapp._format_caregiver_panel(session_id)
         self.assertNotIn("Caregiver note with a scope value this code has never seen", panel)
+
+
+class TestMemoryConflictPrivacy(unittest.TestCase):
+    """Fixes #165 (and duplicates #154, #156, #158, #160, #163, #166, #167):
+    a private fact on either side of a memory conflict, or the reason given
+    for it, must never reach the caregiver panel or survive on disk once the
+    conflict closes."""
+
+    PRIVATE_WORDS = ("lonely", "wife")
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.sessions_dir = Path(self.temp_dir.name) / "sessions"
+        self.patches = [
+            patch.object(webapp, "SESSIONS_DIR", self.sessions_dir),
+            patch.object(webapp, "SHARED_PROFILE", False),
+            patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.temp_dir.cleanup()
+
+    def _new_store_and_flags(self):
+        session_id, _ = webapp.init_session()
+        data_dir, _ = webapp._session_dirs(session_id)
+        store = MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
+        flags = CaregiverFlags(webapp.DEFAULT_PROFILE_ID, data_dir)
+        return session_id, store, flags
+
+    def _assert_panel_clean(self, session_id):
+        try:
+            panel = webapp._format_caregiver_panel(session_id)
+        except Exception as exc:  # pre-fix code must FAIL, never ERROR
+            self.fail(f"_format_caregiver_panel raised {exc!r}")
+        for word in self.PRIVATE_WORDS:
+            self.assertNotIn(word, panel)
+
+    def _assert_disk_clean(self, store):
+        try:
+            raw = store.path.read_text()
+        except Exception as exc:
+            self.fail(f"reading store file raised {exc!r}")
+        for word in self.PRIVATE_WORDS:
+            self.assertNotIn(word, raw)
+
+    def test_tagged_old_fact_hidden_through_full_lifecycle(self):
+        session_id, store, flags = self._new_store_and_flags()
+        try:
+            store.add_conflict(
+                "[EMOTIONAL STATE]: I feel lonely since my wife died",
+                "I feel fine",
+                "senior said they are lonely",
+            )
+        except Exception as exc:
+            self.fail(f"add_conflict raised {exc!r}")
+        self._assert_panel_clean(session_id)
+
+        try:
+            store.mark_conflicts_asked()
+        except Exception as exc:
+            self.fail(f"mark_conflicts_asked raised {exc!r}")
+        self._assert_panel_clean(session_id)
+
+        try:
+            store.escalate_asked_conflicts(flags)
+        except Exception as exc:
+            self.fail(f"escalate_asked_conflicts raised {exc!r}")
+        self._assert_panel_clean(session_id)
+        self._assert_disk_clean(store)
+
+    def test_untagged_old_fact_hidden_through_full_lifecycle(self):
+        session_id, store, flags = self._new_store_and_flags()
+        try:
+            store.add_conflict(
+                "I feel lonely since my wife died",
+                "I feel fine",
+                "senior said they are lonely",
+            )
+        except Exception as exc:
+            self.fail(f"add_conflict raised {exc!r}")
+        self._assert_panel_clean(session_id)
+
+        store.mark_conflicts_asked()
+        self._assert_panel_clean(session_id)
+
+        store.escalate_asked_conflicts(flags)
+        self._assert_panel_clean(session_id)
+        self._assert_disk_clean(store)
+
+    def test_private_text_only_in_new_fact_hidden_through_full_lifecycle(self):
+        session_id, store, flags = self._new_store_and_flags()
+        try:
+            store.add_conflict(
+                "Dad is doing fine",
+                "I feel lonely since my wife died",
+                "senior contradicted an earlier statement",
+            )
+        except Exception as exc:
+            self.fail(f"add_conflict raised {exc!r}")
+        self._assert_panel_clean(session_id)
+
+        store.mark_conflicts_asked()
+        self._assert_panel_clean(session_id)
+
+        store.escalate_asked_conflicts(flags)
+        self._assert_panel_clean(session_id)
+        self._assert_disk_clean(store)
+
+    def test_private_text_only_in_reason_hidden_through_full_lifecycle(self):
+        session_id, store, flags = self._new_store_and_flags()
+        try:
+            store.add_conflict(
+                "Dad said he is doing fine",
+                "Dad said he is doing great",
+                "I feel lonely since my wife died",
+            )
+        except Exception as exc:
+            self.fail(f"add_conflict raised {exc!r}")
+        self._assert_panel_clean(session_id)
+
+        store.mark_conflicts_asked()
+        self._assert_panel_clean(session_id)
+
+        store.escalate_asked_conflicts(flags)
+        self._assert_panel_clean(session_id)
+        self._assert_disk_clean(store)
+
+    def test_resolve_asked_conflicts_scrubs_disk(self):
+        session_id, store, flags = self._new_store_and_flags()
+        store.add_conflict(
+            "I feel lonely since my wife died", "I feel fine", "senior said they are lonely"
+        )
+        store.mark_conflicts_asked()
+        try:
+            store.resolve_asked_conflicts()
+        except Exception as exc:
+            self.fail(f"resolve_asked_conflicts raised {exc!r}")
+        self._assert_disk_clean(store)
+
+    def test_clear_conflicts_scrubs_disk(self):
+        session_id, store, flags = self._new_store_and_flags()
+        store.add_conflict(
+            "I feel lonely since my wife died", "I feel fine", "senior said they are lonely"
+        )
+        try:
+            store.clear_conflicts()
+        except Exception as exc:
+            self.fail(f"clear_conflicts raised {exc!r}")
+        self._assert_disk_clean(store)
+
+    def test_escalation_cardinality_content_free_and_idempotent(self):
+        session_id, store, flags = self._new_store_and_flags()
+        store.add_conflict("Old fact A", "New fact A", "reason A")
+        store.add_conflict("Old fact B", "New fact B", "reason B")
+        store.mark_conflicts_asked()
+
+        try:
+            store.escalate_asked_conflicts(flags)
+        except Exception as exc:
+            self.fail(f"escalate_asked_conflicts raised {exc!r}")
+
+        flag_items = flags.all()
+        self.assertEqual(len(flag_items), 2)
+        fixed_text = "Unresolved Memory Ambiguity: a memory question was asked and left unanswered."
+        for flag in flag_items:
+            self.assertEqual(flag.text, fixed_text)
+            self.assertEqual(flag.severity, "info")
+            self.assertFalse(flag.disclosed_to_senior)
+
+        # Calling it again (nothing left in conflict_asked) must add no more.
+        store.escalate_asked_conflicts(flags)
+        self.assertEqual(len(flags.all()), 2)
 
 
 if __name__ == "__main__":

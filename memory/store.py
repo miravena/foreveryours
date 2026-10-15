@@ -231,21 +231,31 @@ class MemoryStore:
         for i in self._items:
             if i.status == "conflict_asked":
                 i.status = "deleted"
+                i.text = "[DELETED]"
         self._flush()
 
     def escalate_asked_conflicts(self, flags) -> None:
+        """Adds exactly one content-free flag per escalated conflict. The old
+        fact, new fact, reason and any category word (e.g. "emotional") are
+        never included -- we cannot reliably tell which side of a conflict is
+        private, and a content-free flag needs no source lookup (#156, #158,
+        #165 and duplicates)."""
         for i in self._items:
             if i.status == "conflict_asked":
-                parts = i.text.split("|", 2)
-                if len(parts) == 3:
-                    flags.add(f"Unresolved Memory Ambiguity: {parts[0].strip()} vs {parts[1].strip()}", severity="info", disclosed_to_senior=False)
+                flags.add(
+                    "Unresolved Memory Ambiguity: a memory question was asked and left unanswered.",
+                    severity="info",
+                    disclosed_to_senior=False,
+                )
                 i.status = "deleted"
+                i.text = "[DELETED]"
         self._flush()
 
     def clear_conflicts(self) -> None:
         for i in self._items:
             if i.status == "conflict":
                 i.status = "deleted"
+                i.text = "[DELETED]"
         self._flush()
 
     def delete(self, text: str) -> None:

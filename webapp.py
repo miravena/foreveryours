@@ -146,6 +146,11 @@ def _caregiver_panel_may_show(item) -> bool:
     else only if it is neither EMOTIONAL-scope nor EMOTIONAL-state text
     (active or decayed), and its scope is one this code actually
     recognises."""
+    # A pending or asked memory conflict (old|new|reason text) must never
+    # render in Briefed memory -- escalate_asked_conflicts() tells the
+    # caregiver a content-free flag instead (#165 and duplicates).
+    if item.status in ("conflict", "conflict_asked"):
+        return False
     # Fallback (RULE): an unrecognised scope is hidden regardless of
     # source. This check used to run only for non-CAREGIVER_SOURCES items
     # (the CAREGIVER_SOURCES branch below short-circuited first), so a
