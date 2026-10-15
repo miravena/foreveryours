@@ -498,9 +498,9 @@ class TestOrchestrator(unittest.TestCase):
         if result.background_thread:
             result.background_thread.join(timeout=10)
         flag_items = self.flags.all()
-        self.assertTrue(any("Perseveration" in f.text for f in flag_items))
-
-        persev_flag = next(f for f in flag_items if "Perseveration" in f.text)
+        self.assertTrue(any("Perseveration loop detected" in f.text for f in flag_items))
+        
+        persev_flag = next(f for f in flag_items if "Perseveration loop detected" in f.text)
         self.assertTrue(persev_flag.disclosed_to_senior)
         
         # Verify the continuation note was passed to stream_reply

@@ -65,16 +65,23 @@ class TestPerseverationWindow(unittest.TestCase):
         self.flags = CaregiverFlags("test_dad", data_dir)
 
     def _run(self, transcript, history):
-        res = run_turn(
-            transcript,
-            self.store,
-            self.flags,
-            self.audio_dir,
-            caregiver_name="Sarah",
-            history=history,
-        )
-        if res.background_thread:
-            res.background_thread.join(timeout=10)
+        # Any exception from the code under test (e.g. pre-fix code hitting
+        # an edge case this suite wasn't written against) must surface as a
+        # test FAILURE, never an unhandled ERROR -- the negative control
+        # relies on "at least one FAIL, no ERROR" against pre-fix code.
+        try:
+            res = run_turn(
+                transcript,
+                self.store,
+                self.flags,
+                self.audio_dir,
+                caregiver_name="Sarah",
+                history=history,
+            )
+            if res.background_thread:
+                res.background_thread.join(timeout=10)
+        except Exception as exc:  # noqa: BLE001
+            self.fail(f"run_turn raised unexpectedly: {type(exc).__name__}: {exc}")
         return res
 
     def _perseveration_flags(self):
@@ -230,9 +237,15 @@ class TestPerseverationWindow(unittest.TestCase):
         prev1_text = "What time is my cardiologist appointment?"
         current = "What time is my dentist and cardiologist appointment?"
 
-        self.assertTrue(_is_repeat_question(prev2_text, current))
-        self.assertTrue(_is_repeat_question(prev1_text, current))
-        self.assertFalse(_is_repeat_question(prev1_text, prev2_text))
+        try:
+            matches_prev2 = _is_repeat_question(prev2_text, current)
+            matches_prev1 = _is_repeat_question(prev1_text, current)
+            prev_pair_matches = _is_repeat_question(prev1_text, prev2_text)
+        except Exception as exc:  # noqa: BLE001
+            self.fail(f"_is_repeat_question raised unexpectedly: {type(exc).__name__}: {exc}")
+        self.assertTrue(matches_prev2)
+        self.assertTrue(matches_prev1)
+        self.assertFalse(prev_pair_matches)
 
         now = time.time()
         history = _history([prev2_text, prev1_text], [now - 600, now - 300])

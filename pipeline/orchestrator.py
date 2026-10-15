@@ -372,8 +372,8 @@ def run_turn(
                 # must be recorded either way, not only when audio exists.
                 flags.add(
                     text=(
-                        "Perseveration: the senior asked the same question "
-                        f"3 times within {PERSEVERATION_WINDOW_S // 60} minutes."
+                        "Perseveration loop detected: the senior asked the "
+                        f"same question 3 times within {PERSEVERATION_WINDOW_S // 60} minutes."
                     ),
                     severity="confusion",
                     disclosed_to_senior=True,
