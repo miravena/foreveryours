@@ -330,33 +330,43 @@ class TestSweepAndEndSessionRaceFree(unittest.TestCase):
                 is_fallback=False, background_thread=writer_c,
             )
 
-        with patch.object(webapp, "run_turn", side_effect=fake_run_turn), \
-             patch.object(webapp, "_combine_audio_chunks", return_value=None), \
-             patch.object(webapp, "SESSION_TTL_S", 0):
-            gen = webapp.run_demo_turn_streaming(None, "hello", [], sid)
-            next(gen)  # "Companion is thinking..."
-            next(gen)  # the chunk update -- blocks until fake_run_turn calls on_chunk
-            self.assertTrue(run_turn_block.wait(timeout=2))
+        # The real worker thread webapp.py starts inside run_demo_turn_streaming
+        # is not a daemon thread, so if an assertion below fails before we
+        # release it, the interpreter would hang at exit waiting for it. Every
+        # phase below releases its event(s) in `finally`, regardless of outcome.
+        try:
+            with patch.object(webapp, "run_turn", side_effect=fake_run_turn), \
+                 patch.object(webapp, "_combine_audio_chunks", return_value=None), \
+                 patch.object(webapp, "SESSION_TTL_S", 0):
+                gen = webapp.run_demo_turn_streaming(None, "hello", [], sid)
+                next(gen)  # "Companion is thinking..."
+                next(gen)  # the chunk update -- blocks until fake_run_turn calls on_chunk
+                self.assertTrue(run_turn_block.wait(timeout=2))
 
-            gen.close()  # simulates the browser disconnecting mid-turn
+                gen.close()  # simulates the browser disconnecting mid-turn
 
-            webapp._sweep_stale_sessions()
-            self.assertTrue(session_dir.exists(), "worker thread still tracked and alive")
-            webapp._end_session(sid)
-            self.assertTrue(session_dir.exists())
-
+                webapp._sweep_stale_sessions()
+                self.assertTrue(session_dir.exists(), "worker thread still tracked and alive")
+                webapp._end_session(sid)
+                self.assertTrue(session_dir.exists())
+        finally:
             run_turn_release.set()
-            recorded["worker_thread"].join(timeout=2)
+            worker_thread = recorded.get("worker_thread")
+            if worker_thread is not None:
+                worker_thread.join(timeout=2)
 
-            webapp._sweep_stale_sessions()
-            self.assertTrue(session_dir.exists(), "writer C still alive")
-            webapp._end_session(sid)
-            self.assertTrue(session_dir.exists())
-
+        try:
+            with patch.object(webapp, "SESSION_TTL_S", 0):
+                webapp._sweep_stale_sessions()
+                self.assertTrue(session_dir.exists(), "writer C still alive")
+                webapp._end_session(sid)
+                self.assertTrue(session_dir.exists())
+        finally:
             c_event.set()
             writer_c.join(timeout=2)
-            webapp._sweep_stale_sessions()
 
+        with patch.object(webapp, "SESSION_TTL_S", 0):
+            webapp._sweep_stale_sessions()
         self.assertFalse(session_dir.exists(), "tracking leaked: session never got swept after C finished")
 
     def test_live_background_thread_blocks_end_session(self):
@@ -407,13 +417,19 @@ class TestBadSessionIdNeverBlocksCrisisFastPath(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.sessions_dir.parent.iterdir()), ["sessions"])
 
     def test_run_demo_turn_with_bad_id_hits_crisis_fastpath(self):
-        result = webapp.run_demo_turn(None, "I want to die", [], "../x")
+        try:
+            result = webapp.run_demo_turn(None, "I want to die", [], "../x")
+        except Exception as exc:  # pre-fix: raises ValueError instead of running the turn (#149)
+            self.fail(f"run_demo_turn raised on a malformed session id: {exc!r}")
         self.assertIn("988", result[0])
         self._assert_new_valid_session_id(result[5])
         self._assert_nothing_written_outside_sessions_dir()
 
     def test_run_demo_turn_streaming_with_bad_id_hits_crisis_fastpath(self):
-        outputs = list(webapp.run_demo_turn_streaming(None, "I want to die", [], "../x"))
+        try:
+            outputs = list(webapp.run_demo_turn_streaming(None, "I want to die", [], "../x"))
+        except Exception as exc:
+            self.fail(f"run_demo_turn_streaming raised on a malformed session id: {exc!r}")
         self.assertTrue(outputs)
         final = outputs[-1]
         self.assertIn("988", final[0])
@@ -421,19 +437,31 @@ class TestBadSessionIdNeverBlocksCrisisFastPath(unittest.TestCase):
         self._assert_nothing_written_outside_sessions_dir()
 
     def test_format_caregiver_panel_and_mobile_alert_strip_handle_bad_id(self):
-        panel = webapp._format_caregiver_panel("../x")
-        strip = webapp._format_mobile_alert_strip("../x")
+        try:
+            panel = webapp._format_caregiver_panel("../x")
+        except Exception as exc:
+            self.fail(f"_format_caregiver_panel raised on a malformed session id: {exc!r}")
+        try:
+            strip = webapp._format_mobile_alert_strip("../x")
+        except Exception as exc:
+            self.fail(f"_format_mobile_alert_strip raised on a malformed session id: {exc!r}")
         self.assertIsInstance(panel, str)
         self.assertIsInstance(strip, str)
         self._assert_nothing_written_outside_sessions_dir()
 
     def test_memo_savers_handle_bad_id_without_raising(self):
-        text_result = webapp.save_caregiver_text_memo("Dad has physio Tuesday.", "../x")
+        try:
+            text_result = webapp.save_caregiver_text_memo("Dad has physio Tuesday.", "../x")
+        except Exception as exc:
+            self.fail(f"save_caregiver_text_memo raised on a malformed session id: {exc!r}")
         self.assertIsInstance(text_result[0], str)
         self.assertEqual(text_result[2], "")
 
-        with patch.object(webapp.hear, "transcribe", return_value="Dad has physio Tuesday."):
-            voice_result = webapp.save_caregiver_voice_memo("fake.wav", "../x")
+        try:
+            with patch.object(webapp.hear, "transcribe", return_value="Dad has physio Tuesday."):
+                voice_result = webapp.save_caregiver_voice_memo("fake.wav", "../x")
+        except Exception as exc:
+            self.fail(f"save_caregiver_voice_memo raised on a malformed session id: {exc!r}")
         self.assertIsInstance(voice_result[0], str)
         self._assert_nothing_written_outside_sessions_dir()
 
