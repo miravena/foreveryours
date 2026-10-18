@@ -511,7 +511,7 @@ class TestOrchestrator(unittest.TestCase):
         
         # Verify the continuation note was passed to stream_reply
         call_args = mock_stream.call_args
-        self.assertIn("already handled. Just answer them gently", call_args.args[0])
+        self.assertIn("Answer them gently and concisely", call_args.args[0])
 
 
 if __name__ == "__main__":

@@ -9,6 +9,15 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-18 (Public-demo release candidate: #88, #152, #161, #162, #164, #169)
+- **What:** Implemented the agreed Step 1 release-candidate privacy, disclosure, retention, and
+  shared-profile fixes. Added persisted disclosure attestation for senior-derived memories,
+  delivery-aware perseveration flags, shared-profile routing guards, and aligned browser/docs
+  retention wording.
+- **Result:** Focused regressions passed. The full suite ran 242 tests with two Windows-only
+  symlink-privilege errors (`WinError 1314`); all other tests passed, including the mature
+  caregiver privacy benchmarks.
+
 ### 2026-10-15 (Issues #159 (PRIMARY), #153, #155, #157 - repeat-question check flags only real repeats)
 - **What:** `_is_repeat_question()` scored content-word Jaccard overlap (>= 0.5) with no concept of
   which shared words were actually distinguishing. "What time is my dentist/cardiologist/

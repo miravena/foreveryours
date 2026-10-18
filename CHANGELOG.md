@@ -11,6 +11,12 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Fixed
+- Public-demo privacy and safety release candidate (#88, #152, #161, #162, #164, #169):
+  perseveration flags are marked disclosed only after spoken disclosure audio is delivered;
+  senior-derived extracted facts require an independent disclosure attestation before caregiver
+  rendering; the browser retention notice distinguishes session-directory cleanup from Gradio's
+  separate audio cache; and shared-profile mode now reaches both public turn handlers, including
+  crisis handling, without per-session id validation.
 - Repeat-question (perseveration) check no longer flags distinct questions (#159, #153, #155,
   #157): the confusion flag now requires a shared DISTINGUISHING word, not just generic logistics
   overlap ("appointment", "dr", ...), so "dentist" vs "cardiologist" vs "optometrist" appointments

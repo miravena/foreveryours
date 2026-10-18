@@ -40,6 +40,7 @@ class MemoryItem:
     created_at: float = field(default_factory=time.time)
     scope: str = MemoryScope.PERMANENT.value
     privacy: str = PrivacyLevel.PUBLIC_TO_SENIOR.value
+    disclosure_attested: bool = False
     expires_at: float | None = None
     status: str = "active"  # "active" | "superseded" | "expired"
     superseded_by: str | None = None
@@ -121,6 +122,7 @@ class MemoryStore:
         for d in raw:
             d.setdefault("scope", MemoryScope.PERMANENT.value)
             d.setdefault("privacy", PrivacyLevel.PUBLIC_TO_SENIOR.value)
+            d.setdefault("disclosure_attested", False)
             d.setdefault("expires_at", None)
             d.setdefault("status", "active")
             d.setdefault("superseded_by", None)
@@ -174,6 +176,7 @@ class MemoryStore:
             source=source,
             scope=scope,
             privacy=privacy,
+            disclosure_attested=disclosure_attested,
             expires_at=expires_at,
         )
         self._items.append(item)
@@ -282,6 +285,7 @@ class MemoryStore:
         
         inherited_scope = MemoryScope.PERMANENT.value
         inherited_privacy = PrivacyLevel.PUBLIC_TO_SENIOR.value
+        inherited_disclosure_attested = False
         inherited_expires_at = None
 
         for item in self._items:
@@ -290,6 +294,7 @@ class MemoryStore:
                 # Inherit temporal and privacy properties from the original
                 inherited_scope = item.scope
                 inherited_privacy = item.privacy
+                inherited_disclosure_attested = item.disclosure_attested
                 inherited_expires_at = item.expires_at
 
                 if inherited_scope == MemoryScope.UNCERTAIN.value:
@@ -316,6 +321,7 @@ class MemoryStore:
             status="active",
             scope=inherited_scope,
             privacy=inherited_privacy,
+            disclosure_attested=inherited_disclosure_attested,
             expires_at=inherited_expires_at,
         )
         self._items.append(new_item)

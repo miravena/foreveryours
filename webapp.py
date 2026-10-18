@@ -129,9 +129,10 @@ HIGH_PRIORITY_SEVERITIES = ("crisis", "distress", "confusion")
 # MemoryStore.all(), which also holds EMOTIONAL-scope memories extracted from
 # the senior's own private words -- that is the surveillance #140 warns
 # about. Everything else (disclosed flags, caregiver memos/notes) stays
-# visible by design; only EMOTIONAL-scope / emotional-text items are kept
-# out of the panel. An unrecognised scope is treated as EMOTIONAL-like and
-# hidden too (fail closed, never fail open on a privacy boundary).
+# visible by design. Senior-derived facts require an independently recorded
+# disclosure attestation; extractor labels and scopes are never authorization.
+# An unrecognised scope is treated as private and hidden too (fail closed,
+# never fail open on a privacy boundary).
 _CAREGIVER_PANEL_NON_EMOTIONAL_SCOPES = frozenset(
     s.value for s in MemoryScope if s is not MemoryScope.EMOTIONAL
 )
@@ -151,10 +152,9 @@ _ALL_KNOWN_SCOPES = frozenset(s.value for s in MemoryScope)
 
 def _caregiver_panel_may_show(item) -> bool:
     """True if `item` (a memory.store.MemoryItem) is safe to render in the
-    caregiver panel: caregiver-authored memos/notes always are; anything
-    else only if it is neither EMOTIONAL-scope nor EMOTIONAL-state text
-    (active or decayed), and its scope is one this code actually
-    recognises."""
+    caregiver panel: caregiver-authored memos/notes always are; senior-derived
+    facts require an explicit disclosure attestation in addition to the
+    existing scope and text checks."""
     # A pending or asked memory conflict (old|new|reason text) must never
     # render in Briefed memory -- escalate_asked_conflicts() tells the
     # caregiver a content-free flag instead (#165 and duplicates).
@@ -174,7 +174,10 @@ def _caregiver_panel_may_show(item) -> bool:
         return False
     if item.source in CAREGIVER_SOURCES:
         return True
-    return item.scope in _CAREGIVER_PANEL_NON_EMOTIONAL_SCOPES
+    return (
+        bool(getattr(item, "disclosure_attested", False))
+        and item.scope in _CAREGIVER_PANEL_NON_EMOTIONAL_SCOPES
+    )
 
 _lock = threading.Lock()
 _request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._request_log.clear() still resolves; _rate_limit_ok() keeps its own local dict now
@@ -666,7 +669,8 @@ def run_demo_turn(
     # rather than silently looking like a reset conversation.
     session_expired = session_id_val is None
     session_id_val = session_id_val or _new_session()
-    session_id_val = _normalize_or_new_session(session_id_val)
+    if not SHARED_PROFILE:
+        session_id_val = _normalize_or_new_session(session_id_val)
 
     simulated_hour = 10
     if "Sundowning" in simulated_time_str:
@@ -721,7 +725,8 @@ def run_demo_turn_streaming(
 
     session_expired = session_id_val is None
     session_id_val = session_id_val or _new_session()
-    session_id_val = _normalize_or_new_session(session_id_val)
+    if not SHARED_PROFILE:
+        session_id_val = _normalize_or_new_session(session_id_val)
 
     simulated_hour = 10
     if "Sundowning" in simulated_time_str:
@@ -729,22 +734,24 @@ def run_demo_turn_streaming(
     elif "Night" in simulated_time_str:
         simulated_hour = 23
 
-    root = _session_root(session_id_val)
-    with _session_fs_lock:
-        _active_turns[session_id_val] = _active_turns.get(session_id_val, 0) + 1
-        _touch_session(root)
+    root = None if SHARED_PROFILE else _session_root(session_id_val)
+    if root is not None:
+        with _session_fs_lock:
+            _active_turns[session_id_val] = _active_turns.get(session_id_val, 0) + 1
+            _touch_session(root)
     try:
         yield from _run_demo_turn_streaming_impl(
             audio_in, actual_text, history, session_id_val, simulated_hour,
             session_expired, is_proactive, trigger_type,
         )
     finally:
-        with _session_fs_lock:
-            n = _active_turns.get(session_id_val, 0) - 1
-            if n <= 0:
-                _active_turns.pop(session_id_val, None)
-            else:
-                _active_turns[session_id_val] = n
+        if root is not None:
+            with _session_fs_lock:
+                n = _active_turns.get(session_id_val, 0) - 1
+                if n <= 0:
+                    _active_turns.pop(session_id_val, None)
+                else:
+                    _active_turns[session_id_val] = n
 
 
 def _run_demo_turn_streaming_impl(
@@ -942,19 +949,21 @@ def _run_demo_turn(
     value, so `finally` covers every one of them, including the early
     "no speech detected" returns. `session_id` must already be a validated
     id by this point (the public wrappers normalize before calling in)."""
-    root = _session_root(session_id)
-    with _session_fs_lock:
-        _active_turns[session_id] = _active_turns.get(session_id, 0) + 1
-        _touch_session(root)
+    root = None if SHARED_PROFILE else _session_root(session_id)
+    if root is not None:
+        with _session_fs_lock:
+            _active_turns[session_id] = _active_turns.get(session_id, 0) + 1
+            _touch_session(root)
     try:
         return _run_demo_turn_impl(audio_in, text_in, history, session_id, simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type)
     finally:
-        with _session_fs_lock:
-            n = _active_turns.get(session_id, 0) - 1
-            if n <= 0:
-                _active_turns.pop(session_id, None)
-            else:
-                _active_turns[session_id] = n
+        if root is not None:
+            with _session_fs_lock:
+                n = _active_turns.get(session_id, 0) - 1
+                if n <= 0:
+                    _active_turns.pop(session_id, None)
+                else:
+                    _active_turns[session_id] = n
 
 
 def _run_demo_turn_impl(
@@ -1236,12 +1245,15 @@ def build_demo() -> gr.Blocks:
                 "Your tab is its own private demo household, already briefed by Dad's daughter "
                 "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
                 "this link sees it. Its memory, flags and reply audio are removed about "
-                f"{_CLOSED_TAB_MIN} minutes after you close the tab, or after "
-                f"{_SESSION_TTL_MIN} minutes of inactivity if the close never registers. "
-                f"Recorded or uploaded input audio separately sits in Gradio's own cache, swept "
-                f"every {_CACHE_SWEEP_INTERVAL_MIN} minutes and removing files older than "
-                f"{_CACHE_MAX_AGE_MIN} minutes, so up to about {_CACHE_MAX_MIN} minutes. We never "
-                f"promise deletion the instant the tab closes."
+                f"the session cleanup timer runs (about {_CLOSED_TAB_MIN} minutes after "
+                f"the tab closes), or after {_SESSION_TTL_MIN} minutes of inactivity if "
+                f"the close never registers. This removes the household session directory, "
+                f"not Gradio's separate audio cache. Recorded or uploaded input audio "
+                f"separately remains in that cache until its sweep runs every "
+                f"{_CACHE_SWEEP_INTERVAL_MIN} minutes and removes files older than "
+                f"{_CACHE_MAX_AGE_MIN} minutes, so it can remain for up to about "
+                f"{_CACHE_MAX_MIN} minutes. We never promise deletion the instant the "
+                f"tab closes."
             )
 
         if DEV_MODE:

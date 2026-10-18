@@ -57,6 +57,38 @@ class TestSessionPaths(unittest.TestCase):
             self.assertEqual(webapp._session_dirs(webapp.DEFAULT_PROFILE_ID),
                              (webapp.DATA_DIR, webapp.AUDIO_DIR))
 
+    def test_shared_profile_public_turns_bypass_per_session_validation(self):
+        with patch.object(webapp, "SHARED_PROFILE", True), \
+             patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"), \
+             patch.object(webapp, "AUDIO_DIR", Path(self.temp_dir.name) / "audio"), \
+             patch.object(webapp, "run_turn") as mock_run_turn:
+            from pipeline.orchestrator import TurnResult
+            mock_run_turn.return_value = TurnResult("hello", "hello")
+
+            ordinary = webapp.run_demo_turn(None, "hello", [], webapp.DEFAULT_PROFILE_ID)
+
+        self.assertEqual(ordinary[5], webapp.DEFAULT_PROFILE_ID)
+
+        # Exercise the real offline safety path as well as the ordinary
+        # pipeline stub: shared mode must not reject "dad" before crisis
+        # handling can run.
+        with patch.object(webapp, "SHARED_PROFILE", True), \
+             patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"), \
+             patch.object(webapp, "AUDIO_DIR", Path(self.temp_dir.name) / "audio"):
+            webapp.DATA_DIR.mkdir(parents=True, exist_ok=True)
+            webapp.AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+            crisis = webapp.run_demo_turn(None, "I want to die", [], webapp.DEFAULT_PROFILE_ID)
+            streaming = list(webapp.run_demo_turn_streaming(
+                None, "I want to die", [], webapp.DEFAULT_PROFILE_ID
+            ))
+
+        self.assertIn("988", crisis[0])
+        self.assertEqual(crisis[5], webapp.DEFAULT_PROFILE_ID)
+        self.assertTrue(streaming)
+        self.assertIn("988", streaming[-1][0])
+        self.assertEqual(streaming[-1][5], webapp.DEFAULT_PROFILE_ID)
+        self.assertEqual(mock_run_turn.call_count, 1)
+
 
 
 class TestSweepKeepsActiveSessions(unittest.TestCase):
