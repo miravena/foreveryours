@@ -107,6 +107,8 @@ visitor opens the demo after a process restart.
   every `GRADIO_CACHE_SWEEP[0]` seconds (600s) and drops files older than
   `GRADIO_CACHE_SWEEP[1]` seconds (`SESSION_TTL_S`), so an input clip can
   live up to roughly `SESSION_TTL_S + 600` seconds (~70 minutes by default).
+  This cache cleanup is separate from removal of the household session
+  directory; closing a tab does not itself delete cached input audio.
   No other visitor can see another tab's household.
 - **Local CLI (`main.py`).** Reply audio stays in `out/audio/` and memory in
   `data/` until you delete them. That's your own machine, and keeping them is

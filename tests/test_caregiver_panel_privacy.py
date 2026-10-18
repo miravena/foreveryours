@@ -165,6 +165,32 @@ class TestCaregiverPanelPrivacy(unittest.TestCase):
         panel = webapp._format_caregiver_panel(session_id)
         self.assertNotIn("Caregiver note with a scope value this code has never seen", panel)
 
+    def test_senior_derived_facts_require_independent_disclosure_attestation(self):
+        session_id, _ = webapp.init_session()
+        data_dir, _ = webapp._session_dirs(session_id)
+        store = MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
+
+        private_text = "I feel lonely since my wife died"
+        uncertain_text = "My grandson might move next year"
+        misclassified_text = "ADD: I survived a traumatic war"
+        store.add(private_text, source="conversation_extract")
+        store.add(uncertain_text, source="conversation_extract", scope=MemoryScope.UNCERTAIN.value)
+        store.add(misclassified_text, source="conversation_extract")
+        authorized_text = "Dad sleeps poorly"
+        store.add(
+            authorized_text,
+            source="conversation_extract",
+            scope=MemoryScope.LIFESTYLE.value,
+            disclosure_attested=True,
+        )
+
+        panel = webapp._format_caregiver_panel(session_id)
+
+        self.assertNotIn(private_text, panel)
+        self.assertNotIn(uncertain_text, panel)
+        self.assertNotIn(misclassified_text, panel)
+        self.assertIn(authorized_text, panel)
+
 
 class TestMemoryConflictPrivacy(unittest.TestCase):
     """Fixes #165 (and duplicates #154, #156, #158, #160, #163, #166, #167):

@@ -334,10 +334,9 @@ def run_turn(
 
     intent = detect_intent(transcript)
     
-    # Cognitive Drift: Perseveration Tracking -- off the public path (webapp.py's
-    # DEV_MODE) because the flag fires undisclosed (#80 3.C3): a judge asking
-    # three memory questions in a row, the natural thing to test, gets labelled
-    # with a cognitive symptom the senior is never told about.
+    # Cognitive Drift: Perseveration Tracking -- off the public path by default
+    # (webapp.py's DEV_MODE), while every enabled flag still requires an
+    # actually delivered disclosure (#80 3.C3, #88).
     immediate_reply_text = fast.immediate_reply if fast.triggered else ""
 
     if enable_perseveration_flag and history:
@@ -364,19 +363,25 @@ def run_turn(
             )
             if is_repeat:
                 persev_reply = "I'm going to make a note for your family that we've talked about this a few times today."
-
-                _, persev_paths, persev_first_time = _speak_turn(iter([persev_reply]), audio_out_dir, on_chunk=on_chunk)
-                # Fixes #159: the disclosure line is already in the text reply
-                # (immediate_reply_text below), so disclosed_to_senior stays
-                # True whether or not TTS actually produced audio -- the flag
-                # must be recorded either way, not only when audio exists.
+                persev_disclosed = False
+                try:
+                    _, persev_paths, persev_first_time = _speak_turn(
+                        iter([persev_reply]), audio_out_dir, on_chunk=on_chunk
+                    )
+                    persev_disclosed = bool(persev_paths)
+                except Exception as exc:
+                    print(
+                        f"[orchestrator] perseveration disclosure failed: {type(exc).__name__}",
+                        file=sys.stderr,
+                    )
+                    persev_paths, persev_first_time = [], None
                 flags.add(
                     text=(
                         "Perseveration: the senior asked the same question "
                         f"3 times within {PERSEVERATION_WINDOW_S // 60} minutes."
                     ),
                     severity="confusion",
-                    disclosed_to_senior=True,
+                    disclosed_to_senior=persev_disclosed,
                 )
                 immediate_audio_paths.extend(persev_paths)
                 if first_audio_time is None:
@@ -384,7 +389,7 @@ def run_turn(
                     
                 immediate_reply_text = (immediate_reply_text + " " + persev_reply).strip()
                 
-                persev_note = "The person has repeated this question multiple times. You do not need to tell them you are noting it, as that was already handled. Just answer them gently and concisely."
+                persev_note = "The person has repeated this question multiple times. Answer them gently and concisely."
                 if not continuation_note:
                     continuation_note = persev_note
                 else:
