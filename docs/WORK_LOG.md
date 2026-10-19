@@ -18,6 +18,26 @@ Format: newest first. One entry per session: date, who, what, result, next.
   symlink-privilege errors (`WinError 1314`); all other tests passed, including the mature
   caregiver privacy benchmarks.
 
+### 2026-10-16 (Issues #148, #149, #150, #151 - session-safety review and live check)
+- **What:** cross-vendor review (`scripts/openai_review.sh`) of the session-safety fix (merge
+  `9ab0a26`, on `main`), plus a check against a real running server.
+- **Review finding (kept as is):** a caregiver memo sent with a malformed or foreign session id
+  is dropped, and the saver returns its normal placeholder text instead of saving to a fresh
+  session. That is the intended #149 behaviour (never raise, never write outside the sessions
+  directory); saving to a fresh session instead would be a separate UX change.
+- **Live check (`scripts/demo_session_safety_live.sh`):** starts `webapp.py` as its own process
+  and, over the HTTP API, creates a session, adds a same-directory symlink alias and a stray
+  non-hex directory, backdates both, and forces a real sweep. The alias, its target files and
+  the stray directory all survive (#148, #150, #151). Two controls make it fail on a broken
+  sweeper: an expired session that must be deleted, and an alias to a stale target outside
+  the sessions directory that must not be deleted through. The bad-id half (#149) can't be driven
+  over HTTP: Gradio keeps `gr.State` on the server and ignores a client-supplied value. So the
+  script imports `webapp` directly and calls `run_demo_turn_streaming` and
+  `save_caregiver_text_memo` with `"../x"`: the crisis fast path still answers (988), a fresh
+  session comes back, and nothing is written outside the sessions directory. The API key is
+  blanked for the run, so it never makes a billed call.
+- **Result:** no production-code change. The live check passes; CI on `0598d3e` is green.
+
 ### 2026-10-15 (Issues #159 (PRIMARY), #153, #155, #157 - repeat-question check flags only real repeats)
 - **What:** `_is_repeat_question()` scored content-word Jaccard overlap (>= 0.5) with no concept of
   which shared words were actually distinguishing. "What time is my dentist/cardiologist/
@@ -84,6 +104,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
   is unverifiable by the review-arm's own sandbox (no `api.github.com` reachability per its bounce
   note) but `gh issue view 159 --json number,state` succeeds from this session -- same recurring
   environment gap documented below for #165 and #148's rounds.
+
+- **Follow-up:** the flag text now matches the rule exactly ("Perseveration: the senior asked the
+  same question 3 times within N minutes."). The two `tests/test_orchestrator.py` assertions were
+  updated to match ("Perseveration"); same semantics, same `disclosed_to_senior` check.
+  Perseveration and orchestrator tests: 43 OK. Full suite: 240 OK (skipped=8).
 
 ### 2026-10-15 (Issue #165 follow-up - review-arm bounce: GitHub closure/CI/live-invocation evidence)
 - **What:** review-arm bounced #16083 (`changes-requested`): "Runtime tests and negative control pass, but GitHub closure evidence, CI, and live invocation remain unverified." AC1 (unit tests) was already independently confirmed by the reviewer's own run. The same recurring environment gap documented in this file for #140's rounds above (reviewer's sandbox can't reach GitHub) looks like the cause for the closure/CI half; "live invocation" asked for the same kind of real-process, real-HTTP-API evidence #140 already has in `scripts/demo_caregiver_panel_live.sh`, which this ticket's work didn't produce an analogue of.
