@@ -11,6 +11,10 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Fixed
+- The Hugging Face Space deploy (#11) now stages `envload.py`; without it the hosted app failed
+  to boot with `ModuleNotFoundError`. `scripts/deploy_hf_space.py --hardware zero-a10g` deploys
+  to free ZeroGPU hardware, since Hugging Face now requires PRO for Gradio Spaces on `cpu-basic`
+  (ADR-003).
 - Public-demo privacy and safety release candidate (#88, #152, #161, #162, #164, #169):
   perseveration flags are marked disclosed only after spoken disclosure audio is delivered;
   senior-derived extracted facts require an independent disclosure attestation before caregiver
