@@ -37,6 +37,17 @@ auto-deletion (PR #26) keep visitors isolated and honor the no-retention privacy
   ```
   Scheduled once a day; a non-200 means the Space needs attention before the next judge hits it.
 - Needs a team Nebius key so deploying does not depend on one person's credits.
+- **2026 policy change (checked 2026-10-20):** Hugging Face now requires PRO (personal) or
+  Team/Enterprise (org) to run a Gradio Space on `cpu-basic`; a free account gets a 403
+  "cpu-basic quota limit" instead. Free accounts with a verified email that are older than
+  30 days may still host 2 ZeroGPU Spaces ([Spaces overview](https://huggingface.co/docs/hub/spaces-overview),
+  [ZeroGPU](https://huggingface.co/docs/hub/spaces-zerogpu)). We deploy with
+  `--hardware zero-a10g` first: `app.py` defines one never-called `@spaces.GPU` function
+  because ZeroGPU will not boot without one. That is a community workaround, not documented
+  usage, so if the Space fails to boot or misbehaves by 2026-10-24 we switch to PRO
+  ($9/month) on `cpu-basic`, which keeps the same Space URL.
+- The Nebius key must keep enough credit through 2026-12-15; without it the Space falls
+  back to the offline fast-path only.
 
 ## When to revisit
 
