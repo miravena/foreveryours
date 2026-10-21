@@ -29,6 +29,12 @@ rename `Unreleased` to the version and date, then tag it.
   questions to be repeats of EACH OTHER, not just each a repeat of the current one. The confusion
   flag is now recorded whether or not text-to-speech produced audio, and its text describes the
   repeated question rather than the old intent-only wording.
+- Perseveration disclosure regression fixed (#159 round 4): the public-demo release candidate
+  (#88) made the perseveration confusion flag's `disclosed_to_senior` depend on whether TTS
+  delivered audio, re-introducing the gap #159 had fixed (the flag's text-only disclosure line is
+  spoken via the reply text regardless of audio delivery, so the flag itself is disclosed either
+  way). Restored `disclosed_to_senior=True` unconditionally for this flag; kept #88's defensive
+  `try/except` around the TTS call.
 - Session cleanup races and symlink safety (#148, #150, #151): the stale-session sweeper and
   tab-close cleanup now share one lock-protected protocol that never deletes a session with a
   turn or background writer still in flight, never follows a symlinked alias into another

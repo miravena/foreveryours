@@ -9,6 +9,22 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-21 (Ticket #16084 round 4: perseveration disclosure regression from #88)
+- **What:** Office ticket #16084 round 4 (prior rounds landed `d624ab0`..`088c9c2`, merged
+  `0598d3e`). The review bounce found that the unrelated #88 "public-demo release candidate" PR
+  (merged after the round-3 fix) made the perseveration confusion flag's `disclosed_to_senior`
+  depend on whether TTS delivered audio, contradicting ticket #16084's RULE 4: the flag is
+  disclosed either way, because the disclosure line is already in the text reply. #88 also
+  flipped `tests/test_perseveration_window.py`'s no-audio test to assert the regressed (wrong)
+  behaviour.
+- **Fix:** Restored `disclosed_to_senior=True` unconditionally for the perseveration flag in
+  `pipeline/orchestrator.py`, keeping #88's defensive `try/except` around the `_speak_turn` call.
+  Restored the test's name and assertion (`test_verbatim_repeat_flags_even_with_no_tts_audio`,
+  `assertTrue`).
+- **Result:** `tests.test_perseveration_window tests.test_orchestrator` -> `OK`, 43 tests. Full
+  `discover tests` -> `OK (skipped=8)`, 250 tests. Negative control (new test file copied onto
+  pre-fix `34e8426`) -> `FAILED (failures=4)`, 0 `ERROR` lines.
+
 ### 2026-10-18 (Public-demo release candidate: #88, #152, #161, #162, #164, #169)
 - **What:** Implemented the agreed Step 1 release-candidate privacy, disclosure, retention, and
   shared-profile fixes. Added persisted disclosure attestation for senior-derived memories,

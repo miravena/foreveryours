@@ -363,25 +363,28 @@ def run_turn(
             )
             if is_repeat:
                 persev_reply = "I'm going to make a note for your family that we've talked about this a few times today."
-                persev_disclosed = False
                 try:
                     _, persev_paths, persev_first_time = _speak_turn(
                         iter([persev_reply]), audio_out_dir, on_chunk=on_chunk
                     )
-                    persev_disclosed = bool(persev_paths)
                 except Exception as exc:
                     print(
                         f"[orchestrator] perseveration disclosure failed: {type(exc).__name__}",
                         file=sys.stderr,
                     )
                     persev_paths, persev_first_time = [], None
+                # Fixes #159 (ticket #16084 RULE 4): the disclosure line is
+                # already in the text reply (immediate_reply_text below), so
+                # disclosed_to_senior stays True whether or not TTS actually
+                # produced audio -- the flag must be recorded either way, not
+                # only when audio exists.
                 flags.add(
                     text=(
                         "Perseveration: the senior asked the same question "
                         f"3 times within {PERSEVERATION_WINDOW_S // 60} minutes."
                     ),
                     severity="confusion",
-                    disclosed_to_senior=persev_disclosed,
+                    disclosed_to_senior=True,
                 )
                 immediate_audio_paths.extend(persev_paths)
                 if first_audio_time is None:
