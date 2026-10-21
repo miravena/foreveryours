@@ -46,6 +46,16 @@ auto-deletion (PR #26) keep visitors isolated and honor the no-retention privacy
   because ZeroGPU will not boot without one. That is a community workaround, not documented
   usage, so if the Space fails to boot or misbehaves by 2026-10-24 we switch to PRO
   ($9/month) on `cpu-basic`, which keeps the same Space URL.
+- **Deployed 2026-10-21** at <https://huggingface.co/spaces/elevenbaselab/foreveryours> on `zero-a10g` (free account), from `main`
+  2a3af03. Upload to running took about 2 minutes. One-off timings on that revision, through the
+  public API from a client outside Hugging Face, end to end:
+  - caregiver memo saved: 0.3 s;
+  - senior voice clip (`samples/senior_jazz.wav`), transcription, reply and spoken audio: 3.8 s;
+  - distress turn with spoken disclosure and caregiver flag: 6.4 s;
+  - typed recall turn: 1.9 s.
+
+  These are single runs, not a benchmark. Browser time-to-first-audio is not measured yet.
+  Keep-awake runs twice a day (03:23 and 15:23 UTC) until 2026-12-16.
 - The Nebius key must keep enough credit through 2026-12-15; without it the Space falls
   back to the offline fast-path only.
 
