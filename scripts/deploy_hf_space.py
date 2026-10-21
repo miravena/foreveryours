@@ -77,7 +77,9 @@ short_description: A voice companion the family briefs, with honest flags
 # ForeverYours: live demo
 
 Talk as the senior on the left (or click a sample clip); watch the caregiver side on the right.
-Each visitor gets a private, pre-briefed demo household that is deleted when the tab closes.
+Each visitor gets a private demo household, removed about an hour after the tab closes; recorded
+clips can stay in Gradio's file cache for up to about 70 minutes
+([privacy details](https://github.com/miravena/foreveryours/blob/main/docs/PRIVACY.md)).
 
 Source, setup and docs: https://github.com/miravena/foreveryours
 """

@@ -76,6 +76,9 @@ rename `Unreleased` to the version and date, then tag it.
 - Disclosure truthfulness (#117): safety, perseveration, audit, and lifestyle flags are persisted as disclosed only after non-empty audio is delivered; quiet-mode suppression now happens before proactive flagging, and late non-streaming disclosures remain explicitly undisclosed.
 
 ### Docs
+- The live demo link (https://huggingface.co/spaces/elevenbaselab/foreveryours, #11) is in the
+  README, the landing page and ADR-003, with first hosted timings. The Space page no longer
+  promises deletion when the tab closes; it states the real cleanup timers.
 - Cost estimates as a public trail (#118): `Cost-estimate:` commit trailer, PR Provenance line and review-comment Provenance section; `commit-msg` hook now warns (advisory) on an AI `Co-Authored-By`, a `Claude-Session:` link, or `Assisted-by` without `Cost-estimate`. ADR-007 amended.
 - `CONTRIBUTING.md` gains a "Which model and effort for what" table (which AI assistant
   and effort level to use for a build ticket, a safety-critical change, a review, a
