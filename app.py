@@ -5,6 +5,17 @@ import os
 
 from envload import load_repo_env
 
+try:
+    import spaces  # present on Hugging Face Spaces; absent locally, which is fine
+except ImportError:
+    spaces = None
+
+if spaces is not None:
+    @spaces.GPU(duration=1)
+    def _zerogpu_marker():
+        """Never called. The app runs on CPU; ZeroGPU hardware refuses to boot
+        a Space with no @spaces.GPU function (#11). Off ZeroGPU it does nothing."""
+
 load_repo_env()
 
 try:
