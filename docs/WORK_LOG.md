@@ -24,6 +24,13 @@ Format: newest first. One entry per session: date, who, what, result, next.
 - **Result:** `tests.test_perseveration_window tests.test_orchestrator` -> `OK`, 43 tests. Full
   `discover tests` -> `OK (skipped=8)`, 250 tests. Negative control (new test file copied onto
   pre-fix `34e8426`) -> `FAILED (failures=4)`, 0 `ERROR` lines.
+- **`scripts/openai_review.sh` finding (acknowledged, out of scope for this ticket):** flagged
+  that the perseveration flag is persisted with `disclosed_to_senior=True` before the THINK call,
+  so if THINK then raises (e.g. `NebiusNotConfigured`) and `run_turn` re-raises before returning a
+  reply, the flag can be recorded as disclosed even though no reply reached the senior on that
+  path. This is the same pre-existing ordering issue noted (and deferred) in round 1 of this
+  ticket -- it predates RULE 4 and is independent of the TTS-audio condition this ticket fixes;
+  recommend a follow-up ticket to move the flag-add to just before `run_turn` returns.
 
 ### 2026-10-18 (Public-demo release candidate: #88, #152, #161, #162, #164, #169)
 - **What:** Implemented the agreed Step 1 release-candidate privacy, disclosure, retention, and
