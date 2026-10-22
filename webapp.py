@@ -196,7 +196,9 @@ def _caregiver_panel_may_show(item) -> bool:
 # A word may carry apostrophes/hyphens ("o'clock", "well-known") and a number
 # may carry .,:/ followed by MORE DIGITS ("1.5", "3:30", "1/2"); "jazz.His"
 # (legacy no-space period) is two words, not one (openai_review on #23215).
-_FACT_TOKEN_RE = re.compile(r"[-+]?\w+(?:['\u2019-]\w+)*(?:[.,:/]\d+)*")
+# Comparison operators are tokens of their own: "temperature < 38" and
+# "temperature > 38" are opposite instructions, not one fact.
+_FACT_TOKEN_RE = re.compile(r"[-+]?\w+(?:['\u2019-]\w+)*(?:[.,:/]\d+)*|[<>=\u2260\u2264\u2265]+")
 
 
 def _fact_tokens(text: str) -> tuple[str, ...]:
