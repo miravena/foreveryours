@@ -282,7 +282,11 @@ class TestThink(unittest.TestCase):
         prompt = think.SYSTEM_PROMPT
         self.assertIn("19. NO-LISTENING HONESTY", prompt)
         self.assertIn("cannot hear", prompt)
-        self.assertIn("only thing a caregiver ever receives is a safety flag", prompt)
+        # Exact about what is shared: flags AND disclosed wellbeing notes
+        # (orchestrator LIFESTYLE: path), never a false "flags only" assurance.
+        self.assertIn("only things a caregiver ever receives are a safety flag", prompt)
+        self.assertIn("wellbeing note about sleep, appetite, mobility, or hygiene", prompt)
+        self.assertIn("nothing is shared behind his back", prompt)
         self.assertIn("you will always tell Dad when one is sent", prompt)
         self.assertIn('Never say or imply "Sarah is listening to our conversation"', prompt)
 

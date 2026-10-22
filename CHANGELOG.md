@@ -13,7 +13,7 @@ rename `Unreleased` to the version and date, then tag it.
 ### Fixed
 - The companion no longer tells Dad that Sarah is listening to the conversation (Office #23219,
   judge-sim findings 1 and 9): THINK's system prompt now carries a no-listening honesty rule (a
-  caregiver only ever receives a safety flag, and Dad is always told when one is sent) and a
+  caregiver only ever receives a safety flag or a disclosed wellbeing note, and Dad is always told when one is sent) and a
   remembered-facts attribution rule (state only facts in the provided memories, never add detail,
   and say "Sarah mentioned..." for caregiver-sourced facts rather than "you've always told me").
 - The caregiver panel's "Briefed memory" lists each memo fact once (Office #23215): every memo
