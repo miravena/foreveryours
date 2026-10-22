@@ -306,6 +306,60 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(len(self.flags.all()), 1)
         self.assertFalse(self.flags.all()[0].disclosed_to_senior)
 
+    def test_audit_flag_does_not_copy_verdict(self):
+        # #23232: the AUDIT model's one-sentence reason must never reach the
+        # caregiver panel. The flag says WHAT KIND of event happened, never
+        # what the senior said or what the auditor wrote about it -- a reason
+        # can carry health details, names or a bank PIN.
+        from safety import fastpath
+
+        verdict_text = "DISTRESS Senior said she fell and mentioned her bank PIN 1234"
+        cases = [
+            ("CRISIS", "crisis", "audit_crisis"),
+            ("DISTRESS", "distress", "audit_distress"),
+            ("UNSAFE", "audit", "audit_unsafe"),
+        ]
+        transcript = "I feel unwell"
+        # The turn must NOT take the fast path, or the AUDIT branch never runs.
+        self.assertFalse(fastpath.check(transcript).triggered)
+
+        for status, severity, key in cases:
+            with self.subTest(status=status):
+                data_dir = Path(self.temp_dir.name) / status
+                data_dir.mkdir(parents=True, exist_ok=True)
+                audio_dir = Path(self.temp_dir.name) / f"audio-{status}"
+                audio_dir.mkdir(parents=True, exist_ok=True)
+                store = MemoryStore(self.profile_id, data_dir)
+                flags = CaregiverFlags(self.profile_id, data_dir)
+
+                with patch("pipeline.audit.audit_reply", return_value=(status, verdict_text)), \
+                     patch("pipeline.orchestrator._speak_turn",
+                           return_value=("Reply", [Path("reply.wav")], 0.5)), \
+                     patch("pipeline.think.stream_reply", return_value=["Reply"]):
+                    result = run_turn(
+                        transcript=transcript,
+                        memory_store=store,
+                        flags=flags,
+                        audio_out_dir=audio_dir,
+                        caregiver_name="Sarah",
+                    )
+                    result.background_thread.join(timeout=10)
+
+                flag_items = flags.all()
+                # Exactly one flag per audited turn.
+                self.assertEqual(len(flag_items), 1)
+                flag = flag_items[0]
+                self.assertEqual(flag.severity, severity)
+                # The leak checks come FIRST so a regression fails on the leak
+                # itself, not on a missing constant.
+                self.assertNotIn("1234", flag.text)
+                self.assertNotIn("PIN", flag.text)
+                self.assertNotIn(verdict_text, flag.text)
+                # ... and the flag is exactly the fixed text for this category.
+                self.assertEqual(flag.text, fastpath.CAREGIVER_FLAG_TEXT[key])
+                # The raw verdict still rides on the dev/biomarker surface.
+                self.assertEqual(result.audit_verdict, verdict_text)
+
     @patch("pipeline.orchestrator.fastpath.check")
     @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [Path("reply.wav")], 0.5))
     @patch("pipeline.think.stream_reply", return_value=["Reply"])

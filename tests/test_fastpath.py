@@ -201,6 +201,33 @@ class TestFastPath(unittest.TestCase):
         self.assertTrue(res.triggered)
         self.assertEqual(res.severity, "crisis")
 
+    def test_caregiver_flag_is_content_minimized(self):
+        # #23232: the caregiver flag is a FIXED description of the trigger
+        # category, never a copy of what the senior said. The panel is a
+        # caregiver-visible surface, so a flag that quotes the utterance turns
+        # it into a transcript leak ("I fell. Also please keep my bank PIN
+        # 1234 private" -> both sentences on the caregiver's screen).
+        cases = [
+            ("crisis", "I want to die, and please keep my bank PIN 1234 private"),
+            ("distress", "I fell. Also please keep my bank PIN 1234 private"),
+            ("confusion", "Where am I? My bank PIN is 1234"),
+        ]
+        for severity, utterance in cases:
+            with self.subTest(severity=severity):
+                res = fastpath.check(utterance)
+                self.assertTrue(res.triggered, f"Expected '{utterance}' to trigger")
+                self.assertEqual(res.severity, severity)
+
+                flag = res.caregiver_flag
+                self.assertIsNotNone(flag)
+                # The leak checks come FIRST so a regression fails on the leak
+                # itself, not on a missing constant.
+                self.assertNotIn("1234", flag)
+                self.assertNotIn("PIN", flag)
+                self.assertNotIn(utterance.strip(), flag)
+                # ... and the flag is exactly the fixed text for this category.
+                self.assertEqual(flag, fastpath.CAREGIVER_FLAG_TEXT[severity])
+
 
 if __name__ == "__main__":
     unittest.main()

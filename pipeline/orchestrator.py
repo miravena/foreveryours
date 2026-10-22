@@ -577,12 +577,17 @@ def run_turn(
                     except Exception:  # pragma: no cover - best-effort disclosure
                         disclosed = False
                     
+                    # #23232: the flag text is a FIXED description of the
+                    # trigger category -- never the auditor's one-sentence
+                    # reason, which can carry health details, names or a bank
+                    # PIN the senior said. The raw verdict still rides on
+                    # result.audit_verdict (the dev/biomarker surface).
                     if status == "CRISIS":
-                        flags.add(f"URGENT CRISIS: Senior expressed severe distress in conversation: {verdict}", severity="crisis", disclosed_to_senior=disclosed)
+                        flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_crisis"], severity="crisis", disclosed_to_senior=disclosed)
                     elif status == "DISTRESS":
-                        flags.add(f"URGENT: possible distress in conversation: {verdict}", severity="distress", disclosed_to_senior=disclosed)
+                        flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_distress"], severity="distress", disclosed_to_senior=disclosed)
                     elif status == "UNSAFE":
-                        flags.add(f"AUDIT flagged a reply as unsafe: {verdict}", severity="audit", disclosed_to_senior=disclosed)
+                        flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_unsafe"], severity="audit", disclosed_to_senior=disclosed)
             except Exception as exc:  # pragma: no cover - best-effort background task
                 print(
                     f"[orchestrator] audit failed: {type(exc).__name__}",
