@@ -216,5 +216,49 @@ class TestPiperTier(unittest.TestCase):
         self.assertEqual(len(results), 1)
 
 
+class TestTtsTimeoutBound(unittest.TestCase):
+    """Office #23233: every synthesis tier is bounded by TTS_TIMEOUT_S."""
+
+    def test_timeout_env_parsing_rejects_non_finite_and_non_positive(self):
+        for raw in (None, "", "abc", "0", "-3", "inf", "-inf", "nan"):
+            self.assertEqual(speak._parse_tts_timeout(raw), 10.0, raw)
+        self.assertEqual(speak._parse_tts_timeout("2.5"), 2.5)
+
+    def test_run_bounded_abandons_a_hung_call(self):
+        import subprocess as _sp
+        import threading
+        from unittest.mock import patch
+
+        release = threading.Event()
+        self.addCleanup(release.set)
+        with patch("pipeline.speak.TTS_TIMEOUT_S", 0.05):
+            with self.assertRaises(_sp.TimeoutExpired):
+                speak._run_bounded(release.wait, "fake")
+
+    def test_run_bounded_reraises_worker_exception(self):
+        def boom():
+            raise OSError("driver missing")
+
+        with self.assertRaises(OSError):
+            speak._run_bounded(boom, "fake")
+        self.assertEqual(speak._run_bounded(lambda: 7, "fake"), 7)
+
+    def test_pyttsx3_tier_failure_yields_no_path(self):
+        import sys as _sys
+        from unittest.mock import MagicMock, patch
+
+        engine = MagicMock()
+        engine.runAndWait.side_effect = RuntimeError("engine died")
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch("sys.platform", "linux"), \
+             patch("pipeline.speak._get_piper_cli", return_value=None), \
+             patch("pipeline.speak._get_espeak_cli", return_value=None), \
+             patch("pipeline.speak._get_tts_engine", return_value=engine):
+            stdout_before = _sys.stdout
+            with self.assertRaises(RuntimeError):
+                list(speak.speak_sentences(iter(["Hello."]), Path(tmp)))
+            self.assertIs(_sys.stdout, stdout_before)
+
+
 if __name__ == "__main__":
     unittest.main()
