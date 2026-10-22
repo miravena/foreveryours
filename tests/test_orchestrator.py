@@ -247,6 +247,38 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(lifestyle_items[0].text, "Slept poorly due to back pain")
         self.assertEqual(len(delivered), 2)
 
+    def test_run_turn_allow_hosted_call_false_skips_think(self):
+        """#23228: at the daily request cap webapp passes allow_hosted_call=False.
+        The offline fast-path still speaks and flags; THINK and the background
+        AUDIT/extraction thread never run."""
+        with patch("pipeline.think.stream_reply", side_effect=AssertionError("THINK must not be called at the cap")) as stream_mock, \
+             patch("pipeline.think.extract_memory_llm", side_effect=AssertionError("no hosted background work at the cap")) as extract_mock:
+            result = run_turn(
+                "I fell down earlier and I'm scared",
+                self.store,
+                self.flags,
+                self.audio_dir,
+                caregiver_name="Sarah",
+                allow_hosted_call=False,
+            )
+        stream_mock.assert_not_called()
+        extract_mock.assert_not_called()
+        self.assertIsNone(result.background_thread)
+        self.assertIn("daily request cap", result.audit_verdict)
+        self.assertTrue(result.audio_paths)
+        self.assertIn("letting your family know", result.reply_text.lower())
+        self.assertEqual(len(self.flags.all()), 1)
+        self.assertFalse(result.is_fallback)
+
+    def test_run_turn_allow_hosted_call_false_rejects_non_fast_path(self):
+        """allow_hosted_call=False with nothing for the fast-path to say is a
+        caller bug -- it must raise, never return a silent empty turn."""
+        with patch("pipeline.think.stream_reply", side_effect=AssertionError("THINK must not be called")) as stream_mock:
+            with self.assertRaises(ValueError):
+                run_turn("Hello there", self.store, self.flags, self.audio_dir, allow_hosted_call=False)
+        stream_mock.assert_not_called()
+        self.assertEqual(self.flags.all(), [])
+
     @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
     def test_fastpath_flag_stays_undelivered_when_no_audio_is_synthesized(self, mock_speak):
         result = run_turn(

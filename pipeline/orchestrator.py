@@ -242,11 +242,23 @@ def run_turn(
     is_proactive: bool = False,
     trigger_type: str = "silence",
     enable_perseveration_flag: bool = True,
+    allow_hosted_call: bool = True,
 ) -> TurnResult:
     """`history` is session-scoped prior-turn context (see think.build_prompt's
     docstring for why this is kept separate from memory_store) -- pass None
     for a one-shot call like main.py's CLI beats; webapp.py keeps a real list
-    across clicks in one browser session and passes it in each turn."""
+    across clicks in one browser session and passes it in each turn.
+
+    `allow_hosted_call=False` is how webapp.py's daily request cap reaches
+    this turn (#23228): the offline safety fast-path still speaks and flags
+    exactly as it always does, and only the paid THINK continuation (and the
+    AUDIT/extraction thread that would review it) is skipped. It is only valid
+    for a transcript the fast-path answers -- anything else raises ValueError
+    rather than producing a silent empty turn."""
+    if not allow_hosted_call and not fastpath.check(transcript).triggered:
+        raise ValueError(
+            "allow_hosted_call=False needs a transcript the safety fast-path answers"
+        )
     
     if is_proactive:
         # Pre-Flight Context Verification (Hallucination Risk)
@@ -480,53 +492,62 @@ def run_turn(
     reply_text = ""
     think_audio_paths: list[Path] = []
     think_unavailable = False
+    hosted_call_capped = False
     is_fallback = False
-    try:
-        token_stream = think.stream_reply(
-            think_input,
-            filtered_profile,
-            guardrails=guardrails,
-            history=history,
-            caregiver_updates=filtered_schedule,
-            intent=intent.value,
-            current_hour=simulated_hour,
-            is_proactive=is_proactive,
-            pending_conflicts=pending_conflicts,
-        )
-        sentences = think.sentence_chunks(token_stream)
-        
-        physical_claim_pattern = re.compile(
-            r"\b(i will|i'll|i am going to|i'm going to)\s+(bring|drop off|come over|visit|drive|pick up)\b",
-            re.IGNORECASE,
-        )
-        
-        def filter_sentences(s_iter):
-            for s in s_iter:
-                yield physical_claim_pattern.sub(f"{caregiver_name} will \\2", s)
-                
-        reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir, on_chunk=on_chunk)
-        if first_audio_time is None:
-            first_audio_time = think_first_audio_time
-    except NebiusNotConfigured:
-        # Fast-path's immediate reply already completed the turn's safety-
-        # critical part (spoken + disclosed + flagged). Without a key we
-        # can't continue the conversation for real, but that's a degraded
-        # continuation, not a reason to crash a turn that already succeeded.
-        if not fast.triggered:
-            raise
+    if not allow_hosted_call:
+        # Daily request cap (#23228): the same degraded continuation as the
+        # NebiusNotConfigured branch below, without entering it -- the
+        # fast-path above already spoke, disclosed and flagged; only the paid
+        # THINK call (and the AUDIT/extraction thread after it) is withheld.
+        hosted_call_capped = True
         think_unavailable = True
-    except Exception as exc:
-        # Unexpected network / provider error during conversation stream.
-        # Log type + message only (never headers or keys) so a fallback is never silent (#78).
-        print(f"[orchestrator] THINK stream failed, using fallback reply: {type(exc).__name__}: {exc}", file=sys.stderr)
-        if not fast.triggered:
-            is_fallback = True
-            consecutive_errors += 1
-            reply_text = FALLBACK_REPLY_2 if consecutive_errors >= 2 else FALLBACK_REPLY_1
-            _, fallback_paths, fallback_first_time = _speak_turn(iter([reply_text]), audio_out_dir, on_chunk=on_chunk)
-            think_audio_paths.extend(fallback_paths)
+    else:
+        try:
+            token_stream = think.stream_reply(
+                think_input,
+                filtered_profile,
+                guardrails=guardrails,
+                history=history,
+                caregiver_updates=filtered_schedule,
+                intent=intent.value,
+                current_hour=simulated_hour,
+                is_proactive=is_proactive,
+                pending_conflicts=pending_conflicts,
+            )
+            sentences = think.sentence_chunks(token_stream)
+        
+            physical_claim_pattern = re.compile(
+                r"\b(i will|i'll|i am going to|i'm going to)\s+(bring|drop off|come over|visit|drive|pick up)\b",
+                re.IGNORECASE,
+            )
+        
+            def filter_sentences(s_iter):
+                for s in s_iter:
+                    yield physical_claim_pattern.sub(f"{caregiver_name} will \\2", s)
+                
+            reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir, on_chunk=on_chunk)
             if first_audio_time is None:
-                first_audio_time = fallback_first_time
+                first_audio_time = think_first_audio_time
+        except NebiusNotConfigured:
+            # Fast-path's immediate reply already completed the turn's safety-
+            # critical part (spoken + disclosed + flagged). Without a key we
+            # can't continue the conversation for real, but that's a degraded
+            # continuation, not a reason to crash a turn that already succeeded.
+            if not fast.triggered:
+                raise
+            think_unavailable = True
+        except Exception as exc:
+            # Unexpected network / provider error during conversation stream.
+            # Log type + message only (never headers or keys) so a fallback is never silent (#78).
+            print(f"[orchestrator] THINK stream failed, using fallback reply: {type(exc).__name__}: {exc}", file=sys.stderr)
+            if not fast.triggered:
+                is_fallback = True
+                consecutive_errors += 1
+                reply_text = FALLBACK_REPLY_2 if consecutive_errors >= 2 else FALLBACK_REPLY_1
+                _, fallback_paths, fallback_first_time = _speak_turn(iter([reply_text]), audio_out_dir, on_chunk=on_chunk)
+                think_audio_paths.extend(fallback_paths)
+                if first_audio_time is None:
+                    first_audio_time = fallback_first_time
 
     # Zero-Silence Guarantee: If model returned an empty string or whitespace (token exhaustion)
     if not fast.triggered and not think_unavailable and not reply_text.strip() and not is_fallback:
@@ -548,7 +569,9 @@ def run_turn(
         caregiver_flag=fast.caregiver_flag if fast.triggered else None,
         time_to_first_audio_s=first_audio_time,
         audit_verdict=(
-            "skipped (fast-path disclosed directly; continuation needs NEBIUS_API_KEY)"
+            "skipped (fast-path disclosed directly; daily request cap reached)"
+            if hosted_call_capped
+            else "skipped (fast-path disclosed directly; continuation needs NEBIUS_API_KEY)"
             if think_unavailable
             else "skipped (fast-path disclosed directly)" if fast.triggered
             else "skipped (fallback turn)" if is_fallback

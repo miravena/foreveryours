@@ -31,6 +31,11 @@ rename `Unreleased` to the version and date, then tag it.
   against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
 
 ### Fixed
+- The daily request cap no longer blocks the offline safety fast-path (Office #23228): once a
+  session hits `MAX_DAILY_REQUESTS`, "I fell down" / "I can't breathe" / "I want to die" /
+  "Where am I?" still get the spoken fast-path reply and the caregiver flag, with a one-line cap
+  notice; only the paid THINK continuation is withheld. Other utterances still get the daily-cap
+  message, and a capped emergency turn never moves the counter.
 - Caregiver safety flags no longer carry the senior's own words (#23232): the flag text is a
   fixed, content-minimized description of the trigger category (`safety/fastpath.py`'s
   `CAREGIVER_FLAG_TEXT`), for both the fast-path flags and the AUDIT flags. Previously a
