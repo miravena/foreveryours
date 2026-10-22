@@ -9,6 +9,29 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-22 (Ticket #23228: the daily cap withholds only the paid continuation)
+- **What:** both turn handlers in `webapp.py` used to check
+  `_will_call_nebius() and not _rate_limit_ok(...)` BEFORE `run_turn`, so a session at
+  `MAX_DAILY_REQUESTS` got the daily-cap message for "I fell down earlier and I'm scared" --
+  no reassurance, no audio, no caregiver flag. The README and a code comment both claimed the
+  fast-path was exempt; it was uncounted, but blocked. Source: Codex read-only review
+  2026-10-22, robustness.md #5 and safety-privacy.md #1 (code-derived, reproduced here).
+- **Fix:** one cap evaluation per turn, `webapp._cap_decision(data_dir, transcript) ->
+  (block_turn, allow_hosted_call)`, the only caller of `_rate_limit_ok` in a turn. A fast-path
+  utterance at the cap runs `run_turn(..., allow_hosted_call=False)`: the fast-path speaks and
+  flags exactly as before, THINK is skipped like the no-key branch (no AUDIT/extraction thread,
+  `audit_verdict` names the daily request cap), and the reply gets a one-line cap notice plus a
+  `_Rate limited_` biomarker header. `allow_hosted_call=False` on a non-fast-path transcript
+  raises `ValueError`. The process-wide cap (#17637) must fold into `_cap_decision`, never a
+  new early return. Same shape as nginx `limit_req`'s exempt key: the exempt class is decided
+  before the budget is.
+- **Proof:** new `test_cap_*` tests in `tests/test_webapp.py` (fall/breathe/crisis/confusion
+  through both handlers, plus a real-counter idempotency test: two capped emergency turns, two
+  flags, `rate_limit.json` unchanged) and `test_run_turn_allow_hosted_call_*` in
+  `tests/test_orchestrator.py`; red on pre-change main (11 failures, 2 errors), green after.
+- **Gotcha:** `run_turn`'s `except Exception` swallows an `AssertionError` side_effect on
+  `stream_reply` into a fallback, so the tests also `assert_not_called()` the mocks.
+
 ### 2026-10-22 (Ticket #23232: caregiver flag text carries no free text)
 - **What:** the caregiver flag text is now a FIXED, content-minimized description of the
   trigger category, defined in one place -- `safety/fastpath.py`'s `CAREGIVER_FLAG_TEXT`

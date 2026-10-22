@@ -62,6 +62,9 @@ senior as a follow-up, not silently dropped.
    than ending the turn — a distress signal shouldn't make the companion go
    silent right after. Deliberately conservative patterns — a false positive
    here (an unnecessary caregiver note) is far cheaper than a false negative.
+   The public demo's daily request cap never blocks it: at the cap the
+   fast-path still speaks and flags, and only the paid THINK continuation is
+   withheld (`webapp._cap_decision`, Office #23228).
 2. **Audit** (`pipeline/audit.py`) — asynchronous, a second small-model pass
    over every *other* reply and the senior's transcript. It checks for
    medical-hallucination or unsafe-advice risk and provides a wider,

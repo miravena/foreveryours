@@ -89,6 +89,7 @@ from caregiver import (
 from memory.store import CAREGIVER_SOURCES, MemoryScope, MemoryStore, PrivacyLevel
 from pipeline import hear
 from pipeline.orchestrator import run_turn
+from safety import fastpath
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
@@ -294,7 +295,7 @@ def _dedupe_briefed_memory(items: list, now: float) -> list:
 
 
 _lock = threading.Lock()
-_request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._request_log.clear() still resolves; _rate_limit_ok() keeps its own local dict now
+_request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._request_log.clear() still resolves; _rate_limit_ok keeps its own local dict now
 
 _bg_threads_lock = threading.Lock()
 _bg_threads: dict[str, list[threading.Thread]] = {}  # session_id -> every outstanding writer thread for that session, if any (#148: a single slot let a later turn's thread overwrite tracking of a still-running earlier writer)
@@ -406,6 +407,32 @@ def _will_call_nebius() -> bool:
     is free, but its continuation isn't) -- so this is a key-presence check,
     not a fast-path check (#81 A1, Codex review PR #90)."""
     return bool(os.environ.get("NEBIUS_API_KEY", "").strip())
+
+
+CAP_NOTICE = (
+    "\n\n_This demo has hit its daily request cap, so the companion can't continue "
+    "the conversation until tomorrow -- the safety message above still played and "
+    "the family has been notified._"
+)
+CAP_BIOMARKERS = "### 📊 Acoustic Biomarkers\n_Rate limited_"
+
+
+def _cap_decision(data_dir: Path, transcript: str) -> tuple[bool, bool]:
+    """Returns `(block_turn, allow_hosted_call)` for this turn (#23228).
+
+    Invariant: the offline safety fast-path runs before every hosted-call cap;
+    a cap only withholds the paid continuation; call `_rate_limit_ok` here and
+    nowhere else in a turn. So a capped "I fell down" / "I can't breathe" still
+    gets its spoken reply and caregiver flag (`block_turn` False,
+    `allow_hosted_call` False), while a capped ordinary utterance keeps the
+    daily-cap message (`block_turn` True). `_rate_limit_ok` only counts a turn
+    when it is under the cap, so a capped emergency turn never moves the
+    counter, and the fast-path check is pure. Any later cap (the process-wide
+    one, #17637) folds into `capped` here -- never a new early return in a
+    handler."""
+    fast_triggered = fastpath.check(transcript).triggered
+    capped = _will_call_nebius() and not _rate_limit_ok(data_dir)
+    return capped and not fast_triggered, not capped
 
 
 _SESSION_ID_RE = re.compile(r"[0-9a-f]{32}")
@@ -980,7 +1007,8 @@ def _run_demo_turn_streaming_impl(
         yield (*out, session_id_val, "", None)
         return
 
-    if _will_call_nebius() and not _rate_limit_ok(data_dir):
+    block_turn, allow_hosted_call = _cap_decision(data_dir, transcript)
+    if block_turn:
         out = ("This demo has hit its daily request cap -- please try again tomorrow.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_Rate limited_")
         if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
         yield (*out, session_id_val, "", None)
@@ -999,7 +1027,8 @@ def _run_demo_turn_streaming_impl(
             res = run_turn(
                 transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type,
                 enable_perseveration_flag=DEV_MODE,
-                on_chunk=_on_chunk
+                on_chunk=_on_chunk,
+                allow_hosted_call=allow_hosted_call,
             )
             # Hand off to the background AUDIT/memory-extraction thread BEFORE
             # q.put(("DONE", ...)) (#148): if the generator was already closed
@@ -1102,7 +1131,10 @@ def _run_demo_turn_streaming_impl(
 
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
-    if wpm > 0:
+    if not allow_hosted_call:
+        transcript_and_reply += CAP_NOTICE
+        biomarker_str = CAP_BIOMARKERS
+    elif wpm > 0:
         biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
     else:
         biomarker_str = "### 📊 Acoustic Biomarkers\n_Calculated from live voice input only_"
@@ -1178,9 +1210,10 @@ def _run_demo_turn_impl(
         return "Couldn't make out any speech or text -- try again.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_"
 
     # Cap only what's actually about to spend a Nebius call -- not the empty
-    # sends and no-key misses handled above, and not the offline safety
-    # fast-path (#81 A1).
-    if _will_call_nebius() and not _rate_limit_ok(data_dir):
+    # sends and no-key misses handled above. A fast-path utterance at the cap
+    # still runs, with only its THINK continuation withheld (#81 A1, #23228).
+    block_turn, allow_hosted_call = _cap_decision(data_dir, transcript)
+    if block_turn:
         return (
             "This demo has hit its daily request cap -- please try again tomorrow.",
             None,
@@ -1194,6 +1227,7 @@ def _run_demo_turn_impl(
         result = run_turn(
             transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type,
             enable_perseveration_flag=DEV_MODE,
+            allow_hosted_call=allow_hosted_call,
         )
     except Exception as exc:
         err = str(exc)
@@ -1265,7 +1299,10 @@ def _run_demo_turn_impl(
 
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
-    if wpm > 0:
+    if not allow_hosted_call:
+        transcript_and_reply += CAP_NOTICE
+        biomarker_str = CAP_BIOMARKERS
+    elif wpm > 0:
         biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
     else:
         biomarker_str = "### 📊 Acoustic Biomarkers\n_Calculated from live voice input only_"
