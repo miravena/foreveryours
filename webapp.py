@@ -75,7 +75,7 @@ from pathlib import Path
 
 import gradio as gr
 
-from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags
+from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags, split_memo_facts
 from memory.store import CAREGIVER_SOURCES, MemoryScope, MemoryStore, PrivacyLevel
 from pipeline import hear
 from pipeline.orchestrator import run_turn
@@ -178,6 +178,70 @@ def _caregiver_panel_may_show(item) -> bool:
         bool(getattr(item, "disclosure_attested", False))
         and item.scope in _CAREGIVER_PANEL_NON_EMOTIONAL_SCOPES
     )
+
+# Fixes #23215: Briefed memory must list each caregiver-memo fact once. The
+# splitters are now shared (caregiver.split_memo_facts), but a store written
+# before that, or by any future path that stores a whole memo beside its
+# fragments, would still render the fragments AND the whole memo. Compare
+# facts by a punctuation/case-insensitive key so "Dad loves jazz." and
+# "Dad loves jazz" are one fact, and drop a caregiver item whose key is just
+# other shown active caregiver items joined end to end. Only CAREGIVER_SOURCES
+# items are ever dropped; what _caregiver_panel_may_show hides is unchanged.
+_FACT_KEY_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _fact_key(text: str) -> str:
+    return _FACT_KEY_RE.sub("", text.lower())
+
+
+def _is_concatenation_of(key: str, parts: set[str]) -> bool:
+    """True if `key` can be spelled by joining two or more of `parts`
+    (each usable any number of times) end to end."""
+    parts = {p for p in parts if p}
+    dead: set[tuple[int, int]] = set()
+
+    def covers(pos: int, used: int) -> bool:
+        if pos == len(key):
+            return used >= 2
+        if (pos, min(used, 2)) in dead:
+            return False
+        for part in parts:
+            if key.startswith(part, pos) and covers(pos + len(part), used + 1):
+                return True
+        dead.add((pos, min(used, 2)))
+        return False
+
+    return bool(key) and covers(0, 0)
+
+
+def _dedupe_briefed_memory(items: list, now: float) -> list:
+    """Render-time dedupe for the Briefed memory list (#23215): returns
+    `items` in order minus caregiver items that repeat a fact already listed
+    -- same key as an active caregiver item kept earlier, or a key that is the
+    concatenation of other active caregiver items' keys. Non-caregiver items
+    pass through untouched."""
+    active_keys: dict[str, int] = {}
+    for item in items:
+        if item.source in CAREGIVER_SOURCES and item.is_active(now):
+            active_keys[_fact_key(item.text)] = active_keys.get(_fact_key(item.text), 0) + 1
+    kept: list = []
+    seen: set[str] = set()
+    for item in items:
+        if item.source not in CAREGIVER_SOURCES:
+            kept.append(item)
+            continue
+        key = _fact_key(item.text)
+        if key in seen:
+            continue  # same fact, different punctuation/case
+        if not item.is_active(now) and key in active_keys:
+            continue  # an active copy of this fact is (or will be) listed
+        others = {k for k in active_keys if k != key}
+        if _is_concatenation_of(key, others):
+            continue  # the whole memo, already listed fact by fact
+        seen.add(key)
+        kept.append(item)
+    return kept
+
 
 _lock = threading.Lock()
 _request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._request_log.clear() still resolves; _rate_limit_ok() keeps its own local dict now
@@ -456,10 +520,8 @@ def _new_session() -> str:
     session_id = DEFAULT_PROFILE_ID if SHARED_PROFILE else uuid.uuid4().hex
     data_dir, _ = _session_dirs(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
-    for line in DEMO_MEMO.split(". "):
-        line = line.strip().rstrip(".")
-        if line:
-            store.add(line, source="caregiver_memo")  # no-op on duplicates
+    for line in split_memo_facts(DEMO_MEMO):  # one shared splitter (#23215)
+        store.add(line, source="caregiver_memo")  # no-op on duplicates
     return session_id
 
 
@@ -563,10 +625,12 @@ def _format_caregiver_panel(session_id: str | None) -> str:
         lines.append(f"- **({flag.severity})** {flag.text}\n  {disclosed}")
 
     lines.append("\n### Briefed memory")
-    items = [item for item in store.all() if _caregiver_panel_may_show(item)]
+    now = time.time()
+    items = _dedupe_briefed_memory(
+        [item for item in store.all() if _caregiver_panel_may_show(item)], now
+    )
     if not items:
         lines.append("_(nothing briefed yet)_")
-    now = time.time()
     for item in items:
         # Privacy badge
         is_private = (item.privacy == PrivacyLevel.CAREGIVER_ONLY.value)
@@ -1107,10 +1171,8 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
     # that thread's later _flush() of a now-stale snapshot (Codex review, PR #90).
     _join_previous_turn(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
-    for raw_part in re.split(r"[.!?\n]+", memo_text):
-        line = raw_part.strip()
-        if line:
-            store.add(line, source="caregiver_memo")
+    for line in split_memo_facts(memo_text):  # one shared splitter (#23215)
+        store.add(line, source="caregiver_memo")
     return _format_caregiver_panel(session_id), session_id, ""
 
 
@@ -1126,10 +1188,8 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
         return _format_caregiver_panel(session_id), session_id  # malformed/foreign id (#149)
     _join_previous_turn(session_id)  # see save_caregiver_text_memo
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
-    for line in transcript.split(". "):
-        line = line.strip().rstrip(".")
-        if line:
-            store.add(line, source="caregiver_memo")
+    for line in split_memo_facts(transcript):  # one shared splitter (#23215)
+        store.add(line, source="caregiver_memo")
     return _format_caregiver_panel(session_id), session_id
 
 

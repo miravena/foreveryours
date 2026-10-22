@@ -370,3 +370,108 @@ class TestMemoryConflictPrivacy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBriefedMemoryDedupe(unittest.TestCase):
+    """Office #23215: Briefed memory lists each caregiver-memo fact once.
+
+    Seen on the live Space 2026-10-21: the panel listed the split facts AND
+    the whole memo as one more entry, because the memo paths split on
+    different rules and MemoryStore.add's exact (text, source) dedupe cannot
+    see a whole memo and its fragments as the same facts.
+    """
+
+    FACTS = (
+        "Dad loves jazz",
+        "His grandson is named Leo",
+        "Avoid talking about driving",
+        "I'm dropping off groceries at 4 PM today",
+    )
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.sessions_dir = Path(self.temp_dir.name) / "sessions"
+        self.patches = [
+            patch.object(webapp, "SESSIONS_DIR", self.sessions_dir),
+            patch.object(webapp, "SHARED_PROFILE", False),
+            patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.temp_dir.cleanup()
+
+    def _briefed(self, panel: str) -> str:
+        return panel.split("### Briefed memory", 1)[1]
+
+    def _store(self, session_id: str) -> MemoryStore:
+        data_dir, _ = webapp._session_dirs(session_id)
+        return MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
+
+    def test_dedupe_whole_memo_beside_fragments_lists_each_fact_once(self):
+        # Negative control for the pre-change panel: a store holding the
+        # fragments plus the whole memo (what a "."-plus-space-only splitter
+        # stores for a transcript ending sentences with "!" / "?") rendered
+        # every fact twice -- once alone, once inside the whole-memo entry.
+        session_id, _ = webapp.init_session()  # pre-briefs the 4 fragments
+        whole_memo = "Dad loves jazz! His grandson is named Leo? Avoid talking about driving"
+        store = self._store(session_id)
+        self.assertIsNotNone(store.add(whole_memo, source="caregiver_memo"))
+        self.assertEqual(len(store.all()), len(self.FACTS) + 1)  # stored, so the panel must hide it
+
+        emotional_text = "I feel lonely since my wife died"
+        store.add(emotional_text, source="conversation_extract", scope=MemoryScope.EMOTIONAL.value)
+
+        briefed = self._briefed(webapp._format_caregiver_panel(session_id))
+        for fact in self.FACTS:
+            self.assertEqual(briefed.count(fact), 1, f"{fact!r} listed {briefed.count(fact)}x:\n{briefed}")
+        self.assertNotIn(whole_memo, briefed)
+        self.assertNotIn(emotional_text, briefed)  # #140 rules untouched by the dedupe
+
+    def test_dedupe_same_fact_different_punctuation_listed_once(self):
+        session_id, _ = webapp.init_session()
+        store = self._store(session_id)
+        store.add("Dad loves jazz.", source="caregiver_memo")  # exact-text dedupe misses the "."
+        store.add("dad loves Jazz", source="caregiver_note")
+        briefed = self._briefed(webapp._format_caregiver_panel(session_id))
+        self.assertEqual(briefed.lower().count("dad loves jazz"), 1, briefed)
+
+    def test_dedupe_all_memo_paths_share_one_splitter(self):
+        # The source-level fix: a dictated memo whose sentences end in "!",
+        # "?" or "." without a following space yields the same items as the
+        # pre-brief and the typed memo -- no whole-memo item is ever stored.
+        session_id, _ = webapp.init_session()
+        dictated = "Dad loves jazz! His grandson is named Leo? Avoid talking about driving.I'm dropping off groceries at 4 PM today."
+        with patch.object(webapp.hear, "transcribe", return_value=dictated):
+            webapp.save_caregiver_voice_memo("memo.wav", session_id)
+        webapp.save_caregiver_text_memo(dictated, session_id)
+        self.assertEqual([i.text for i in self._store(session_id).all()], list(self.FACTS))
+
+    def test_dedupe_repeat_save_is_idempotent(self):
+        session_id, _ = webapp.init_session()
+        memo = "Dad loves chicken soup. Doctor appointment tomorrow at 2 PM!"
+        webapp.save_caregiver_text_memo(memo, session_id)
+        before = [i.text for i in self._store(session_id).all()]
+        self.assertEqual(before[len(self.FACTS):], ["Dad loves chicken soup", "Doctor appointment tomorrow at 2 PM"])
+        webapp.save_caregiver_text_memo(memo, session_id)
+        with patch.object(webapp.hear, "transcribe", return_value=memo):
+            webapp.save_caregiver_voice_memo("memo.wav", session_id)
+        self.assertEqual([i.text for i in self._store(session_id).all()], before)
+        briefed = self._briefed(webapp._format_caregiver_panel(session_id))
+        self.assertEqual(briefed.count("Dad loves chicken soup"), 1)
+
+    def test_dedupe_keeps_distinct_facts_and_senior_items(self):
+        # A fact that merely shares words with another is NOT a concatenation
+        # and must stay; a hidden senior item stays hidden, an attested one stays shown.
+        session_id, _ = webapp.init_session()
+        store = self._store(session_id)
+        store.add("Dad loves jazz on Sunday mornings", source="caregiver_memo")
+        store.add("Leo", source="caregiver_note")
+        store.add("Dad said he enjoys the garden", source="conversation_extract", disclosure_attested=True)
+        briefed = self._briefed(webapp._format_caregiver_panel(session_id))
+        for text in ("Dad loves jazz on Sunday mornings", "Leo `(caregiver_note)`", "Dad said he enjoys the garden"):
+            self.assertIn(text, briefed)
+        self.assertEqual(briefed.count("Dad loves jazz"), 2)  # the fact and the distinct Sunday one

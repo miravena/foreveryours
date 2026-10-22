@@ -11,6 +11,11 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Fixed
+- The caregiver panel's "Briefed memory" lists each memo fact once (Office #23215): every memo
+  path (pre-brief, typed memo, voice memo, `main.py beat1`) now splits sentences with one shared
+  rule (`caregiver.split_memo_facts`), so a dictated memo ending sentences in "!" or "?" is no
+  longer stored whole beside its own facts, and the panel skips an entry that only repeats facts
+  already listed. Privacy rules (#140) are unchanged.
 - The Hugging Face Space deploy (#11) now stages `envload.py`; without it the hosted app failed
   to boot with `ModuleNotFoundError`. `scripts/deploy_hf_space.py --hardware zero-a10g` deploys
   to free ZeroGPU hardware, since Hugging Face now requires PRO for Gradio Spaces on `cpu-basic`
