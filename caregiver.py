@@ -26,8 +26,9 @@ DEMO_MEMO = (
 # dictated once and typed once produced different texts -- MemoryStore.add's
 # exact (text, source) dedupe cannot see those as the same fact, and a
 # transcript with "!"/"?"/no space after "." was stored as one whole-memo
-# item beside its own fragments.
-_MEMO_FACT_BOUNDARY_RE = re.compile(r"[.!?\n]+")
+# item beside its own fragments. A "." followed by a digit is a decimal
+# point ("Give 1.5 mg"), never a boundary (openai_review on #23215).
+_MEMO_FACT_BOUNDARY_RE = re.compile(r"(?:[!?\n]|\.(?!\d))+")
 
 
 def split_memo_facts(memo: str | None) -> list[str]:

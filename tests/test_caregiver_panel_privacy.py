@@ -484,9 +484,16 @@ class TestBriefedMemoryDedupe(unittest.TestCase):
         # caregiver); two active copies differing only in lifetime show once
         # with the longer-lived copy's badge.
         session_id, _ = webapp.init_session()
+        # Through the real paths, so the shared splitter keeps "1.5" whole and
+        # the panel keeps the two doses (and the signed values) apart.
+        with patch.object(webapp.hear, "transcribe", return_value="Dose: 1.5 mg today. Temperature -5 C!"):
+            webapp.save_caregiver_voice_memo("memo.wav", session_id)
+        webapp.save_caregiver_text_memo("Dose: 15 mg today. Temperature 5 C.", session_id)
         store = self._store(session_id)
-        store.add("Dose: 1.5 mg", source="caregiver_memo")
-        store.add("Dose: 15 mg", source="caregiver_memo")
+        self.assertEqual(
+            [i.text for i in store.all()][len(self.FACTS):],
+            ["Dose: 1.5 mg today", "Temperature -5 C", "Dose: 15 mg today", "Temperature 5 C"],
+        )
         store.add("爸爸喜欢爵士乐", source="caregiver_memo")  # two distinct CJK facts
         store.add("孙子叫小明", source="caregiver_memo")
         store.add("Call Sarah", source="caregiver_memo", privacy=PrivacyLevel.CAREGIVER_ONLY.value)
@@ -494,7 +501,7 @@ class TestBriefedMemoryDedupe(unittest.TestCase):
         store.add("Sarah visits", source="caregiver_note", scope=MemoryScope.TEMPORARY.value, expires_at=time.time() + 600)
         store.add("Sarah visits.", source="caregiver_note", scope=MemoryScope.TEMPORARY.value, expires_at=time.time() + 5 * 3600)
         briefed = self._briefed(webapp._format_caregiver_panel(session_id))
-        for text in ("Dose: 1.5 mg", "Dose: 15 mg", "爸爸喜欢爵士乐", "孙子叫小明"):
+        for text in ("Dose: 1.5 mg today", "Dose: 15 mg today", "Temperature -5 C", "Temperature 5 C", "爸爸喜欢爵士乐", "孙子叫小明"):
             self.assertEqual(briefed.count(text), 1, briefed)
         self.assertIn("Hidden from Dad]** Call Sarah `(caregiver_memo)`", briefed)
         self.assertIn("🟢 **[Permanent]** Call Sarah. `(caregiver_memo)`", briefed)

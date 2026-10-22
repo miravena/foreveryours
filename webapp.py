@@ -186,13 +186,14 @@ def _caregiver_panel_may_show(item) -> bool:
 # compared by a key that ignores case, whitespace and sentence punctuation
 # but keeps every word (Unicode included) and in-word punctuation, so
 # "Dad loves jazz." and "Dad loves jazz" are one fact while "Dose: 1.5 mg"
-# and "Dose: 15 mg" are two. The key includes the item's privacy level: a
+# and "Dose: 15 mg" are two (a sign stays on its number: "-5 C" is not
+# "5 C"). The key includes the item's privacy level: a
 # caregiver-only copy and a public copy of the same words mean different
 # things to the caregiver and both stay. A caregiver item is dropped only
 # when its key repeats a listed fact, or is other shown active caregiver
 # items joined end to end (the whole memo). Only CAREGIVER_SOURCES items are
 # ever dropped; what _caregiver_panel_may_show hides is unchanged.
-_FACT_TOKEN_RE = re.compile(r"\w+(?:[.,:/'\u2019-]\w+)*")
+_FACT_TOKEN_RE = re.compile(r"[-+]?\w+(?:[.,:/'\u2019-]\w+)*")
 
 
 def _fact_tokens(text: str) -> tuple[str, ...]:
