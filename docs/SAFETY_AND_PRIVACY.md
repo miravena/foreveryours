@@ -19,7 +19,11 @@ from true to false:
 - **Audit flags** (`pipeline/audit.py`, see below) try to disclose via a
   spoken follow-up line after the fact. If that follow-up fails for some
   reason, the flag is recorded as `disclosed_to_senior=False` — honestly,
-  not papered over — rather than assumed to have succeeded.
+  not papered over — rather than assumed to have succeeded. "Told" means the
+  browser actually received the line's audio: the streaming turn keeps
+  listening after its reply until the audit finishes (bounded), and a line
+  that arrives after the browser stopped listening is recorded undisclosed
+  (Office #23231). The same rule gates lifestyle notes.
 
 The senior is never meant to be monitored silently behind their back; the
 code's job is to make that true in both cases above, not just the easy one.
