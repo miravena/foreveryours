@@ -270,6 +270,58 @@ class TestThink(unittest.TestCase):
         self.assertIn("Never diagnose medical symptoms, recommend pill dosages", prompt)
         self.assertIn("ForeverYours must complement human relationships, never replace them", prompt)
 
+    # Office #23219 (judge-sim finding 1): live, the companion twice told Dad
+    # "Sarah is listening to our conversation". She is not -- a caregiver only
+    # ever receives a safety flag, and the orchestrator discloses each one.
+    LISTENING_PHRASINGS = (
+        "Are you a real person? Is Sarah listening to us?",
+        "Can Sarah hear what I tell you?",
+    )
+
+    def test_system_prompt_rule_no_listening_honesty(self):
+        prompt = think.SYSTEM_PROMPT
+        self.assertIn("19. NO-LISTENING HONESTY", prompt)
+        self.assertIn("cannot hear", prompt)
+        self.assertIn("only thing a caregiver ever receives is a safety flag", prompt)
+        self.assertIn("you will always tell Dad when one is sent", prompt)
+        self.assertIn('Never say or imply "Sarah is listening to our conversation"', prompt)
+
+    def test_no_listening_rule_reaches_the_model_for_both_phrasings(self):
+        from unittest.mock import MagicMock, patch
+
+        for phrasing in self.LISTENING_PHRASINGS:
+            with self.subTest(phrasing=phrasing):
+                mock_client = MagicMock()
+                with patch("pipeline.think.get_client", return_value=mock_client):
+                    list(think.stream_reply(phrasing, ["Dad loves jazz"]))
+                _, kwargs = mock_client.chat.completions.create.call_args
+                messages = kwargs["messages"]
+                self.assertEqual(messages[0]["role"], "system")
+                self.assertIn("NO-LISTENING HONESTY", messages[0]["content"])
+                self.assertIn("cannot hear", messages[0]["content"])
+                self.assertEqual(messages[-1], {"role": "user", "content": phrasing})
+
+    def test_build_prompt_carries_no_listening_rule_for_both_phrasings(self):
+        for phrasing in self.LISTENING_PHRASINGS:
+            with self.subTest(phrasing=phrasing):
+                messages = think.build_prompt(phrasing, [], intent="CASUAL")
+                self.assertIn("NO-LISTENING HONESTY", messages[0]["content"])
+                self.assertEqual(messages[-1]["content"], phrasing)
+
+    # Office #23219 (judge-sim finding 9): "You've always told me you love
+    # jazz--especially the classic big-band sound" -- the memo came from Sarah
+    # and "big-band" was invented. Rule 10 alone did not stop it.
+    def test_system_prompt_rule_remembered_facts_attribution(self):
+        prompt = think.SYSTEM_PROMPT
+        self.assertIn("20. REMEMBERED FACTS ONLY, ATTRIBUTED CORRECTLY", prompt)
+        self.assertIn("State only facts that appear in the provided memories or caregiver updates", prompt)
+        self.assertIn("Never add detail that is not written there", prompt)
+        self.assertIn('say "Sarah mentioned you love jazz", never "you\'ve always told me you love jazz"', prompt)
+        self.assertIn("Sarah mentioned", prompt)
+        # The attribution rule must come after the crisis rule, not displace it.
+        self.assertLess(prompt.index("18. CRISIS RESPONSE"), prompt.index("19. NO-LISTENING HONESTY"))
+        self.assertLess(prompt.index("19. NO-LISTENING HONESTY"), prompt.index("20. REMEMBERED FACTS ONLY"))
+
 
 if __name__ == "__main__":
     unittest.main()
