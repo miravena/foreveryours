@@ -56,7 +56,22 @@ class TestSampleSeedAndValidator(unittest.TestCase):
         for meal in ("breakfast", "lunch", "dinner"):
             self.assertIn(meal, routine)
         self.assertIn("walk", routine)
-        self.assertIn("visit", " ".join(_texts("family")).lower())
+        self.assertIn("visit", routine)
+
+    def test_identity_facts_carry_no_schedule_words(self):
+        """openai_review on #23218: a family/persona/likes line that also
+        says "every evening" or "visits on Saturday afternoons" is claimed by
+        MemoryStore.caregiver_schedule_updates() and dropped from
+        senior_profile_facts(), so "Who is my daughter?" would get nothing.
+        Identity stays identity; visits and calls are routine items."""
+        import re
+        schedule_word = re.compile(
+            r"\b(am|pm|today|tomorrow|tonight|afternoon|morning|evening|o'clock|groceries|appointment|doctor|dropping\s+off|visiting|visit)\b",
+            re.IGNORECASE,
+        )
+        for group in ("persona", "family", "likes", "avoid"):
+            for text in _texts(group):
+                self.assertIsNone(schedule_word.search(text), text)
 
     def test_validator_accepts_allowed_examples(self):
         validate_sample_profile("Blood pressure pill, 8 AM")
@@ -208,7 +223,12 @@ class TestSeniorSideRecall(_SessionCase):
         store = self._store(session_id)
         self.assertIn(REMINDER_LINE, store.caregiver_schedule_updates())
         self.assertIn("Evening walk, 6 PM", store.caregiver_schedule_updates())
-        self.assertIn(_texts("persona")[0], store.senior_profile_facts())
+        facts = store.senior_profile_facts()
+        self.assertIn(_texts("persona")[0], facts)
+        for text in _texts("family") + _texts("likes"):
+            self.assertIn(text, facts, "identity fact must be recallable, not swallowed as a schedule item")
+        self.assertTrue(any("daughter" in f.lower() for f in facts))
+        self.assertFalse(any("daughter" in u.lower() for u in store.caregiver_schedule_updates()))
         captured = {}
 
         def fake_stream(transcript, facts, **kwargs):

@@ -41,17 +41,24 @@ SAMPLE_FAMILY = {
     # (group, text, privacy) -- group drives the caregiver-side profile card.
     "items": (
         ("persona", "Dad is Walter, 82, a retired trumpet teacher who lives on his own in Maple Street.", "public"),
-        ("family", "Sarah is his daughter and primary caregiver; she calls every evening.", "public"),
-        ("family", "His grandson is named Leo; Leo visits on Saturday afternoons.", "public"),
-        ("family", "His neighbour Rosa drops by most mornings for coffee.", "public"),
+        # Identity facts carry NO schedule words (am/pm, morning/evening,
+        # visit...): MemoryStore.caregiver_schedule_updates() claims any
+        # caregiver line with one, and senior_profile_facts() then drops it,
+        # so "Who is my daughter?" would reach the model with no answer
+        # (openai_review on #23218). The visits and calls are routine items.
+        ("family", "Sarah is his daughter and primary caregiver.", "public"),
+        ("family", "His grandson Leo is nine and loves hearing his trumpet stories.", "public"),
+        ("family", "Rosa next door is his neighbour and oldest friend.", "public"),
         ("likes", "Dad loves jazz, especially Ella Fitzgerald, and crossword puzzles.", "public"),
         ("likes", "He enjoys chicken soup and a slice of apple pie after dinner.", "public"),
         ("routine", "Breakfast, 7:30 AM", "public"),
         ("routine", "Morning walk round the park, 9 AM", "public"),
+        ("routine", "Coffee with Rosa, 10 AM", "public"),
         ("routine", "Lunch, 12:30 PM", "public"),
         ("routine", "Evening walk, 6 PM", "public"),
         ("routine", "Dinner, 6:30 PM", "public"),
         ("routine", "Sarah's evening phone call, 8 PM", "public"),
+        ("routine", "Leo visits, Saturday 3 PM", "public"),
         ("reminder", "Blood pressure pill, 8 AM", "public"),
         ("reminder", "Evening pill with dinner, 6:30 PM", "public"),
         ("avoid", "Avoid talking about driving: he gave up his licence in March and it is a sore subject.", "public"),
