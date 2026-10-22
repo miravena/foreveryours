@@ -149,7 +149,9 @@ cp .env.example .env   # fill in NEBIUS_API_KEY for the full pipeline; works wit
 ### Cloudflare & Cloud Hosting
 
 - **Cloudflare Pages**: Deploys the landing page and presentation directly from `docs/index.html` with zero build commands.
-- **Hugging Face Spaces** (the judge-facing link, issue #11): `scripts/deploy_hf_space.py`
+- **Hugging Face Spaces** (the judge-facing link, issue #11): deploys run from GitHub Actions
+  (`.github/workflows/deploy-space.yml`, see `HOW_TO_WORK_HERE.md` -> *Deploying the Space*);
+  the Space shows the commit it runs as `Build: <sha7>`. Underneath, `scripts/deploy_hf_space.py`
   stages `app.py` + pipeline + `requirements.txt`/`packages.txt` with the Spaces config header
   and uploads them. `HF_TOKEN=... NEBIUS_API_KEY=... python scripts/deploy_hf_space.py <user>/<space>`;
   `--dry-run` builds the staging folder without uploading. The key goes in as a Space *secret*,

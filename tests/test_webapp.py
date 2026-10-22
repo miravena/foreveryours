@@ -587,6 +587,16 @@ class TestProactiveButtons(unittest.TestCase):
 
 
 class TestBuildDemoCss(unittest.TestCase):
+    def test_build_line_only_when_build_info_exists(self):
+        # scripts/deploy_hf_space.py writes BUILD_INFO into the Space; a checkout has none.
+        with tempfile.TemporaryDirectory() as tmp:
+            info = Path(tmp) / "BUILD_INFO"
+            self.assertEqual(webapp._build_line(info), "")
+            info.write_text("0123456789abcdef0123456789abcdef01234567\n", encoding="utf-8")
+            self.assertEqual(webapp._build_line(info), "Build: `0123456`")
+            info.write_text("\n", encoding="utf-8")
+            self.assertEqual(webapp._build_line(info), "")
+
     def test_css_set_on_blocks_not_only_launch_kwargs(self):
         """#83 PR #85 Codex review: app.py (the hosted/Spaces entrypoint) calls
         build_demo() and never calls .launch(css=...) itself, so the mobile
