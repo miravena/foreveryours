@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,6 +20,22 @@ DEMO_MEMO = (
     "Dad loves jazz. His grandson is named Leo. Avoid talking about driving. "
     "I'm dropping off groceries at 4 PM today."
 )
+
+# One sentence boundary for every memo path (#23215). Each caller used to
+# split on its own rule ("." + space here, [.!?\n]+ there), so the same memo
+# dictated once and typed once produced different texts -- MemoryStore.add's
+# exact (text, source) dedupe cannot see those as the same fact, and a
+# transcript with "!"/"?"/no space after "." was stored as one whole-memo
+# item beside its own fragments. A "." followed by a digit is a decimal
+# point ("Give 1.5 mg"), never a boundary (openai_review on #23215).
+_MEMO_FACT_BOUNDARY_RE = re.compile(r"(?:[!?\n]|\.(?!\d))+")
+
+
+def split_memo_facts(memo: str | None) -> list[str]:
+    """Split a caregiver memo (typed, dictated or canned) into one stripped
+    fact per sentence, dropping empties. The ONLY splitter any memo path may
+    use, so a memo saved by any route yields identical items."""
+    return [part.strip() for part in _MEMO_FACT_BOUNDARY_RE.split(memo or "") if part.strip()]
 
 
 @dataclass

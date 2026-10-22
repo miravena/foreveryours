@@ -37,7 +37,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
 
 from envload import load_repo_env
 
-from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags
+from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags, split_memo_facts
 from memory.store import MemoryStore
 from pipeline import hear, speak
 from pipeline.orchestrator import run_turn
@@ -75,9 +75,8 @@ def beat1_caregiver_memo(audio_in: Path | None = None) -> None:
 
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR, timezone_str=SENIOR_TIMEZONE)
     saved = 0
-    for line in memo.split(". "):
-        line = line.strip().rstrip(".")
-        if line and store.add(line, source="caregiver_memo"):
+    for line in split_memo_facts(memo):  # one shared splitter (#23215)
+        if store.add(line, source="caregiver_memo"):
             saved += 1
     print(f"Caregiver memo saved ({saved} new facts; re-running this beat won't duplicate them).")
     _print_memory_panel(store, CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR))
