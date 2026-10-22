@@ -32,8 +32,11 @@ class FakeApi:
 
 
 class FakeClient:
-    def __init__(self, endpoints):
+    def __init__(self, endpoints, build=SHA):
         self.endpoints = endpoints
+        # Mirrors the Gradio config shape: the build line is a Markdown component value.
+        self.config = {"components": [{"type": "markdown", "props": {"value": f"Build: `{build[:7]}`"}}]} \
+            if build else {"components": []}
 
     def view_api(self, **kw):
         return {"named_endpoints": self.endpoints}
@@ -80,6 +83,43 @@ class TestVerify(unittest.TestCase):
             self._verify(SHA, stages=("BUILDING", "BUILD_ERROR"), wait_s=600)
         with self.assertRaises(TimeoutError):
             self._verify(SHA, stages=("BUILDING",), wait_s=30)
+
+    def test_smoke_waits_for_the_running_app_to_show_the_new_build(self):
+        # BUILD_INFO in the repo already matches, but the old build is still serving,
+        # then the Space restarts (connect fails), then the new build serves.
+        served = [FakeClient({"/x": {}}, build=OLD), ConnectionError("503"), FakeClient({"/x": {}})]
+
+        def factory(space_id):
+            item = served.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+        log = io.StringIO()
+        rc = vss.verify("me/demo", SHA, wait_s=900, do_smoke=True, api_factory=lambda: FakeApi(["RUNNING"]),
+                        downloader=lambda s: SHA, client_factory=factory, sleep=lambda s: None,
+                        clock=_Clock(), log=lambda l: log.write(l + "\n"))
+        self.assertEqual(rc, 0)
+        self.assertEqual(served, [])
+        self.assertIn("running app shows build fedcba9", log.getvalue())
+        self.assertIn("running app shows build 0123456", log.getvalue())
+
+    def test_smoke_fails_when_the_old_build_keeps_serving(self):
+        with self.assertRaises(RuntimeError) as cm:
+            vss.verify("me/demo", SHA, wait_s=60, do_smoke=True, api_factory=lambda: FakeApi(["RUNNING"]),
+                       downloader=lambda s: SHA, client_factory=lambda s: FakeClient({"/x": {}}, build=OLD),
+                       sleep=lambda s: None, clock=_Clock(), log=lambda l: None)
+        self.assertIn("fedcba9", str(cm.exception))
+        self.assertEqual(vss.main(["me/demo", "--sha", SHA, "--smoke"], downloader=lambda s: SHA,
+                                  client_factory=lambda s: FakeClient({"/x": {}}, build=None)), 1)
+
+    def test_default_client_uses_the_current_token_keyword(self):
+        import inspect
+        try:
+            from gradio_client import Client
+        except ImportError:  # pragma: no cover
+            self.skipTest("gradio_client not installed")
+        self.assertIn("token", inspect.signature(Client.__init__).parameters)
+        self.assertIn("Client(space_id, token=_token()", (ROOT / "scripts" / "verify_space_sha.py").read_text())
 
     def test_smoke_needs_endpoints(self):
         rc, out = self._verify(SHA, do_smoke=True)
@@ -155,6 +195,8 @@ class TestDeployWorkflow(unittest.TestCase):
                 self.assertIn("mode == 'deploy'", step["if"], name)
         self.assertIn("--hardware zero-a10g", steps["Deploy ${{ github.sha }} to the Space"]["run"])
         self.assertIn("--max-calls", steps["Live judge check suite (small call cap)"]["run"])
+        # Every deploy runs the live suite, releases included (HOW_TO_WORK_HERE.md).
+        self.assertNotIn("event_name", steps["Live judge check suite (small call cap)"]["if"])
 
 
 if __name__ == "__main__":
