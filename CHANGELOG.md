@@ -10,6 +10,14 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Added
+- Live judge-behaviour check (Office #23223): `scripts/live_judge_check.py` plays a judge against
+  the running HF Space through `gradio_client` -- about twenty scripted turns (pre-brief recall,
+  "Is Sarah listening?", a typed "Dr. Tan" memo, driving, a fall, a crisis phrase, a private
+  disclosure) with keyword assertions on the reply and the caregiver panel, a scorecard, and a
+  hard cap on submitted reply turns (default 25). `--fake good|bad` runs the same turns against
+  an offline stub. `HOW_TO_WORK_HERE.md` names it as the required check after every Space deploy.
+
 ### Fixed
 - The companion no longer tells Dad that Sarah is listening to the conversation (Office #23219,
   judge-sim findings 1 and 9): THINK's system prompt now carries a no-listening honesty rule (a
