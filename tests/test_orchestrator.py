@@ -270,6 +270,14 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(len(self.flags.all()), 1)
         self.assertFalse(result.is_fallback)
 
+    def test_run_turn_allow_hosted_call_false_keeps_conflicts_pending(self):
+        """A capped turn never reaches THINK, so a pending memory clarification
+        must not be marked asked (Codex review of #23228)."""
+        self.store.add_conflict("Leo is a grandson", "Leo is a nephew", "relationship unclear")
+        with patch("pipeline.think.stream_reply", side_effect=AssertionError("THINK must not be called at the cap")):
+            run_turn("I fell down earlier and I'm scared", self.store, self.flags, self.audio_dir, allow_hosted_call=False)
+        self.assertEqual(len(self.store.get_pending_conflicts()), 1)
+
     def test_run_turn_allow_hosted_call_false_rejects_non_fast_path(self):
         """allow_hosted_call=False with nothing for the fast-path to say is a
         caller bug -- it must raise, never return a silent empty turn."""

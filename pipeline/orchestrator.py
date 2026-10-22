@@ -485,7 +485,9 @@ def run_turn(
     filtered_profile = [f for f in filtered_profile if f not in filtered_schedule and f not in guardrails]
 
     pending_conflicts = memory_store.get_pending_conflicts()
-    if pending_conflicts:
+    # Only THINK asks a clarification; at the daily cap (#23228) THINK never
+    # runs, so the conflict must stay pending for a later turn to ask.
+    if pending_conflicts and allow_hosted_call:
         memory_store.mark_conflicts_asked()
 
     think_input = transcript if not continuation_note else f"{transcript}\n\n[{continuation_note}]"
