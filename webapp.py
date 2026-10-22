@@ -1695,14 +1695,14 @@ def build_demo() -> gr.Blocks:
             gr.Markdown(
                 "Your tab is its own private demo household, already briefed by Dad's daughter "
                 "Sarah (jazz, grandson Leo, no driving talk, groceries at 4 PM). Nobody else on "
-                "this link sees it. Its memory, flags and reply audio are removed about "
+                "this link sees it. Its memory and flags are removed when "
                 f"the session cleanup timer runs (about {_CLOSED_TAB_MIN} minutes after "
                 f"the tab closes), or after {_SESSION_TTL_MIN} minutes of inactivity if "
                 f"the close never registers. This removes the household session directory, "
-                f"not Gradio's separate audio cache. Recorded or uploaded input audio "
-                f"separately remains in that cache until its sweep runs every "
+                f"not Gradio's separate audio cache. Both recorded or uploaded input audio "
+                f"and Gradio's cached copies of reply audio separately remain in that cache until its sweep runs every "
                 f"{_CACHE_SWEEP_INTERVAL_MIN} minutes and removes files older than "
-                f"{_CACHE_MAX_AGE_MIN} minutes, so it can remain for up to about "
+                f"{_CACHE_MAX_AGE_MIN} minutes, so they can remain for up to about "
                 f"{_CACHE_MAX_MIN} minutes. We never promise deletion the instant the "
                 f"tab closes."
             )

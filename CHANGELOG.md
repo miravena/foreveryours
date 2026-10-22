@@ -31,6 +31,7 @@ rename `Unreleased` to the version and date, then tag it.
   against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
 
 ### Fixed
+- Fixed ungrammatical wording in the browser retention notice and clarified that both recorded input audio and Gradio's cached reply audio copies remain until the separate cache sweep runs (`webapp.py`, `docs/PRIVACY.md`, `docs/SAFETY_AND_PRIVACY.md`, fixes #176, fixes #177).
 - The daily-cap footnote on a capped emergency turn says the safety message "still played" only
   when reply audio was produced, and "the family has been notified" only when a caregiver flag was
   recorded; a TTS failure now reads "shown as text because speech was unavailable" (Codex review

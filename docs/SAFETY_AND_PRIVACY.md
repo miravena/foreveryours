@@ -111,7 +111,7 @@ visitor opens the demo after a process restart.
 
 - **Hosted web demo (`webapp.py`).** Each browser tab is its own throwaway
   household under `FY_SESSIONS_DIR`. The reply WAVs from one turn are deleted
-  at the start of the next; the whole household (memory, flags, reply audio)
+  at the start of the next; the whole household (memory, flags)
   is deleted about an hour (3600s) after the tab disconnects — Gradio's
   `gr.State` `delete_callback` (`_end_session`) fires once Gradio's own
   closed-session timer expires, which is a fixed 3600s in the installed
@@ -122,10 +122,10 @@ visitor opens the demo after a process restart.
   recorded input clips and served reply audio separately pass through
   Gradio's own file cache (`delete_cache=GRADIO_CACHE_SWEEP`), which is swept
   every `GRADIO_CACHE_SWEEP[0]` seconds (600s) and drops files older than
-  `GRADIO_CACHE_SWEEP[1]` seconds (`SESSION_TTL_S`), so an input clip can
+  `GRADIO_CACHE_SWEEP[1]` seconds (`SESSION_TTL_S`), so a clip can
   live up to roughly `SESSION_TTL_S + 600` seconds (~70 minutes by default).
   This cache cleanup is separate from removal of the household session
-  directory; closing a tab does not itself delete cached input audio.
+  directory; closing a tab does not itself delete cached input or reply audio.
   No other visitor can see another tab's household.
 - **Local CLI (`main.py`).** Reply audio stays in `out/audio/` and memory in
   `data/` until you delete them. That's your own machine, and keeping them is
