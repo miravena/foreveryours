@@ -11,6 +11,11 @@ Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackat
 runs on Nebius Token Factory with open-weight NVIDIA Nemotron models; it does not use Nebius AI
 Cloud.
 
+**Live demo:** <https://huggingface.co/spaces/elevenbaselab/foreveryours>. No login: talk as the senior on the left (or click a
+sample clip) and watch the caregiver side on the right. Each visitor gets a private demo household,
+removed about an hour after the tab closes; recorded clips can stay in the web framework's cache
+for up to about 70 minutes ([PRIVACY.md](docs/PRIVACY.md)).
+
 ## The three-beat demo
 
 1. **Caregiver memo.** "Dad loves jazz, his grandson is Leo, avoid talking about driving. I'm
