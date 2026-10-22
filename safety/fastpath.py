@@ -56,6 +56,45 @@ CONFUSION_PATTERNS = [
     r"\bi don'?t know (where|what day)\b",
 ]
 
+# The caregiver-facing flag text (#23232). FIXED, content-minimized
+# descriptions of the trigger category -- the caregiver panel must never
+# carry the senior's own words, nor a model's free-text reason about the
+# conversation: both can hold health details, names or a bank PIN, and the
+# panel is a caregiver-visible surface, so quoting them turns a safety
+# notification into a transcript leak. The OWASP Logging Cheat Sheet's
+# "data to exclude" rule applies here -- record the category, not the
+# sensitive content. The AUDIT background path (pipeline/orchestrator.py)
+# imports these same constants instead of re-stating the wording, so there
+# is exactly one wording per category in the repo.
+# Keys: fast-path severities ("crisis", "distress", "confusion") and the
+# AUDIT classifications ("audit_crisis", "audit_distress", "audit_unsafe").
+CAREGIVER_FLAG_TEXT = {
+    "crisis": (
+        "URGENT CRISIS: Senior expressed suicidal ideation or severe distress. "
+        "Please check on the senior now."
+    ),
+    "distress": (
+        "URGENT: possible distress detected (a fall, injury or physical distress). "
+        "Please check on the senior now."
+    ),
+    "confusion": (
+        "Possible confusion in conversation: the senior asked where they are "
+        "or what is happening. Please check on the senior now."
+    ),
+    "audit_crisis": (
+        "URGENT CRISIS: the conversation audit flagged signs of severe distress "
+        "in the senior's turn. Please check on the senior now."
+    ),
+    "audit_distress": (
+        "URGENT: possible distress detected by the conversation audit. "
+        "Please check on the senior now."
+    ),
+    "audit_unsafe": (
+        "AUDIT flagged a reply as unsafe: the companion's reply may have contained "
+        "medical or unsafe advice, and it was not acted on by the companion."
+    ),
+}
+
 
 def _normalize(text: str) -> str:
     """Normalize punctuation that varies by source before matching.
@@ -122,7 +161,7 @@ def check(transcript: str) -> FastPathResult:
                         "You already told them to call 988 and notified their family. "
                         "Offer gentle, non-judgmental emotional support."
                     ),
-                    caregiver_flag=f"URGENT CRISIS: Senior expressed suicidal ideation or severe distress - \"{transcript.strip()}\"",
+                    caregiver_flag=CAREGIVER_FLAG_TEXT["crisis"],
                 )
 
     for pattern in DISTRESS_PATTERNS:
@@ -140,7 +179,7 @@ def check(transcript: str) -> FastPathResult:
                     "You already told them you're notifying their family -- don't repeat that. "
                     "Gently check in on how they're doing right now."
                 ),
-                caregiver_flag=f"URGENT: possible distress in conversation — \"{transcript.strip()}\"",
+                caregiver_flag=CAREGIVER_FLAG_TEXT["distress"],
             )
 
     for pattern in CONFUSION_PATTERNS:
@@ -153,7 +192,7 @@ def check(transcript: str) -> FastPathResult:
                     f'The person just said something that sounded like confusion: "{transcript.strip()}". '
                     "Answer their question plainly and reassure them -- don't ignore what they asked."
                 ),
-                caregiver_flag=f"Possible confusion in conversation — \"{transcript.strip()}\"",
+                caregiver_flag=CAREGIVER_FLAG_TEXT["confusion"],
             )
 
     return FastPathResult(

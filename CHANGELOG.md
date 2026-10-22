@@ -30,6 +30,15 @@ rename `Unreleased` to the version and date, then tag it.
   `Build: <sha7>` under *About this demo household*, `scripts/verify_space_sha.py` checks a Space
   against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
 
+### Fixed
+- Caregiver safety flags no longer carry the senior's own words (#23232): the flag text is a
+  fixed, content-minimized description of the trigger category (`safety/fastpath.py`'s
+  `CAREGIVER_FLAG_TEXT`), for both the fast-path flags and the AUDIT flags. Previously a
+  fast-path flag quoted the utterance verbatim and an AUDIT flag copied the auditor's
+  one-sentence reason, so a turn like "I fell. Also please keep my bank PIN 1234 private"
+  put both sentences on the caregiver panel. The flag now says what kind of event happened,
+  never what the senior said or what the model wrote about it.
+
 ## [0.2.0] - 2026-10-22
 
 ### Fixed

@@ -30,6 +30,13 @@ only caregiver-authored memos/notes and non-EMOTIONAL conversation facts
 and disclosed flags, never from model-written free text about the
 conversation.
 
+Flag *text* is minimised on the same principle: it is a fixed description
+of the trigger category — `safety/fastpath.py`'s `CAREGIVER_FLAG_TEXT` —
+and never contains the senior's utterance or the auditor's one-sentence
+reason. A flag says *what kind* of event happened (crisis, distress,
+confusion, unsafe advice), not what the senior said or what the model wrote
+about it, so the caregiver panel can never become a transcript leak (#23232).
+
 **Refinement (implemented 2026-10-03):** the fast-path reply today discloses this *one* instance ("I'm letting your family know right now so someone can check on you.") but also states the standing rule — i.e. when disclosure happens and when it doesn't. Spelling that rule out loud, e.g. *"I'll only tell them if I'm worried about your safety,"* answers the "elder surveillance" objection more directly than a single-instance disclosure can: it tells the senior the boundary up front, not just that this one thing got reported.
 
 ## No medical claims

@@ -9,6 +9,45 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-22 (Ticket #23232: caregiver flag text carries no free text)
+- **What:** the caregiver flag text is now a FIXED, content-minimized description of the
+  trigger category, defined in one place -- `safety/fastpath.py`'s `CAREGIVER_FLAG_TEXT`
+  (fast-path `crisis`/`distress`/`confusion` plus the AUDIT background's `audit_crisis`/
+  `audit_distress`/`audit_unsafe`); `pipeline/orchestrator.py` imports those constants
+  instead of re-stating the wording. Before this, `safety/fastpath.py`'s `check()` put
+  `transcript.strip()` verbatim into `caregiver_flag` for all three severities, and the
+  AUDIT `background()` closure in `run_turn()` copied the model's verdict string (the
+  auditor's one-sentence reason) into `flags.add(...)`, so "I fell. Also please keep my
+  bank PIN 1234 private" put BOTH sentences on the caregiver panel -- which breaks the
+  promise `docs/SAFETY_AND_PRIVACY.md` already makes ("only from counters and disclosed
+  flags, never from model-written free text about the conversation"). Rule applied: OWASP
+  Logging Cheat Sheet, "Data to exclude" -- record the category, not the sensitive
+  content. `continuation_note`, `immediate_reply`, the spoken disclosure lines and
+  `audit_verdict` (the dev/biomarker surface) are untouched; severities ("crisis"/
+  "distress"/"audit"), `disclosed_to_senior` and one-flag-per-turn are unchanged.
+- **Repro (negative control, red before the fix, green after):** new
+  `tests/test_fastpath.py::test_caregiver_flag_is_content_minimized` and
+  `tests/test_orchestrator.py::test_audit_flag_does_not_copy_verdict`. On the pre-change
+  checkout they failed with `'1234' unexpectedly found in 'URGENT: possible distress in
+  conversation -- "I fell. Also please keep my bank PIN 1234 private"'` and `'1234'
+  unexpectedly found in 'URGENT CRISIS: Senior expressed severe distress in conversation:
+  DISTRESS Senior said she fell and mentioned her bank PIN 1234'`; both are green after the
+  fix. `audit_verdict` was checked too: `webapp.py` never renders it (no reference to it
+  at all), so the raw verdict stays off the caregiver panel.
+- **Gotcha (environment, not the repo):** this container has no `espeak-ng` package and no
+  root to install one, so every SPEAK-dependent test errors with "Speech synthesis
+  unavailable: install espeak-ng or pyttsx3" -- the SAME 8 failures + 21 errors before and
+  after this change (pre-change baseline `Ran 321 tests ... FAILED (failures=8, errors=21)`;
+  post-change `Ran 323 tests ... FAILED (failures=8, errors=21)`, identical failure sets).
+  With a local espeak-ng shim kept OUTSIDE the repo (`libespeak-ng` from the
+  `espeakng-loader` wheel, driven through the same CLI flags the repo uses) the full suite
+  is green: pre-change `Ran 321 tests ... OK (skipped=8)`, post-change `Ran 323 tests ...
+  OK (skipped=8)`. The repo still needs the documented
+  `sudo apt-get install -y espeak-ng`.
+- **Notes:** the `wq background` step does not exist in this environment (no `wq` command),
+  and the local `--no-ff` merge into `main` was deliberately NOT done -- the fix commit sits
+  on branch `oc/23232` only, as instructed.
+
 ### 2026-10-22 (Office #23223: live judge-behaviour check after every Space deploy)
 - **What:** `scripts/live_judge_check.py` plays a judge against the hosted Space through
   `gradio_client`: 20 scored turns in six fresh sessions (pre-brief recall + "Is Sarah
