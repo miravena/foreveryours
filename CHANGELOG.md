@@ -11,6 +11,12 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Added
+- Live judge-behaviour check (Office #23223): `scripts/live_judge_check.py` plays a judge against
+  the running HF Space through `gradio_client` -- about twenty scripted turns (pre-brief recall,
+  "Is Sarah listening?", a typed "Dr. Tan" memo, driving, a fall, a crisis phrase, a private
+  disclosure) with keyword assertions on the reply and the caregiver panel, a scorecard, and a
+  hard cap on submitted reply turns (default 25). `--fake good|bad` runs the same turns against
+  an offline stub. `HOW_TO_WORK_HERE.md` names it as the required check after every Space deploy.
 - One-click **Load sample family** button on the caregiver side (Office #23218): seeds this
   session's household with a labelled-fictional senior (Walter), family, likes, a daily routine
   and caregiver-entered medication reminder times as plain schedule items, shown as a
