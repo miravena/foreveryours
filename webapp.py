@@ -395,10 +395,12 @@ class _ChunkConsumer:
                 self._in_flight = msg[3]
         return msg
 
-    def accept(self, ack: _ChunkAck) -> None:
-        """Called by the generator right after the chunk's yield returned."""
+    def accept(self, ack: _ChunkAck, accepted: bool = True) -> None:
+        """Called by the generator right after the chunk's yield returned;
+        `accepted=False` when that yield did not actually carry the chunk's
+        audio (see `_audio_carries_last`)."""
         with self._lock:
-            ack._settle(True)
+            ack._settle(accepted)
             if self._in_flight is ack:
                 self._in_flight = None
 
@@ -962,6 +964,19 @@ def _combine_audio_chunks(audio_paths: list[Path], out_dir: Path) -> Path | None
         return audio_paths[0]
 
 
+def _audio_carries_last(combined: Path | None, audio_paths: list[Path]) -> bool:
+    """Whether `combined` (from `_combine_audio_chunks(audio_paths, ...)`)
+    actually contains the newest chunk. On a concatenation failure the
+    combiner falls back to the FIRST chunk, which for a multi-chunk list
+    drops the newest one -- a late disclosure in that case never reached the
+    browser and must not be attested (#23231, Codex review)."""
+    if combined is None or not audio_paths:
+        return False
+    if len(audio_paths) == 1:
+        return combined == audio_paths[0]
+    return combined != audio_paths[0]
+
+
 def run_demo_turn(
     audio_in: str | None = None,
     text_in_or_history: str | list[dict] | None = None,
@@ -1220,7 +1235,7 @@ def _run_demo_turn_streaming_impl(
             out = (transcript_and_reply, reply_audio, history, panel(), biomarkers_panel)
             if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
             yield (*out, session_id_val, "", None)
-            consumer.accept(ack)
+            consumer.accept(ack, _audio_carries_last(combined_audio, accumulated_audio_paths))
 
     _remember_background_thread(session_id_val, result.background_thread)
 
@@ -1291,6 +1306,12 @@ def _run_demo_turn_streaming_impl(
         _, _sentence, chunk_path, ack = msg
         final_audio_paths.append(chunk_path)
         combined_audio = _combine_audio_chunks(final_audio_paths, audio_dir)
+        if not _audio_carries_last(combined_audio, final_audio_paths):
+            # The recombined audio would not contain this line: refuse it
+            # (recorded undisclosed) rather than yield audio without it.
+            final_audio_paths.pop()
+            consumer.accept(ack, accepted=False)
+            continue
         late = (out[0], str(combined_audio) if combined_audio else None, new_history, panel(), biomarker_str)
         yield (*late, session_id_val, "", None)
         consumer.accept(ack)

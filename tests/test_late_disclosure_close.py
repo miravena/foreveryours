@@ -3,13 +3,16 @@ so that module stays at exactly the four tests its acceptance check counts:
 
 1. audit-only turn (extract_new_memory returns None): one late chunk, then
    a panel-only refresh that shows the persisted flag;
-2. a browser disconnect (`gen.close()`) while a late disclosure chunk has
+2. a failed audio recombination (combiner falls back to the first chunk)
+   does not attest the disclosure it dropped (Codex review P1);
+3. a browser disconnect (`gen.close()`) while a late disclosure chunk has
    been dequeued and is suspended at its yield: it is NOT attested.
 """
 from __future__ import annotations
 
 import time
 import unittest
+from unittest.mock import patch
 
 import webapp
 from tests.test_late_disclosure import LateDisclosureHarness
@@ -38,6 +41,31 @@ class TestAuditOnlyLateDisclosure(LateDisclosureHarness):
         self.assertIn("Dad was told", late[1][3])
         flags, lifestyle = self.stores(sid)
         self.assertIs(flags[-1].disclosed_to_senior, True)
+        self.assertEqual(lifestyle, [])
+
+
+class TestCombineFailureIsNotAttested(LateDisclosureHarness):
+    """Codex review P1: if recombining the late disclosure fails, the
+    combiner falls back to the first chunk -- the disclosure audio never
+    reaches the browser, so it must not be attested."""
+
+    def test_combine_fallback_drops_disclosure_and_refuses_it(self):
+        with patch.object(webapp, "_combine_audio_chunks",
+                          side_effect=lambda paths, _d: paths[0] if paths else None):
+            gen = self.start()
+            outs, done = [], False
+            for out in gen:
+                outs.append(out)
+                if not done and self.is_done_final(out):
+                    done = True
+                    self.release_background.set()
+            sid = outs[-1][5]
+            self.settle(sid)
+        disclosures = self.disclosure_paths()
+        self.assertEqual(len(disclosures), 2, self.spoken)
+        self.assertFalse(any(o[1] in disclosures for o in outs))
+        flags, lifestyle = self.stores(sid)
+        self.assertIs(flags[-1].disclosed_to_senior, False)
         self.assertEqual(lifestyle, [])
 
 
