@@ -10,6 +10,14 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Added
+- One-click **Load sample family** button on the caregiver side (Office #23218): seeds this
+  session's household with a labelled-fictional senior (Walter), family, likes, a daily routine
+  and caregiver-entered medication reminder times as plain schedule items, shown as a
+  "Fictional sample household" card and recalled in the senior's replies; `validate_sample_profile`
+  refuses dosing, diagnosis and clinical-claim language, and the session-end sweep removes the seed
+  with everything else.
+
 ### Fixed
 - The companion no longer tells Dad that Sarah is listening to the conversation (Office #23219,
   judge-sim findings 1 and 9): THINK's system prompt now carries a no-listening honesty rule (a
