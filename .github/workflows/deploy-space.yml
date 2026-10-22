@@ -6,7 +6,8 @@
 #   push to main        until the freeze (FREEZE_UTC below): tests -> deploy -> sha check
 #                       -> live judge check suite with a small call cap. After the freeze a
 #                       push to main only runs the tests; nothing deploys automatically.
-#   release published   deploys the tagged commit, then the sha check and API smoke.
+#   release published   deploys the tagged commit, then the sha check, API smoke and the
+#                       live judge check suite (every deploy runs it).
 #                       Rollback = publish/re-run the workflow on the previous tag.
 #   workflow_dispatch   "Run workflow" by a collaborator: action=check only proves the
 #                       token works and the Space is reachable; action=deploy deploys the
@@ -129,7 +130,7 @@ jobs:
         run: python scripts/verify_space_sha.py "$SPACE_ID" --sha "$GITHUB_SHA" --wait 900 --smoke
 
       - name: Live judge check suite (small call cap)
-        if: steps.gate.outputs.mode == 'deploy' && github.event_name != 'release'
+        if: steps.gate.outputs.mode == 'deploy'
         run: |
           if [ ! -f scripts/live_judge_check.py ]; then
             echo "::notice::scripts/live_judge_check.py is not in this ref yet (#23223); skipping the live suite."

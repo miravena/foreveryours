@@ -105,7 +105,11 @@ deploys it by hand: `.github/workflows/deploy-space.yml` does, so a collaborator
   the Space variable `BUILD_SHA`; the app shows `Build: <sha7>` under *About this demo
   household*. `python scripts/verify_space_sha.py elevenbaselab/foreveryours` exits 0 only when
   the Space runs your local `HEAD` (`--sha <sha>` to compare against another commit,
-  `--wait 900` to first wait for a build, `--smoke` to also call `view_api()`).
+  `--wait 900` to first wait for a build, `--smoke` to also require the *running* app to show
+  that `Build:` line and answer `view_api()`; without `--smoke` it only proves the upload landed,
+  because the previous build keeps serving until the new one is up).
+- **Every deploy runs the live suite,** releases included, so a release cannot pass on stubbed
+  tests and API reachability alone.
 - **By hand, if Actions is unavailable:** from a clean, pushed `main`,
   `HF_TOKEN=... NEBIUS_API_KEY= python scripts/deploy_hf_space.py elevenbaselab/foreveryours --hardware zero-a10g`
   then `python scripts/verify_space_sha.py elevenbaselab/foreveryours --wait 900 --smoke`.
