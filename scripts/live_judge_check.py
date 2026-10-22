@@ -71,7 +71,9 @@ PRIVATE_PHRASE = "sock drawer"
 MEMO_TAN = "Dad has a check-up with Dr. Tan on Thursday at 10 AM."
 
 _REPLY_RE = re.compile(r"\*\*Companion replied:\*\*\s*\"(.*)\"\s*$", re.DOTALL)
-_NOTE_RE = re.compile(r"(?:\s*\n\n\*\([^*]*\)\*\s*)+$")  # trailing *(📢 ...)* / *(🤖 ...)* notes
+# Trailing *(📢 ...)* / *(🤖 ...)* notes. The final \s* sits outside the group so two
+# adjacent \s* never compete for the same whitespace (CodeQL py/redos on PR #181).
+_NOTE_RE = re.compile(r"(?:\s*\n\n\*\([^*]*\)\*)+\s*$")
 _FLAG_LINE_RE = re.compile(r"^- \*\*\((\w+)\)\*\*", re.MULTILINE)
 
 
