@@ -334,12 +334,31 @@ def run_turn(
     immediate_audio_paths: list[Path] = []
     continuation_note = None
     if fast.triggered:
-        # Persist the flag only after the disclosure has produced audio.
-        _, immediate_audio_paths, first_audio_time = _speak_turn(
-            iter([fast.immediate_reply]), audio_out_dir, on_chunk=on_chunk
+        # Office #23233: the emergency flag is recorded whether or not speech
+        # works -- same rule as the perseveration branch below (#16084 RULE 4).
+        # Synthesis is bounded by speak.TTS_TIMEOUT_S per tier, so a hung
+        # Piper/espeak ends here as TimeoutExpired and the flag is written to
+        # disk before THINK starts. disclosed_to_senior states the truth: True
+        # only when the spoken disclosure produced audio; otherwise the
+        # immediate reply still reaches the senior as text (reply_text below).
+        try:
+            _, immediate_audio_paths, first_audio_time = _speak_turn(
+                iter([fast.immediate_reply]), audio_out_dir, on_chunk=on_chunk
+            )
+        except Exception as exc:
+            print(
+                f"[orchestrator] fast-path disclosure TTS failed: {type(exc).__name__}",
+                file=sys.stderr,
+            )
+            immediate_audio_paths, first_audio_time = [], None
+        flag_text = fast.caregiver_flag
+        if not immediate_audio_paths:
+            flag_text += " (spoken disclosure failed; shown as text only)"
+        flags.add(
+            flag_text,
+            severity=fast.severity,
+            disclosed_to_senior=bool(immediate_audio_paths),
         )
-        if immediate_audio_paths:
-            flags.add(fast.caregiver_flag, severity=fast.severity, disclosed_to_senior=True)
         continuation_note = fast.continuation_note
     else:
         first_audio_time = None

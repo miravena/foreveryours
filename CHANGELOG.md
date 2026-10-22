@@ -36,6 +36,13 @@ rename `Unreleased` to the version and date, then tag it.
   "Where am I?" still get the spoken fast-path reply and the caregiver flag, with a one-line cap
   notice; only the paid THINK continuation is withheld. Other utterances still get the daily-cap
   message, and a capped emergency turn never moves the counter.
+- A safety fast-path emergency ("I fell down earlier and I'm scared") now always records its
+  caregiver flag, even when speech synthesis returns nothing, raises or hangs (Office #23233).
+  The flag says `disclosed_to_senior: False` (plus "spoken disclosure failed; shown as text
+  only") when no audio was produced, and the immediate reply still comes back as text. Every
+  TTS tier (Piper, espeak, PowerShell, pyttsx3) is now bounded by `TTS_TIMEOUT_S` (default
+  10 s); a hung Piper falls through to espeak. Previously the flag was saved only after audio
+  existed, and a hung synthesizer could stall the turn indefinitely.
 - Caregiver safety flags no longer carry the senior's own words (#23232): the flag text is a
   fixed, content-minimized description of the trigger category (`safety/fastpath.py`'s
   `CAREGIVER_FLAG_TEXT`), for both the fast-path flags and the AUDIT flags. Previously a

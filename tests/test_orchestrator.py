@@ -288,7 +288,9 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(self.flags.all(), [])
 
     @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
-    def test_fastpath_flag_stays_undelivered_when_no_audio_is_synthesized(self, mock_speak):
+    def test_fastpath_flag_is_recorded_undisclosed_when_no_audio_is_synthesized(self, mock_speak):
+        # Office #23233: an emergency is flagged whether or not TTS produced
+        # audio; disclosed_to_senior is False because nothing was spoken.
         result = run_turn(
             "I fell down earlier and I'm scared",
             self.store,
@@ -298,7 +300,43 @@ class TestOrchestrator(unittest.TestCase):
         )
 
         self.assertEqual(result.audio_paths, [])
-        self.assertEqual(self.flags.all(), [])
+        items = self.flags.all()
+        self.assertEqual(len(items), 1)
+        self.assertFalse(items[0].disclosed_to_senior)
+
+    def test_fastpath_flag_is_on_disk_before_think_when_tts_hangs(self):
+        # Office #23233: a hung in-process TTS engine is abandoned after
+        # TTS_TIMEOUT_S and the undisclosed flag is already on disk when THINK
+        # is entered; the immediate reply still comes back as text.
+        import threading
+        from unittest.mock import MagicMock
+
+        from safety import fastpath
+
+        release = threading.Event()
+        self.addCleanup(release.set)
+        engine = MagicMock()
+        engine.runAndWait.side_effect = lambda: release.wait()
+        seen_on_disk = []
+
+        def think_entered(*args, **kwargs):
+            seen_on_disk.extend(CaregiverFlags(self.profile_id, self.data_dir).all())
+            raise NebiusNotConfigured("no key in tests")
+
+        transcript = "I fell down earlier and I'm scared"
+        with patch("pipeline.speak.TTS_TIMEOUT_S", 0.05), \
+             patch("sys.platform", "linux"), \
+             patch("pipeline.speak._get_piper_cli", return_value=None), \
+             patch("pipeline.speak._get_espeak_cli", return_value=None), \
+             patch("pipeline.speak._get_tts_engine", return_value=engine), \
+             patch("pipeline.think.stream_reply", side_effect=think_entered):
+            result = run_turn(transcript, self.store, self.flags, self.audio_dir, caregiver_name="Sarah")
+
+        self.assertEqual(len(seen_on_disk), 1)
+        self.assertFalse(seen_on_disk[0].disclosed_to_senior)
+        self.assertEqual(result.audio_paths, [])
+        self.assertIn(fastpath.check(transcript).immediate_reply, result.reply_text)
+        self.assertEqual(len(self.flags.all()), 1)
 
     @patch("pipeline.orchestrator.fastpath.check")
     @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
