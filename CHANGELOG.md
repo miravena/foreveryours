@@ -31,6 +31,10 @@ rename `Unreleased` to the version and date, then tag it.
   against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
 
 ### Fixed
+- The daily-cap footnote on a capped emergency turn says the safety message "still played" only
+  when reply audio was produced, and "the family has been notified" only when a caregiver flag was
+  recorded; a TTS failure now reads "shown as text because speech was unavailable" (Codex review
+  of the #23228/#23233 publish).
 - A late audit or lifestyle disclosure is recorded as told only when the browser actually got
   its audio (Office #23231): the streaming turn keeps playing the follow-up line after the reply
   (bounded by `_BG_JOIN_TIMEOUT_S`), and a line spoken after the browser stopped listening is

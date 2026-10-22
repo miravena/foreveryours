@@ -590,6 +590,32 @@ class TestEmptyTranscriptArity(unittest.TestCase):
                 last = outputs[-1]
                 self._assert_capped_fast_path_reply(last[:5], session_id, reply_text, flag_text)
 
+    def test_cap_notice_does_not_claim_audio_when_speech_failed(self):
+        """Codex P2 on the #23228/#23233 publish: a capped emergency whose TTS
+        failed must not say the safety message "still played"."""
+        utterance, reply_text, flag_text = self.CAP_FAST_PATH_CASES[0]
+        for streaming in (False, True):
+            with self.subTest(streaming=streaming):
+                session_id, _ = webapp.init_session()
+                with self._cap_patches(utterance), \
+                        patch.object(webapp, "_combine_audio_chunks", return_value=None):
+                    if streaming:
+                        result = list(webapp.run_demo_turn_streaming("fake.wav", [], session_id))[-1][:5]
+                    else:
+                        result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                self.assertIsNone(result[1])
+                self.assertIn("daily request cap", result[0])
+                self.assertNotIn("still played", result[0])
+                self.assertIn("speech was unavailable", result[0])
+                self.assertIn(flag_text, webapp._format_caregiver_panel(session_id))
+
+    def test_cap_notice_claims_only_what_happened(self):
+        self.assertIn("still played", webapp._cap_notice(True, True))
+        self.assertIn("family has been notified", webapp._cap_notice(True, True))
+        self.assertNotIn("still played", webapp._cap_notice(False, True))
+        self.assertNotIn("family has been notified", webapp._cap_notice(True, False))
+        self.assertEqual(webapp.CAP_NOTICE, webapp._cap_notice(True, True))
+
     def test_cap_does_not_block_crisis_fast_path(self):
         """'I can't breathe' matches safety/fastpath.py's distress patterns on
         current main, so it is used as written (#23228 step 1)."""

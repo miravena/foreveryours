@@ -520,11 +520,20 @@ def _will_call_nebius() -> bool:
     return bool(os.environ.get("NEBIUS_API_KEY", "").strip())
 
 
-CAP_NOTICE = (
-    "\n\n_This demo has hit its daily request cap, so the companion can't continue "
-    "the conversation until tomorrow -- the safety message above still played and "
-    "the family has been notified._"
-)
+def _cap_notice(spoke: bool, flagged: bool) -> str:
+    """The daily-cap footnote on a capped fast-path turn. It claims only what
+    happened: "still played" only when reply audio was produced (a TTS failure
+    or timeout leaves the reply as text, #23233), and "the family has been
+    notified" only when this turn recorded a caregiver flag (Codex review of
+    the #23228/#23233 publish, P2)."""
+    said = ("the safety message above still played" if spoke
+            else "the safety message above is shown as text because speech was unavailable")
+    family = " and the family has been notified" if flagged else ""
+    return ("\n\n_This demo has hit its daily request cap, so the companion can't continue "
+            f"the conversation until tomorrow -- {said}{family}._")
+
+
+CAP_NOTICE = _cap_notice(spoke=True, flagged=True)
 CAP_BIOMARKERS = "### 📊 Acoustic Biomarkers\n_Rate limited_"
 
 
@@ -1269,7 +1278,7 @@ def _run_demo_turn_streaming_impl(
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
     if not allow_hosted_call:
-        transcript_and_reply += CAP_NOTICE
+        transcript_and_reply += _cap_notice(bool(reply_audio), bool(result.caregiver_flag))
         biomarker_str = CAP_BIOMARKERS
     elif wpm > 0:
         biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
@@ -1483,7 +1492,7 @@ def _run_demo_turn_impl(
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
     if not allow_hosted_call:
-        transcript_and_reply += CAP_NOTICE
+        transcript_and_reply += _cap_notice(bool(reply_audio), bool(result.caregiver_flag))
         biomarker_str = CAP_BIOMARKERS
     elif wpm > 0:
         biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
