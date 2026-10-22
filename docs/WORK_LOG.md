@@ -9,6 +9,112 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-22 (Ticket #23228: the daily cap withholds only the paid continuation)
+- **What:** both turn handlers in `webapp.py` used to check
+  `_will_call_nebius() and not _rate_limit_ok(...)` BEFORE `run_turn`, so a session at
+  `MAX_DAILY_REQUESTS` got the daily-cap message for "I fell down earlier and I'm scared" --
+  no reassurance, no audio, no caregiver flag. The README and a code comment both claimed the
+  fast-path was exempt; it was uncounted, but blocked. Source: Codex read-only review
+  2026-10-22, robustness.md #5 and safety-privacy.md #1 (code-derived, reproduced here).
+- **Fix:** one cap evaluation per turn, `webapp._cap_decision(data_dir, transcript) ->
+  (block_turn, allow_hosted_call)`, the only caller of `_rate_limit_ok` in a turn. A fast-path
+  utterance at the cap runs `run_turn(..., allow_hosted_call=False)`: the fast-path speaks and
+  flags exactly as before, THINK is skipped like the no-key branch (no AUDIT/extraction thread,
+  `audit_verdict` names the daily request cap), and the reply gets a one-line cap notice plus a
+  `_Rate limited_` biomarker header. `allow_hosted_call=False` on a non-fast-path transcript
+  raises `ValueError`. The process-wide cap (#17637) must fold into `_cap_decision`, never a
+  new early return. Same shape as nginx `limit_req`'s exempt key: the exempt class is decided
+  before the budget is.
+- **Proof:** new `test_cap_*` tests in `tests/test_webapp.py` (fall/breathe/crisis/confusion
+  through both handlers, plus a real-counter idempotency test: two capped emergency turns, two
+  flags, `rate_limit.json` unchanged) and `test_run_turn_allow_hosted_call_*` in
+  `tests/test_orchestrator.py`; red on pre-change main (11 failures, 2 errors), green after.
+- **Gotcha:** `run_turn`'s `except Exception` swallows an `AssertionError` side_effect on
+  `stream_reply` into a fallback, so the tests also `assert_not_called()` the mocks.
+
+### 2026-10-22 (Ticket #23232: caregiver flag text carries no free text)
+- **What:** the caregiver flag text is now a FIXED, content-minimized description of the
+  trigger category, defined in one place -- `safety/fastpath.py`'s `CAREGIVER_FLAG_TEXT`
+  (fast-path `crisis`/`distress`/`confusion` plus the AUDIT background's `audit_crisis`/
+  `audit_distress`/`audit_unsafe`); `pipeline/orchestrator.py` imports those constants
+  instead of re-stating the wording. Before this, `safety/fastpath.py`'s `check()` put
+  `transcript.strip()` verbatim into `caregiver_flag` for all three severities, and the
+  AUDIT `background()` closure in `run_turn()` copied the model's verdict string (the
+  auditor's one-sentence reason) into `flags.add(...)`, so "I fell. Also please keep my
+  bank PIN 1234 private" put BOTH sentences on the caregiver panel -- which breaks the
+  promise `docs/SAFETY_AND_PRIVACY.md` already makes ("only from counters and disclosed
+  flags, never from model-written free text about the conversation"). Rule applied: OWASP
+  Logging Cheat Sheet, "Data to exclude" -- record the category, not the sensitive
+  content. `continuation_note`, `immediate_reply`, the spoken disclosure lines and
+  `audit_verdict` (the dev/biomarker surface) are untouched; severities ("crisis"/
+  "distress"/"audit"), `disclosed_to_senior` and one-flag-per-turn are unchanged.
+- **Repro (negative control, red before the fix, green after):** new
+  `tests/test_fastpath.py::test_caregiver_flag_is_content_minimized` and
+  `tests/test_orchestrator.py::test_audit_flag_does_not_copy_verdict`. On the pre-change
+  checkout they failed with `'1234' unexpectedly found in 'URGENT: possible distress in
+  conversation -- "I fell. Also please keep my bank PIN 1234 private"'` and `'1234'
+  unexpectedly found in 'URGENT CRISIS: Senior expressed severe distress in conversation:
+  DISTRESS Senior said she fell and mentioned her bank PIN 1234'`; both are green after the
+  fix. `audit_verdict` was checked too: `webapp.py` never renders it (no reference to it
+  at all), so the raw verdict stays off the caregiver panel.
+- **Gotcha (environment, not the repo):** this container has no `espeak-ng` package and no
+  root to install one, so every SPEAK-dependent test errors with "Speech synthesis
+  unavailable: install espeak-ng or pyttsx3" -- the SAME 8 failures + 21 errors before and
+  after this change (pre-change baseline `Ran 321 tests ... FAILED (failures=8, errors=21)`;
+  post-change `Ran 323 tests ... FAILED (failures=8, errors=21)`, identical failure sets).
+  With a local espeak-ng shim kept OUTSIDE the repo (`libespeak-ng` from the
+  `espeakng-loader` wheel, driven through the same CLI flags the repo uses) the full suite
+  is green: pre-change `Ran 321 tests ... OK (skipped=8)`, post-change `Ran 323 tests ...
+  OK (skipped=8)`. The repo still needs the documented
+  `sudo apt-get install -y espeak-ng`.
+- **Notes:** the `wq background` step does not exist in this environment (no `wq` command),
+  and the local `--no-ff` merge into `main` was deliberately NOT done -- the fix commit sits
+  on branch `oc/23232` only, as instructed.
+
+### 2026-10-22 (Office #23223: live judge-behaviour check after every Space deploy)
+- **What:** `scripts/live_judge_check.py` plays a judge against the hosted Space through
+  `gradio_client`: 20 scored turns in six fresh sessions (pre-brief recall + "Is Sarah
+  listening?", a typed "Dr. Tan" memo, driving, a fall, a crisis phrase, a private disclosure),
+  keyword/regex assertions on the reply and on the caregiver-panel DIFF (snapshot before the
+  turn, settled panel after: two identical reads polled every 1 s, 8 s max), a scorecard, and a
+  hard cap on submitted reply turns (`--max-calls`, default 25; exit 2 when reached). `--fake
+  good|bad` runs the same turns against an in-process stub; `tests/test_live_judge_check.py`
+  (22 tests, offline) covers good/bad runs, the cap (the stub's own counter shows exactly 3
+  calls under `--max-calls 3`), an unsettling panel, and secret redaction. `scripts/openai_review.sh`
+  on the first commit found two real gaps, both fixed in the follow-up commit: a panel read error
+  escaped the per-turn handler (now that turn's ERROR, run continues), and two identical reads can
+  look settled while AUDIT / extraction are still running (the privacy group now ends with a
+  linger line, T21, that waits the full window again and re-reads the panel).
+- **Endpoint mapping (view_api, gradio_client 2.7.2):** `/init_session`, `/_format_caregiver_panel`,
+  `/save_caregiver_text_memo(memo_text)` are free local calls; `/run_demo_turn_streaming(audio_in,
+  text_in_or_history, simulated_time_in)` is the one that costs Nebius credit. `gr.State` inputs
+  are not in the API signature: one `Client` is one Gradio session, so a fresh `Client` plus
+  `/init_session` is a fresh household.
+- **Measured (one live run, 19 reply turns, cap 25):** wall clock 77 s for the whole run including
+  six session set-ups (`/init_session` 3.5 s warm, `Client()` 0.9 s). Result exit 1, 12 PASS /
+  8 FAIL, 0 ERROR: the failures are the report's findings 1 (T05, no denial), 2 (T09-T11, "Dr."
+  memo not recalled), 5 (T12 "enjoy your afternoon trip"), 7 (T16 "988" twice), 8 (T14 never asks
+  "are you hurt"), plus one false FAIL of the suite's own: T06's reply said "Sarah can’t hear"
+  with a curly apostrophe (U+2019) and the straight-quote regex missed it. Fixed by straightening
+  quotes in `extract_reply` (regression test added); not re-run live, per the credit rule.
+- **Gotchas:** `gradio_client.Client` takes `token=`, not `hf_token=` (caught by a free-endpoint
+  smoke test before the paid run -- do that first, always). With `download_files=False` the reply
+  audio is never fetched, so a run leaves nothing on disk. The two `-- reply:` quotes in a FAIL
+  line are the first 160 characters only.
+### 2026-10-22 (Office #23226: deploy from Actions, show the deployed sha)
+- **What:** `.github/workflows/deploy-space.yml` (push to main until the freeze, Release,
+  Run workflow; token check first; concurrency group; skips with a notice when the
+  `HF_TOKEN_FY_SPACE` secret is absent). `scripts/deploy_hf_space.py` stages `BUILD_INFO`
+  (full HEAD sha), sets the `BUILD_SHA` Space variable and refuses a dirty tree unless
+  `--dry-run`; `webapp.py` shows `Build: <sha7>` when `BUILD_INFO` exists.
+  `scripts/verify_space_sha.py` waits for RUNNING, compares the Space's `BUILD_INFO` to a sha
+  and can smoke `view_api()`. Offline tests: `tests/test_space_release.py`, additions to
+  `tests/test_deploy_hf_space.py` and `tests/test_webapp.py`.
+- **Gotcha:** `huggingface_hub`'s `SpaceRuntime.stage` is an enum in newer versions and a plain
+  string in older ones; the verify script normalises `SpaceStage.RUNNING` -> `RUNNING`.
+- **Gotcha:** `NEBIUS_API_KEY=` set but empty makes the deploy script leave the Space's
+  existing secret alone; unset, it refuses. The workflow sets it empty on purpose.
+
 ### 2026-10-22 (Fixes #176, #177: browser retention notice grammar and audio cache disclosure)
 - **Who:** SirTehTarik (assisted by Antigravity)
 - **What:** Addressed backlog bugs #176 and #177 caught in the automated daily review:

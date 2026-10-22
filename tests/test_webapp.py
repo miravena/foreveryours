@@ -504,6 +504,157 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         self.assertIn("daily request cap", result[0])
         self.assertIn("_Rate limited_", result[4])
 
+    # --- #23228: the daily cap withholds only the paid THINK continuation ---
+    #
+    # At the cap, a fast-path utterance must still get the offline spoken
+    # reply and the caregiver flag through BOTH handlers. stream_reply and
+    # extract_memory_llm raise if touched, but run_turn's `except Exception`
+    # would swallow that into a fallback, so each test also asserts the mocks
+    # were never called, and that run_turn handed back no background thread.
+
+    # (utterance, text the fast-path reply carries, text the caregiver flag carries)
+    CAP_FAST_PATH_CASES = [
+        ("I fell down earlier and I'm scared", "letting your family know", "URGENT"),
+        ("I can't breathe", "letting your family know", "URGENT"),
+        ("I want to die", "988", "URGENT CRISIS"),
+        ("Where am I?", "take it slow", "Possible confusion"),
+    ]
+
+    def _cap_patches(self, utterance, rate_limit_ok=False):
+        """The capped-session fixture shared by every test_cap_* test."""
+        from contextlib import ExitStack
+        stack = ExitStack()
+        stack.enter_context(patch.dict(os.environ, {"NEBIUS_API_KEY": "dummy-key-for-cap-test"}))
+        stack.enter_context(patch.object(
+            webapp.hear, "transcribe", return_value=(utterance, {"wpm": 0.0, "avg_pause_s": 0.0})
+        ))
+        if rate_limit_ok is not None:
+            stack.enter_context(patch.object(webapp, "_rate_limit_ok", return_value=rate_limit_ok))
+        self.stream_reply_mock = stack.enter_context(patch(
+            "pipeline.think.stream_reply", side_effect=AssertionError("THINK must not be called at the cap")
+        ))
+        self.extract_mock = stack.enter_context(patch(
+            "pipeline.think.extract_memory_llm", side_effect=AssertionError("no hosted background work at the cap")
+        ))
+        self.turn_results = []
+        real_run_turn = webapp.run_turn
+
+        def recording_run_turn(*args, **kwargs):
+            res = real_run_turn(*args, **kwargs)
+            self.turn_results.append((kwargs.get("allow_hosted_call", True), res))
+            return res
+
+        stack.enter_context(patch.object(webapp, "run_turn", side_effect=recording_run_turn))
+        self.remember_mock = stack.enter_context(patch.object(
+            webapp, "_remember_background_thread", wraps=webapp._remember_background_thread
+        ))
+        return stack
+
+    def _assert_no_hosted_work(self):
+        self.stream_reply_mock.assert_not_called()
+        self.extract_mock.assert_not_called()
+        self.assertTrue(self.turn_results, "run_turn was never reached at the cap")
+        for allowed, res in self.turn_results:
+            self.assertFalse(allowed, "run_turn must get allow_hosted_call=False at the cap")
+            self.assertIsNone(res.background_thread, "no AUDIT/extraction thread at the cap")
+
+    def _assert_capped_fast_path_reply(self, result, session_id, reply_text, flag_text):
+        self.assertEqual(len(result), 5)
+        self.assertFalse(result[0].startswith("This demo has hit its daily request cap"))
+        self.assertIn(reply_text, result[0])
+        self.assertIsNotNone(result[1], "fast-path reply must carry audio at the cap")
+        self.assertIn("daily request cap", result[0])
+        self.assertIn("_Rate limited_", result[4])
+        self.assertIn(flag_text, webapp._format_caregiver_panel(session_id))
+
+    def test_cap_does_not_block_fast_path_nonstreaming(self):
+        for utterance, reply_text, flag_text in self.CAP_FAST_PATH_CASES:
+            with self.subTest(utterance=utterance):
+                session_id, _ = webapp.init_session()
+                with self._cap_patches(utterance):
+                    result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                    self._assert_no_hosted_work()
+                    # The non-streaming handler registers only run_turn's own
+                    # background thread, which must be None here.
+                    for call in self.remember_mock.call_args_list:
+                        self.assertIsNone(call.args[1])
+                self._assert_capped_fast_path_reply(result, session_id, reply_text, flag_text)
+
+    def test_cap_does_not_block_fast_path_streaming(self):
+        for utterance, reply_text, flag_text in self.CAP_FAST_PATH_CASES:
+            with self.subTest(utterance=utterance):
+                session_id, _ = webapp.init_session()
+                with self._cap_patches(utterance):
+                    outputs = list(webapp.run_demo_turn_streaming("fake.wav", [], session_id))
+                    self._assert_no_hosted_work()
+                last = outputs[-1]
+                self._assert_capped_fast_path_reply(last[:5], session_id, reply_text, flag_text)
+
+    def test_cap_notice_does_not_claim_audio_when_speech_failed(self):
+        """Codex P2 on the #23228/#23233 publish: a capped emergency whose TTS
+        failed must not say the safety message "still played"."""
+        utterance, reply_text, flag_text = self.CAP_FAST_PATH_CASES[0]
+        for streaming in (False, True):
+            with self.subTest(streaming=streaming):
+                session_id, _ = webapp.init_session()
+                with self._cap_patches(utterance), \
+                        patch.object(webapp, "_combine_audio_chunks", return_value=None):
+                    if streaming:
+                        result = list(webapp.run_demo_turn_streaming("fake.wav", [], session_id))[-1][:5]
+                    else:
+                        result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                self.assertIsNone(result[1])
+                self.assertIn("daily request cap", result[0])
+                self.assertNotIn("still played", result[0])
+                self.assertIn("speech was unavailable", result[0])
+                self.assertIn(flag_text, webapp._format_caregiver_panel(session_id))
+
+    def test_cap_notice_claims_only_what_happened(self):
+        self.assertIn("still played", webapp._cap_notice(True, True))
+        self.assertIn("family has been notified", webapp._cap_notice(True, True))
+        self.assertNotIn("still played", webapp._cap_notice(False, True))
+        self.assertNotIn("family has been notified", webapp._cap_notice(True, False))
+        self.assertEqual(webapp.CAP_NOTICE, webapp._cap_notice(True, True))
+
+    def test_cap_does_not_block_crisis_fast_path(self):
+        """'I can't breathe' matches safety/fastpath.py's distress patterns on
+        current main, so it is used as written (#23228 step 1)."""
+        for utterance in ("I can't breathe", "I want to die"):
+            with self.subTest(utterance=utterance):
+                session_id, _ = webapp.init_session()
+                with self._cap_patches(utterance):
+                    result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                    self._assert_no_hosted_work()
+                self.assertIsNotNone(result[1])
+                self.assertIn("URGENT", webapp._format_caregiver_panel(session_id))
+
+    def test_cap_count_unchanged_by_emergency_turns(self):
+        """Idempotency against the REAL counter: _rate_limit_ok is not patched."""
+        import datetime
+        import json
+        from caregiver import CaregiverFlags
+
+        session_id, _ = webapp.init_session()
+        data_dir, _ = webapp._session_dirs(session_id)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        rate_file = data_dir / "rate_limit.json"
+        today = datetime.date.today().isoformat()
+        rate_file.write_text(json.dumps({today: webapp.MAX_DAILY_REQUESTS}), "utf-8")
+
+        utterance = "I fell down earlier and I'm scared"
+        for _ in range(2):
+            with self._cap_patches(utterance, rate_limit_ok=None):
+                result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                self._assert_no_hosted_work()
+            self.assertIsNotNone(result[1])
+            self.assertIn("_Rate limited_", result[4])
+
+        self.assertEqual(json.loads(rate_file.read_text("utf-8")), {today: webapp.MAX_DAILY_REQUESTS})
+        flags = CaregiverFlags(webapp.DEFAULT_PROFILE_ID, data_dir).all()
+        self.assertEqual(len(flags), 2)
+        panel = webapp._format_caregiver_panel(session_id)
+        self.assertEqual(panel.count(f"- **({flags[0].severity})** {flags[0].text}"), 2)
+
     def test_valid_distress_turn_preserved(self):
         """Requirement 3.1/3.4: a valid transcript still returns its 5-tuple with reply + audio."""
         session_id, _ = webapp.init_session()
@@ -587,6 +738,16 @@ class TestProactiveButtons(unittest.TestCase):
 
 
 class TestBuildDemoCss(unittest.TestCase):
+    def test_build_line_only_when_build_info_exists(self):
+        # scripts/deploy_hf_space.py writes BUILD_INFO into the Space; a checkout has none.
+        with tempfile.TemporaryDirectory() as tmp:
+            info = Path(tmp) / "BUILD_INFO"
+            self.assertEqual(webapp._build_line(info), "")
+            info.write_text("0123456789abcdef0123456789abcdef01234567\n", encoding="utf-8")
+            self.assertEqual(webapp._build_line(info), "Build: `0123456`")
+            info.write_text("\n", encoding="utf-8")
+            self.assertEqual(webapp._build_line(info), "")
+
     def test_css_set_on_blocks_not_only_launch_kwargs(self):
         """#83 PR #85 Codex review: app.py (the hosted/Spaces entrypoint) calls
         build_demo() and never calls .launch(css=...) itself, so the mobile

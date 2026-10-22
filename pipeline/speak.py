@@ -14,6 +14,10 @@ sentence, so none re-introduces the long-lived-engine C-buffer silence bug
 is missing the code falls through to exactly the prior behavior, so `main`
 stays demo-able with no extra install.
 
+Every tier is bounded by ``TTS_TIMEOUT_S`` (env, default 10 s) per sentence:
+a hung Piper falls through to the next tier; a hung espeak, PowerShell or
+pyttsx3 raises ``subprocess.TimeoutExpired`` to the caller (Office #23233).
+
 Needs the `espeak-ng` system package on Linux (`apt install espeak-ng`) when
 Piper is not used -- pyttsx3.init() raises OSError without it.
 """
@@ -22,10 +26,12 @@ from __future__ import annotations
 import contextlib
 import io
 import itertools
+import math
 import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -37,6 +43,61 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Default offline neural voice: small, warm, eldercare-appropriate.
 _DEFAULT_PIPER_MODEL = "models/piper/en_US-lessac-medium.onnx"
+
+_DEFAULT_TTS_TIMEOUT_S = 10.0
+
+
+def _parse_tts_timeout(raw: str | None) -> float:
+    """``TTS_TIMEOUT_S`` as a finite, positive float; anything else (unset,
+    malformed, zero, negative, inf, nan) falls back to 10 seconds."""
+    try:
+        value = float(raw) if raw is not None else _DEFAULT_TTS_TIMEOUT_S
+    except (TypeError, ValueError):
+        return _DEFAULT_TTS_TIMEOUT_S
+    if not math.isfinite(value) or value <= 0:
+        return _DEFAULT_TTS_TIMEOUT_S
+    return value
+
+
+# Upper bound, in seconds, on each synthesis tier for one sentence (Office
+# #23233). A hung Piper/espeak/PowerShell child is killed by subprocess.run and
+# raises TimeoutExpired; the in-process pyttsx3 tier is abandoned in a daemon
+# thread. Process creation time is not covered (Python's subprocess docs).
+TTS_TIMEOUT_S = _parse_tts_timeout(os.environ.get("TTS_TIMEOUT_S"))
+
+
+def reload_tts_timeout() -> float:
+    """Re-read ``TTS_TIMEOUT_S`` from the environment. A caller that loads
+    ``.env`` after importing this module (main.py) calls this so the file's
+    value takes effect."""
+    global TTS_TIMEOUT_S
+    TTS_TIMEOUT_S = _parse_tts_timeout(os.environ.get("TTS_TIMEOUT_S"))
+    return TTS_TIMEOUT_S
+
+
+def _run_bounded(fn, label: str):
+    """Run in-process ``fn()`` in a daemon thread, wait at most TTS_TIMEOUT_S.
+
+    Returns fn's result; re-raises fn's own exception in the caller (a thread's
+    exception would otherwise only reach threading.excepthook and be lost); if
+    the thread is still running at the deadline, raises TimeoutExpired and
+    abandons it -- it is a daemon, so it never blocks interpreter exit."""
+    outcome: dict = {}
+
+    def target():
+        try:
+            outcome["value"] = fn()
+        except BaseException as exc:  # noqa: BLE001 - re-raised in the caller
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=target, name=f"tts-{label}", daemon=True)
+    worker.start()
+    worker.join(TTS_TIMEOUT_S)
+    if worker.is_alive():
+        raise subprocess.TimeoutExpired(cmd=label, timeout=TTS_TIMEOUT_S)
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome.get("value")
 
 
 def _strip_smart_quotes(sentence: str) -> str:
@@ -95,7 +156,8 @@ def _get_tts_engine():
     try:
         import pyttsx3
 
-        return pyttsx3.init()
+        # pyttsx3.init() loads a native driver and can block; bound it too.
+        return _run_bounded(pyttsx3.init, "pyttsx3.init")
     except Exception:
         return None
 
@@ -116,10 +178,13 @@ def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
                 text=True,
                 check=True,
                 capture_output=True,
+                timeout=TTS_TIMEOUT_S,
             )
             return
-        except (subprocess.CalledProcessError, OSError) as exc:  # pragma: no cover - env specific
-            print(f"  (piper synthesis failed, falling back: {exc})")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:  # pragma: no cover - env specific
+            # A hung Piper is killed by subprocess.run and falls through here
+            # exactly like a failed one.
+            print(f"  (piper synthesis failed, falling back: {type(exc).__name__})")
             # fall through to the legacy tiers below
 
     # 1. On Windows: PowerShell System.Speech (avoids pyttsx3 SAPI5 deadlock)
@@ -133,7 +198,13 @@ def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
             f"$s.Speak('{safe_sentence}'); "
             f"$s.Dispose()"
         )
-        subprocess.run(["powershell", "-Command", ps_cmd], check=True, capture_output=True)
+        # TimeoutExpired propagates: the caller bounds the turn.
+        subprocess.run(
+            ["powershell", "-Command", ps_cmd],
+            check=True,
+            capture_output=True,
+            timeout=TTS_TIMEOUT_S,
+        )
         return
 
     # 2. On Linux/macOS: Prefer espeak-ng / espeak CLI (spawns clean isolated process per sentence;
@@ -147,14 +218,20 @@ def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
             [cli, "-s", "150", "-p", "45", "-w", str(out_path), sentence],
             check=True,
             capture_output=True,
+            timeout=TTS_TIMEOUT_S,  # TimeoutExpired propagates to the caller
         )
         return
 
     # 3. Fallback to pyttsx3 in-process engine if CLI is not found
     if engine is not None:
-        engine.save_to_file(sentence, str(out_path))
-        with contextlib.redirect_stdout(io.StringIO()):
+        def _pyttsx3_synthesize():
+            engine.save_to_file(sentence, str(out_path))
             engine.runAndWait()
+
+        # The redirect wraps the bounded call (not the thread body) so stdout
+        # is restored even when a hung engine is abandoned at the deadline.
+        with contextlib.redirect_stdout(io.StringIO()):
+            _run_bounded(_pyttsx3_synthesize, "pyttsx3")
         return
 
     raise RuntimeError("Speech synthesis unavailable: install espeak-ng or pyttsx3")

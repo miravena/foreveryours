@@ -201,7 +201,9 @@ def _speak_turn(sentences, audio_out_dir: Path, on_chunk=None) -> tuple[str, lis
     for each chunk the moment it is synthesized -- this lets a caller play a
     sentence while the next one is still being synthesized (issue #17). When
     ``on_chunk`` is None (the default), behavior is exactly as before, so
-    callers like webapp.py that only read ``audio_paths`` are unaffected."""
+    callers like webapp.py that only read ``audio_paths`` are unaffected.
+    The callback's return value is the consumer's acknowledgement; see
+    ``_speak_disclosure`` for how it gates attestation (#23231)."""
     t0 = time.monotonic()
     parts: list[str] = []
     paths: list[Path] = []
@@ -221,12 +223,38 @@ def _speak_disclosure(
     audio_out_dir: Path,
     on_chunk=None,
 ) -> tuple[list[Path], bool]:
-    """Synthesize and deliver a disclosure before it can be recorded as told."""
-    _, paths, _ = _speak_turn(iter([text]), audio_out_dir, on_chunk=on_chunk)
-    # A late disclosure is only delivered when the caller accepts it in the
-    # current output stream. Returning a WAV path alone is not enough: the
-    # non-streaming browser path has already handed its response to Gradio.
-    return paths, bool(paths) and on_chunk is not None
+    """Synthesize and deliver a disclosure before it can be recorded as told.
+
+    Returns ``(paths, disclosed)``. ``disclosed`` is True only when audio was
+    synthesized AND an ``on_chunk`` consumer exists AND it ACCEPTED every
+    chunk (Office #23231). Acceptance is the callback's return value, in the
+    ``queue.task_done()`` sense -- an item counts as delivered only when the
+    consumer says it took it, never because it was handed over: an explicit
+    ``False`` (e.g. webapp's ``_ChunkConsumer.offer`` after the browser
+    stopped listening, or a chunk that was enqueued but never dequeued and
+    yielded) refuses attestation. Any other return value, including
+    ``None`` from a plain callback that returns nothing, counts as accepted.
+    A callback may instead return a pending acknowledgement -- any object
+    with a ``wait_accepted()`` method, as webapp's streaming ``_on_chunk``
+    does so the main reply never blocks on the browser -- and it is resolved
+    here, blocking until the consumer settles it (bounded by the consumer).
+    Without ``on_chunk`` (the non-streaming browser path, which has already
+    handed its response to Gradio) a disclosure is never attested."""
+    refused = False
+
+    def _tracking(sentence, audio_path):
+        nonlocal refused
+        ack = on_chunk(sentence, audio_path)
+        wait_accepted = getattr(ack, "wait_accepted", None)
+        if callable(wait_accepted):
+            ack = wait_accepted()
+        if ack is False:
+            refused = True
+
+    _, paths, _ = _speak_turn(
+        iter([text]), audio_out_dir, on_chunk=_tracking if on_chunk is not None else None
+    )
+    return paths, bool(paths) and on_chunk is not None and not refused
 
 
 def run_turn(
@@ -242,11 +270,23 @@ def run_turn(
     is_proactive: bool = False,
     trigger_type: str = "silence",
     enable_perseveration_flag: bool = True,
+    allow_hosted_call: bool = True,
 ) -> TurnResult:
     """`history` is session-scoped prior-turn context (see think.build_prompt's
     docstring for why this is kept separate from memory_store) -- pass None
     for a one-shot call like main.py's CLI beats; webapp.py keeps a real list
-    across clicks in one browser session and passes it in each turn."""
+    across clicks in one browser session and passes it in each turn.
+
+    `allow_hosted_call=False` is how webapp.py's daily request cap reaches
+    this turn (#23228): the offline safety fast-path still speaks and flags
+    exactly as it always does, and only the paid THINK continuation (and the
+    AUDIT/extraction thread that would review it) is skipped. It is only valid
+    for a transcript the fast-path answers -- anything else raises ValueError
+    rather than producing a silent empty turn."""
+    if not allow_hosted_call and not fastpath.check(transcript).triggered:
+        raise ValueError(
+            "allow_hosted_call=False needs a transcript the safety fast-path answers"
+        )
     
     if is_proactive:
         # Pre-Flight Context Verification (Hallucination Risk)
@@ -322,12 +362,31 @@ def run_turn(
     immediate_audio_paths: list[Path] = []
     continuation_note = None
     if fast.triggered:
-        # Persist the flag only after the disclosure has produced audio.
-        _, immediate_audio_paths, first_audio_time = _speak_turn(
-            iter([fast.immediate_reply]), audio_out_dir, on_chunk=on_chunk
+        # Office #23233: the emergency flag is recorded whether or not speech
+        # works -- same rule as the perseveration branch below (#16084 RULE 4).
+        # Synthesis is bounded by speak.TTS_TIMEOUT_S per tier, so a hung
+        # Piper/espeak ends here as TimeoutExpired and the flag is written to
+        # disk before THINK starts. disclosed_to_senior states the truth: True
+        # only when the spoken disclosure produced audio; otherwise the
+        # immediate reply still reaches the senior as text (reply_text below).
+        try:
+            _, immediate_audio_paths, first_audio_time = _speak_turn(
+                iter([fast.immediate_reply]), audio_out_dir, on_chunk=on_chunk
+            )
+        except Exception as exc:
+            print(
+                f"[orchestrator] fast-path disclosure TTS failed: {type(exc).__name__}",
+                file=sys.stderr,
+            )
+            immediate_audio_paths, first_audio_time = [], None
+        flag_text = fast.caregiver_flag
+        if not immediate_audio_paths:
+            flag_text += " (spoken disclosure failed; shown as text only)"
+        flags.add(
+            flag_text,
+            severity=fast.severity,
+            disclosed_to_senior=bool(immediate_audio_paths),
         )
-        if immediate_audio_paths:
-            flags.add(fast.caregiver_flag, severity=fast.severity, disclosed_to_senior=True)
         continuation_note = fast.continuation_note
     else:
         first_audio_time = None
@@ -473,60 +532,71 @@ def run_turn(
     filtered_profile = [f for f in filtered_profile if f not in filtered_schedule and f not in guardrails]
 
     pending_conflicts = memory_store.get_pending_conflicts()
-    if pending_conflicts:
+    # Only THINK asks a clarification; at the daily cap (#23228) THINK never
+    # runs, so the conflict must stay pending for a later turn to ask.
+    if pending_conflicts and allow_hosted_call:
         memory_store.mark_conflicts_asked()
 
     think_input = transcript if not continuation_note else f"{transcript}\n\n[{continuation_note}]"
     reply_text = ""
     think_audio_paths: list[Path] = []
     think_unavailable = False
+    hosted_call_capped = False
     is_fallback = False
-    try:
-        token_stream = think.stream_reply(
-            think_input,
-            filtered_profile,
-            guardrails=guardrails,
-            history=history,
-            caregiver_updates=filtered_schedule,
-            intent=intent.value,
-            current_hour=simulated_hour,
-            is_proactive=is_proactive,
-            pending_conflicts=pending_conflicts,
-        )
-        sentences = think.sentence_chunks(token_stream)
-        
-        physical_claim_pattern = re.compile(
-            r"\b(i will|i'll|i am going to|i'm going to)\s+(bring|drop off|come over|visit|drive|pick up)\b",
-            re.IGNORECASE,
-        )
-        
-        def filter_sentences(s_iter):
-            for s in s_iter:
-                yield physical_claim_pattern.sub(f"{caregiver_name} will \\2", s)
-                
-        reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir, on_chunk=on_chunk)
-        if first_audio_time is None:
-            first_audio_time = think_first_audio_time
-    except NebiusNotConfigured:
-        # Fast-path's immediate reply already completed the turn's safety-
-        # critical part (spoken + disclosed + flagged). Without a key we
-        # can't continue the conversation for real, but that's a degraded
-        # continuation, not a reason to crash a turn that already succeeded.
-        if not fast.triggered:
-            raise
+    if not allow_hosted_call:
+        # Daily request cap (#23228): the same degraded continuation as the
+        # NebiusNotConfigured branch below, without entering it -- the
+        # fast-path above already spoke, disclosed and flagged; only the paid
+        # THINK call (and the AUDIT/extraction thread after it) is withheld.
+        hosted_call_capped = True
         think_unavailable = True
-    except Exception as exc:
-        # Unexpected network / provider error during conversation stream.
-        # Log type + message only (never headers or keys) so a fallback is never silent (#78).
-        print(f"[orchestrator] THINK stream failed, using fallback reply: {type(exc).__name__}: {exc}", file=sys.stderr)
-        if not fast.triggered:
-            is_fallback = True
-            consecutive_errors += 1
-            reply_text = FALLBACK_REPLY_2 if consecutive_errors >= 2 else FALLBACK_REPLY_1
-            _, fallback_paths, fallback_first_time = _speak_turn(iter([reply_text]), audio_out_dir, on_chunk=on_chunk)
-            think_audio_paths.extend(fallback_paths)
+    else:
+        try:
+            token_stream = think.stream_reply(
+                think_input,
+                filtered_profile,
+                guardrails=guardrails,
+                history=history,
+                caregiver_updates=filtered_schedule,
+                intent=intent.value,
+                current_hour=simulated_hour,
+                is_proactive=is_proactive,
+                pending_conflicts=pending_conflicts,
+            )
+            sentences = think.sentence_chunks(token_stream)
+        
+            physical_claim_pattern = re.compile(
+                r"\b(i will|i'll|i am going to|i'm going to)\s+(bring|drop off|come over|visit|drive|pick up)\b",
+                re.IGNORECASE,
+            )
+        
+            def filter_sentences(s_iter):
+                for s in s_iter:
+                    yield physical_claim_pattern.sub(f"{caregiver_name} will \\2", s)
+                
+            reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir, on_chunk=on_chunk)
             if first_audio_time is None:
-                first_audio_time = fallback_first_time
+                first_audio_time = think_first_audio_time
+        except NebiusNotConfigured:
+            # Fast-path's immediate reply already completed the turn's safety-
+            # critical part (spoken + disclosed + flagged). Without a key we
+            # can't continue the conversation for real, but that's a degraded
+            # continuation, not a reason to crash a turn that already succeeded.
+            if not fast.triggered:
+                raise
+            think_unavailable = True
+        except Exception as exc:
+            # Unexpected network / provider error during conversation stream.
+            # Log type + message only (never headers or keys) so a fallback is never silent (#78).
+            print(f"[orchestrator] THINK stream failed, using fallback reply: {type(exc).__name__}: {exc}", file=sys.stderr)
+            if not fast.triggered:
+                is_fallback = True
+                consecutive_errors += 1
+                reply_text = FALLBACK_REPLY_2 if consecutive_errors >= 2 else FALLBACK_REPLY_1
+                _, fallback_paths, fallback_first_time = _speak_turn(iter([reply_text]), audio_out_dir, on_chunk=on_chunk)
+                think_audio_paths.extend(fallback_paths)
+                if first_audio_time is None:
+                    first_audio_time = fallback_first_time
 
     # Zero-Silence Guarantee: If model returned an empty string or whitespace (token exhaustion)
     if not fast.triggered and not think_unavailable and not reply_text.strip() and not is_fallback:
@@ -548,7 +618,9 @@ def run_turn(
         caregiver_flag=fast.caregiver_flag if fast.triggered else None,
         time_to_first_audio_s=first_audio_time,
         audit_verdict=(
-            "skipped (fast-path disclosed directly; continuation needs NEBIUS_API_KEY)"
+            "skipped (fast-path disclosed directly; daily request cap reached)"
+            if hosted_call_capped
+            else "skipped (fast-path disclosed directly; continuation needs NEBIUS_API_KEY)"
             if think_unavailable
             else "skipped (fast-path disclosed directly)" if fast.triggered
             else "skipped (fallback turn)" if is_fallback
@@ -577,12 +649,17 @@ def run_turn(
                     except Exception:  # pragma: no cover - best-effort disclosure
                         disclosed = False
                     
+                    # #23232: the flag text is a FIXED description of the
+                    # trigger category -- never the auditor's one-sentence
+                    # reason, which can carry health details, names or a bank
+                    # PIN the senior said. The raw verdict still rides on
+                    # result.audit_verdict (the dev/biomarker surface).
                     if status == "CRISIS":
-                        flags.add(f"URGENT CRISIS: Senior expressed severe distress in conversation: {verdict}", severity="crisis", disclosed_to_senior=disclosed)
+                        flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_crisis"], severity="crisis", disclosed_to_senior=disclosed)
                     elif status == "DISTRESS":
-                        flags.add(f"URGENT: possible distress in conversation: {verdict}", severity="distress", disclosed_to_senior=disclosed)
+                        flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_distress"], severity="distress", disclosed_to_senior=disclosed)
                     elif status == "UNSAFE":
-                        flags.add(f"AUDIT flagged a reply as unsafe: {verdict}", severity="audit", disclosed_to_senior=disclosed)
+                        flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_unsafe"], severity="audit", disclosed_to_senior=disclosed)
             except Exception as exc:  # pragma: no cover - best-effort background task
                 print(
                     f"[orchestrator] audit failed: {type(exc).__name__}",

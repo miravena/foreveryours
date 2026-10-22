@@ -10,8 +10,56 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Added
+- Live judge-behaviour check (Office #23223): `scripts/live_judge_check.py` plays a judge against
+  the running HF Space through `gradio_client` -- about twenty scripted turns (pre-brief recall,
+  "Is Sarah listening?", a typed "Dr. Tan" memo, driving, a fall, a crisis phrase, a private
+  disclosure) with keyword assertions on the reply and the caregiver panel, a scorecard, and a
+  hard cap on submitted reply turns (default 25). `--fake good|bad` runs the same turns against
+  an offline stub. `HOW_TO_WORK_HERE.md` names it as the required check after every Space deploy.
+- One-click **Load sample family** button on the caregiver side (Office #23218): seeds this
+  session's household with a labelled-fictional senior (Walter), family, likes, a daily routine
+  and caregiver-entered medication reminder times as plain schedule items, shown as a
+  "Fictional sample household" card and recalled in the senior's replies; `validate_sample_profile`
+  refuses dosing, diagnosis and clinical-claim language, and the session-end sweep removes the seed
+  with everything else.
+- The Space deploys from GitHub Actions (`.github/workflows/deploy-space.yml`, Office #23226,
+  #11): before the freeze every push to `main` deploys and runs the live judge check suite; after
+  it, only a published Release or a manual *Run workflow* deploys. Each deploy records the commit
+  it was built from (`BUILD_INFO` file + `BUILD_SHA` Space variable), the app shows it as
+  `Build: <sha7>` under *About this demo household*, `scripts/verify_space_sha.py` checks a Space
+  against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
+
 ### Fixed
 - Fixed ungrammatical wording in the browser retention notice and clarified that both recorded input audio and Gradio's cached reply audio copies remain until the separate cache sweep runs (`webapp.py`, `docs/PRIVACY.md`, `docs/SAFETY_AND_PRIVACY.md`, fixes #176, fixes #177).
+- The daily-cap footnote on a capped emergency turn says the safety message "still played" only
+  when reply audio was produced, and "the family has been notified" only when a caregiver flag was
+  recorded; a TTS failure now reads "shown as text because speech was unavailable" (Codex review
+  of the #23228/#23233 publish).
+- A late audit or lifestyle disclosure is recorded as told only when the browser actually got
+  its audio (Office #23231): the streaming turn keeps playing the follow-up line after the reply
+  (bounded by `_BG_JOIN_TIMEOUT_S`), and a line spoken after the browser stopped listening is
+  recorded `disclosed_to_senior=False` and its lifestyle note is suppressed, instead of the
+  panel saying "Dad was told".
+- The daily request cap no longer blocks the offline safety fast-path (Office #23228): once a
+  session hits `MAX_DAILY_REQUESTS`, "I fell down" / "I can't breathe" / "I want to die" /
+  "Where am I?" still get the spoken fast-path reply and the caregiver flag, with a one-line cap
+  notice; only the paid THINK continuation is withheld. Other utterances still get the daily-cap
+  message, and a capped emergency turn never moves the counter.
+- A safety fast-path emergency ("I fell down earlier and I'm scared") now always records its
+  caregiver flag, even when speech synthesis returns nothing, raises or hangs (Office #23233).
+  The flag says `disclosed_to_senior: False` (plus "spoken disclosure failed; shown as text
+  only") when no audio was produced, and the immediate reply still comes back as text. Every
+  TTS tier (Piper, espeak, PowerShell, pyttsx3) is now bounded by `TTS_TIMEOUT_S` (default
+  10 s); a hung Piper falls through to espeak. Previously the flag was saved only after audio
+  existed, and a hung synthesizer could stall the turn indefinitely.
+- Caregiver safety flags no longer carry the senior's own words (#23232): the flag text is a
+  fixed, content-minimized description of the trigger category (`safety/fastpath.py`'s
+  `CAREGIVER_FLAG_TEXT`), for both the fast-path flags and the AUDIT flags. Previously a
+  fast-path flag quoted the utterance verbatim and an AUDIT flag copied the auditor's
+  one-sentence reason, so a turn like "I fell. Also please keep my bank PIN 1234 private"
+  put both sentences on the caregiver panel. The flag now says what kind of event happened,
+  never what the senior said or what the model wrote about it.
 
 ## [0.2.0] - 2026-10-22
 

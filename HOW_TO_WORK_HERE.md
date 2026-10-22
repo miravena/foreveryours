@@ -83,6 +83,72 @@ When `[Unreleased]` in the changelog has something worth tagging: rename it to t
 date, commit, tag `vX.Y.Z` on `main`, publish a GitHub Release (notes auto-generate from labels
 via `.github/release.yml`).
 
+## Deploying the Space
+
+The judge-facing demo is the Hugging Face Space `elevenbaselab/foreveryours` (#11). Nobody
+deploys it by hand: `.github/workflows/deploy-space.yml` does, so a collaborator deploys by
+**merging to `main`** or by **Actions -> deploy-space -> Run workflow**.
+
+- **Before the freeze** (the `FREEZE_UTC` date in the workflow): every push to `main` runs the
+  tests, deploys that commit, waits for the Space to come up, checks the deployed sha, smokes the
+  Gradio API and runs the live judge check suite (`scripts/live_judge_check.py`) with a small
+  call cap.
+- **After the freeze:** a push to `main` only runs the tests. Deploy by publishing a GitHub
+  Release (see *Releases*) or by *Run workflow* with `action=deploy`. Rollback = publish or re-run
+  the workflow on the previous tag. Nothing deploys automatically.
+- **`Run workflow` with `action=check`** only proves the token works and the Space is reachable;
+  it uploads nothing.
+- **Token:** the repo secret `HF_TOKEN_FY_SPACE` (a fine-grained Hugging Face token with write
+  access to this one Space), exported to the scripts as `HF_TOKEN`. Without it the workflow skips
+  the deploy with a notice. The workflow never runs on `pull_request`, so a fork never sees it.
+- **Which commit is live:** every deploy stages a one-line `BUILD_INFO` (full git sha) and sets
+  the Space variable `BUILD_SHA`; the app shows `Build: <sha7>` under *About this demo
+  household*. `python scripts/verify_space_sha.py elevenbaselab/foreveryours` exits 0 only when
+  the Space runs your local `HEAD` (`--sha <sha>` to compare against another commit,
+  `--wait 900` to first wait for a build, `--smoke` to also require the *running* app to show
+  that `Build:` line and answer `view_api()`; without `--smoke` it only proves the upload landed,
+  because the previous build keeps serving until the new one is up).
+- **Every deploy runs the live suite,** releases included, so a release cannot pass on stubbed
+  tests and API reachability alone.
+- **By hand, if Actions is unavailable:** from a clean, pushed `main`,
+  `HF_TOKEN=... NEBIUS_API_KEY= python scripts/deploy_hf_space.py elevenbaselab/foreveryours --hardware zero-a10g`
+  then `python scripts/verify_space_sha.py elevenbaselab/foreveryours --wait 900 --smoke`.
+  The deploy script refuses a dirty tree, so the recorded sha is always a real commit.
+
+## After every Space deploy: the live judge check
+
+The unit tests stub the LLM, so they cannot see what the hosted model actually says (the
+2026-10-22 judge simulation found the live companion telling Dad "Sarah is listening", and no
+test could catch it). **After every deploy of the HF Space, run the live judge check** from a
+worktree with its own `.venv`:
+
+```bash
+.venv/bin/python scripts/live_judge_check.py                 # --space elevenbaselab/foreveryours --max-calls 25
+```
+
+It plays a judge against the running Space through `gradio_client`: about twenty scripted turns
+in fresh sessions per scenario (pre-brief recall, "Is Sarah listening?", a typed "Dr. Tan" memo,
+driving, a fall, a crisis phrase, a private disclosure), with keyword assertions on the reply and
+on the caregiver panel, then prints a scorecard. The privacy group ends with a linger line
+that waits the full settle window again and re-reads the panel, because AUDIT and memory
+extraction run in the background and can land after the panel looked settled. Exit 0 means every turn passed, 1 means a turn
+failed or errored, 2 means the call cap stopped the run.
+
+- **A deploy is not done until the check exits 0, or every failing turn is on a GitHub Issue.**
+  Paste the scorecard and the live-call count on the deploy's Issue as evidence, not into a doc.
+- **The cap (`--max-calls`, default 25) counts submitted reply turns**, one per invocation of the
+  streaming reply endpoint, not raw Nebius requests. The app issues extra background requests per
+  turn (THINK, AUDIT, memory extraction), so real Nebius requests are about 2-3x the number the
+  scorecard reports. A full run is 19 turns; the run aborts before the turn that would exceed the
+  cap, marks the rest SKIPPED and exits 2. The cap exists because the Nebius credit must last
+  through judging on 2026-12-15 ([ADR-003](docs/decisions/ADR-003-hosting.md)): run it once per
+  deploy, not on every push.
+- It complements, never replaces, the stubbed unit tests (`python -m unittest discover tests`):
+  those run offline on every change; this one runs after a deploy and costs credit.
+- Offline: `--fake good` and `--fake bad` run the same turns against an in-process stub (zero
+  network), which is what `tests/test_live_judge_check.py` uses and how a change to the script
+  itself is verified.
+
 ## Done means
 
 - [ ] acceptance criteria checked, with evidence pasted on the Issue
@@ -90,6 +156,7 @@ via `.github/release.yml`).
 - [ ] **no work state written outside GitHub** (no status/date/blocker copied into a doc)
 - [ ] `WORK_LOG.md` entry added; ADR added if a decision was made
 - [ ] `CHANGELOG.md` updated if user-visible
+- [ ] after a Space deploy: `scripts/live_judge_check.py` exit 0, or each failing turn on an Issue
 
 ## Gotchas
 

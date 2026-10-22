@@ -35,12 +35,20 @@ def _imported_top_levels(path: Path) -> set[str]:
 
 
 class TestStagedSpace(unittest.TestCase):
-    def _stage(self, hardware="cpu-basic"):
+    def _stage(self, hardware="cpu-basic", build_sha="f" * 40):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         dest = Path(tmp.name)
-        deploy.stage(dest, "6.0.0", hardware)
+        deploy.stage(dest, "6.0.0", hardware, build_sha)
         return dest
+
+    def test_build_info_holds_the_full_head_sha(self):
+        # Default (no sha passed) records HEAD of this checkout; webapp shows its first 7.
+        dest = self._stage(build_sha=None)
+        sha = (dest / "BUILD_INFO").read_text(encoding="utf-8")
+        self.assertEqual(sha, deploy.git_head_sha() + "\n")
+        self.assertRegex(sha.strip(), r"^[0-9a-f]{40}$")
+        self.assertIn("BUILD_INFO", deploy.stage(Path(tempfile.mkdtemp()), "6.0.0", "cpu-basic", "a" * 40))
 
     def test_every_repo_module_the_space_imports_is_staged(self):
         # envload.py was missing once: app.py died with ModuleNotFoundError on boot.
@@ -85,21 +93,71 @@ class TestStagedSpace(unittest.TestCase):
 class TestHardwareRequest(unittest.TestCase):
     """main() asks for --hardware unless the Space is already on it or headed to it."""
 
-    def _deploy(self, hardware, requested):
+    SHA = "0123456789abcdef0123456789abcdef01234567"
+    TOKEN = "hf_SENTINEL_never_printed_0000"
+
+    def _run(self, hardware="zero-a10g", requested=None, dirty=False, argv_extra=(), env=None):
         from types import SimpleNamespace
         from unittest import mock
         api = mock.MagicMock()
         api.get_space_runtime.return_value = SimpleNamespace(hardware=hardware, requested_hardware=requested)
-        argv = ["deploy", "me/demo", "--hardware", "zero-a10g", "--gradio-version", "6.0.0"]
+        argv = ["deploy", "me/demo", "--hardware", "zero-a10g", "--gradio-version", "6.0.0", *argv_extra]
         hub = SimpleNamespace(HfApi=lambda **kw: api)
-        env = {"HF_TOKEN": "placeholder", "NEBIUS_API_KEY": ""}
+        if env is None:
+            env = {"HF_TOKEN": self.TOKEN, "NEBIUS_API_KEY": ""}
+        printed = []
         with mock.patch("sys.argv", argv), mock.patch.dict("sys.modules", {"huggingface_hub": hub}), \
                 mock.patch.dict(deploy.os.environ, env, clear=True), \
                 mock.patch.object(deploy, "stage", return_value=[]), \
-                mock.patch("builtins.print"):
-            self.assertEqual(deploy.main(), 0)
+                mock.patch.object(deploy, "git_head_sha", return_value=self.SHA), \
+                mock.patch.object(deploy, "git_tree_is_dirty", return_value=dirty), \
+                mock.patch("builtins.print", side_effect=lambda *a, **k: printed.append(" ".join(map(str, a)))):
+            rc = deploy.main()
+        return rc, api, "\n".join(printed)
+
+    def _deploy(self, hardware, requested):
+        rc, api, _ = self._run(hardware, requested)
+        self.assertEqual(rc, 0)
         self.assertEqual(api.create_repo.call_args.kwargs["space_hardware"], "zero-a10g")
         return api.request_space_hardware.call_args_list
+
+    def test_dirty_tree_is_refused_unless_dry_run(self):
+        rc, api, out = self._run(dirty=True)
+        self.assertEqual(rc, 2)
+        self.assertIn("dirty", out.lower())
+        api.upload_folder.assert_not_called()
+        rc, api, _ = self._run(dirty=True, argv_extra=("--dry-run",))
+        self.assertEqual(rc, 0)
+        api.upload_folder.assert_not_called()
+
+    def test_build_sha_variable_set_and_token_never_printed(self):
+        rc, api, out = self._run()
+        self.assertEqual(rc, 0)
+        api.add_space_variable.assert_any_call("me/demo", "BUILD_SHA", self.SHA)
+        self.assertIn(self.SHA[:7], out)
+        self.assertNotIn(self.TOKEN, out)
+
+    def test_missing_hf_token_refuses_before_any_hub_call(self):
+        # Negative control for the deploy guard: with HF_TOKEN unset the script must
+        # exit non-zero naming HF_TOKEN, touch nothing on the Hub, and print no secret.
+        # Removing the `if not token` guard makes this fail (HfApi runs, rc becomes 0).
+        nebius = "nebius_SENTINEL_never_printed_1111"
+        for unset in ({"NEBIUS_API_KEY": nebius}, {"HF_TOKEN": "", "NEBIUS_API_KEY": nebius}):
+            with self.subTest(env=sorted(unset)):
+                rc, api, out = self._run(env=unset)
+                self.assertNotEqual(rc, 0)
+                self.assertIn("HF_TOKEN", out)
+                self.assertNotIn(nebius, out)
+                self.assertNotIn(self.TOKEN, out)
+                api.create_repo.assert_not_called()
+                api.add_space_secret.assert_not_called()
+                api.upload_folder.assert_not_called()
+
+    def test_workflow_skips_with_a_notice_when_the_secret_is_missing(self):
+        wf = (ROOT / ".github" / "workflows" / "deploy-space.yml").read_text()
+        self.assertIn("HF_TOKEN: ${{ secrets.HF_TOKEN_FY_SPACE }}", wf)
+        self.assertIn('if [ -z "$HF_TOKEN" ]; then', wf)
+        self.assertIn("::notice::Repo secret HF_TOKEN_FY_SPACE is not set; skipping the Space deploy.", wf)
 
     def test_pending_switch_away_is_overridden(self):
         self.assertTrue(self._deploy("zero-a10g", "cpu-basic"))

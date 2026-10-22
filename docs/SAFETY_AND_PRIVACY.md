@@ -9,14 +9,21 @@ conversation — `CaregiverFlags.add()` takes `disclosed_to_senior` as a
 required argument, not a default, specifically so this can't quietly drift
 from true to false:
 
-- **Fast-path flags** (`safety/fastpath.py`) are always disclosed — the
-  immediate reply the senior hears ("I'm letting your family know right now
-  so someone can check on you.") *is* the disclosure, spoken before anything
-  else happens.
+- **Fast-path flags** (`safety/fastpath.py`) are always recorded, and
+  disclosed whenever speech works — the immediate reply the senior hears
+  ("I'm letting your family know right now so someone can check on you.")
+  *is* the disclosure, spoken before anything else happens. If speech
+  synthesis fails or times out (`TTS_TIMEOUT_S`), the flag is still recorded
+  with `disclosed_to_senior: False` and "spoken disclosure failed; shown as
+  text only", and the same sentence reaches the senior as text (Office #23233).
 - **Audit flags** (`pipeline/audit.py`, see below) try to disclose via a
   spoken follow-up line after the fact. If that follow-up fails for some
   reason, the flag is recorded as `disclosed_to_senior=False` — honestly,
-  not papered over — rather than assumed to have succeeded.
+  not papered over — rather than assumed to have succeeded. "Told" means the
+  browser actually received the line's audio: the streaming turn keeps
+  listening after its reply until the audit finishes (bounded), and a line
+  that arrives after the browser stopped listening is recorded undisclosed
+  (Office #23231). The same rule gates lifestyle notes.
 
 The senior is never meant to be monitored silently behind their back; the
 code's job is to make that true in both cases above, not just the easy one.
@@ -29,6 +36,13 @@ only caregiver-authored memos/notes and non-EMOTIONAL conversation facts
 `docs/PRD.md` describes) must be built the same way: only from counters
 and disclosed flags, never from model-written free text about the
 conversation.
+
+Flag *text* is minimised on the same principle: it is a fixed description
+of the trigger category — `safety/fastpath.py`'s `CAREGIVER_FLAG_TEXT` —
+and never contains the senior's utterance or the auditor's one-sentence
+reason. A flag says *what kind* of event happened (crisis, distress,
+confusion, unsafe advice), not what the senior said or what the model wrote
+about it, so the caregiver panel can never become a transcript leak (#23232).
 
 **Refinement (implemented 2026-10-03):** the fast-path reply today discloses this *one* instance ("I'm letting your family know right now so someone can check on you.") but also states the standing rule — i.e. when disclosure happens and when it doesn't. Spelling that rule out loud, e.g. *"I'll only tell them if I'm worried about your safety,"* answers the "elder surveillance" objection more directly than a single-instance disclosure can: it tells the senior the boundary up front, not just that this one thing got reported.
 
@@ -52,6 +66,9 @@ senior as a follow-up, not silently dropped.
    than ending the turn — a distress signal shouldn't make the companion go
    silent right after. Deliberately conservative patterns — a false positive
    here (an unnecessary caregiver note) is far cheaper than a false negative.
+   The public demo's daily request cap never blocks it: at the cap the
+   fast-path still speaks and flags, and only the paid THINK continuation is
+   withheld (`webapp._cap_decision`, Office #23228).
 2. **Audit** (`pipeline/audit.py`) — asynchronous, a second small-model pass
    over every *other* reply and the senior's transcript. It checks for
    medical-hallucination or unsafe-advice risk and provides a wider,
