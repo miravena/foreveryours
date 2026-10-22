@@ -309,6 +309,115 @@ _active_turns: dict[str, int] = {}  # session_id -> number of turns currently in
 _BG_JOIN_TIMEOUT_S = 10
 
 
+class _ChunkAck:
+    """One chunk's acknowledgement (Office #23231): settled exactly once --
+    accepted by the generator right after it yielded the chunk, or refused
+    by `_ChunkConsumer.close` / the wait timeout. `wait_accepted()` is what
+    `orchestrator._speak_disclosure` resolves an `on_chunk` return value
+    with, so only callers that need the answer ever block on it."""
+
+    def __init__(self, consumer: "_ChunkConsumer") -> None:
+        self._consumer = consumer
+        self._event = threading.Event()
+        self.accepted = False
+
+    def is_set(self) -> bool:
+        return self._event.is_set()
+
+    def _settle(self, accepted: bool) -> None:
+        # Caller holds the consumer's lock. First settlement wins: an ack
+        # refused by a timeout or close() is never flipped back to accepted.
+        if not self._event.is_set():
+            self.accepted = accepted
+            self._event.set()
+
+    def wait_accepted(self) -> bool:
+        self._event.wait(timeout=_BG_JOIN_TIMEOUT_S)
+        with self._consumer._lock:
+            self._settle(False)  # no-op if the generator already acked
+            return self.accepted
+
+
+class _ChunkConsumer:
+    """The producer/consumer handshake between `run_turn`'s `on_chunk`
+    callback (worker + background threads) and the streaming generator
+    (Office #23231).
+
+    A chunk counts as delivered only once the generator has DEQUEUED and
+    YIELDED it to the browser and acknowledged it -- the `queue.task_done()`
+    contract, never "it was put()". `offer` returns that acknowledgement as
+    a bool (blocking up to `_BG_JOIN_TIMEOUT_S`); `submit` enqueues without
+    blocking and returns the `_ChunkAck` (or False if already closed), which
+    is what the streaming `_on_chunk` hands back so the main reply's
+    sentence-by-sentence synthesis never waits on the browser, while
+    `orchestrator._speak_disclosure` resolves it before attesting a late
+    AUDIT/lifestyle disclosure.
+
+    One lock covers both "check open + put" in `submit` and "mark closed +
+    drain" in `close`, so a chunk is either enqueued while open (and later
+    accepted by the generator or refused by `close`) or refused outright --
+    there is no window where it is enqueued into a queue nobody will read.
+    `close` also refuses a chunk already dequeued but still suspended at the
+    generator's yield (browser disconnect: `gen.close()` raises GeneratorExit
+    there, before the ack)."""
+
+    def __init__(self) -> None:
+        import queue as _queue
+
+        self.queue: _queue.Queue = _queue.Queue()
+        self._lock = threading.Lock()
+        self._open = True
+        self._in_flight: _ChunkAck | None = None
+
+    def submit(self, sentence: str, path: Path) -> "_ChunkAck | bool":
+        with self._lock:
+            if not self._open:
+                return False
+            ack = _ChunkAck(self)
+            self.queue.put(("CHUNK", sentence, path, ack))
+            return ack
+
+    def offer(self, sentence: str, path: Path) -> bool:
+        ack = self.submit(sentence, path)
+        return ack.wait_accepted() if isinstance(ack, _ChunkAck) else False
+
+    def put(self, msg: tuple) -> None:
+        """Control messages (DONE / ERROR) -- never acknowledged."""
+        self.queue.put(msg)
+
+    def get(self, timeout: float | None = None) -> tuple:
+        """Dequeue the next message (raises queue.Empty on timeout). A CHUNK
+        becomes the in-flight chunk until `accept` or `close` settles it."""
+        msg = self.queue.get(timeout=timeout)
+        if msg[0] == "CHUNK":
+            with self._lock:
+                self._in_flight = msg[3]
+        return msg
+
+    def accept(self, ack: _ChunkAck) -> None:
+        """Called by the generator right after the chunk's yield returned."""
+        with self._lock:
+            ack._settle(True)
+            if self._in_flight is ack:
+                self._in_flight = None
+
+    def close(self) -> None:
+        import queue as _queue
+
+        with self._lock:
+            self._open = False
+            if self._in_flight is not None:
+                self._in_flight._settle(False)
+                self._in_flight = None
+            while True:
+                try:
+                    msg = self.queue.get_nowait()
+                except _queue.Empty:
+                    break
+                if msg[0] == "CHUNK":
+                    msg[3]._settle(False)
+
+
 def _join_previous_turn(session_id: str) -> None:
     """A turn's background AUDIT + memory-extraction thread is no longer
     joined before returning to the browser (#81 B1 -- that's the whole point
@@ -921,12 +1030,17 @@ def run_demo_turn_streaming(
         with _session_fs_lock:
             _active_turns[session_id_val] = _active_turns.get(session_id_val, 0) + 1
             _touch_session(root)
+    # #23231: one consumer per call. Closing it in this `finally` (which a
+    # browser disconnect's GeneratorExit also unwinds through) refuses every
+    # chunk still pending, so nothing is attested to a closed stream.
+    consumer = _ChunkConsumer()
     try:
         yield from _run_demo_turn_streaming_impl(
             audio_in, actual_text, history, session_id_val, simulated_hour,
-            session_expired, is_proactive, trigger_type,
+            session_expired, is_proactive, trigger_type, consumer=consumer,
         )
     finally:
+        consumer.close()
         if root is not None:
             with _session_fs_lock:
                 n = _active_turns.get(session_id_val, 0) - 1
@@ -945,10 +1059,14 @@ def _run_demo_turn_streaming_impl(
     session_expired: bool,
     is_proactive: bool,
     trigger_type: str,
+    consumer: "_ChunkConsumer | None" = None,
 ):
     import queue
     import threading
     from pathlib import Path
+
+    if consumer is None:
+        consumer = _ChunkConsumer()
 
     yield (
         "_Companion is thinking..._",
@@ -988,11 +1106,14 @@ def _run_demo_turn_streaming_impl(
 
     _clear_session_audio(audio_dir)
 
-    q = queue.Queue()
     accumulated_audio_paths = []
 
     def _on_chunk(sentence: str, chunk_path: Path):
-        q.put(("CHUNK", sentence, chunk_path))
+        # #23231: returns the chunk's ack without blocking (False if the
+        # stream already closed). It resolves True only after the generator
+        # below dequeued AND yielded the chunk; `_speak_disclosure` waits on
+        # it before attesting, the main reply's synthesis never does.
+        return consumer.submit(sentence, chunk_path)
 
     def _worker():
         try:
@@ -1002,15 +1123,15 @@ def _run_demo_turn_streaming_impl(
                 on_chunk=_on_chunk
             )
             # Hand off to the background AUDIT/memory-extraction thread BEFORE
-            # q.put(("DONE", ...)) (#148): if the generator was already closed
+            # consumer.put(("DONE", ...)) (#148): if the generator was already closed
             # (browser disconnected) and nothing ever reads "DONE", that
             # writer must still be tracked. _remember_background_thread
             # ignores a thread already tracked (identity), so the later
             # registration below (after DONE) is a no-op.
             _remember_background_thread(session_id_val, res.background_thread)
-            q.put(("DONE", res))
+            consumer.put(("DONE", res))
         except Exception as exc:
-            q.put(("ERROR", exc))
+            consumer.put(("ERROR", exc))
 
     t = threading.Thread(target=_worker)
     t.start()
@@ -1018,7 +1139,7 @@ def _run_demo_turn_streaming_impl(
 
     current_reply_text = ""
     while True:
-        msg = q.get()
+        msg = consumer.get()
         if msg[0] == "DONE":
             result = msg[1]
             break
@@ -1053,7 +1174,7 @@ def _run_demo_turn_streaming_impl(
             yield (*out, session_id_val, "", None)
             return
         elif msg[0] == "CHUNK":
-            _, sentence, chunk_path = msg
+            _, sentence, chunk_path, ack = msg
             current_reply_text += sentence + " "
             accumulated_audio_paths.append(chunk_path)
             
@@ -1070,6 +1191,7 @@ def _run_demo_turn_streaming_impl(
             out = (transcript_and_reply, reply_audio, history, panel(), biomarkers_panel)
             if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
             yield (*out, session_id_val, "", None)
+            consumer.accept(ack)
 
     _remember_background_thread(session_id_val, result.background_thread)
 
@@ -1109,7 +1231,45 @@ def _run_demo_turn_streaming_impl(
 
     out = (transcript_and_reply, reply_audio, new_history, panel(), biomarker_str)
     if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+    # The DONE-final yield: exactly once, immediately.
     yield (*out, session_id_val, "", None)
+
+    # Drain (#23231). The background AUDIT/extraction thread may speak a
+    # disclosure line seconds after DONE; keep consuming until it finishes or
+    # _BG_JOIN_TIMEOUT_S elapses, so that audio reaches the browser and only
+    # a chunk the browser actually got is attested. Each late yield is
+    # additive: same final history and text, fresher caregiver panel, audio
+    # recombined to include the disclosure.
+    bg = result.background_thread
+    final_audio_paths = list(result.audio_paths)
+    deadline = time.monotonic() + _BG_JOIN_TIMEOUT_S
+    late_yields = 0
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        if (bg is None or not bg.is_alive()) and consumer.queue.empty():
+            break
+        try:
+            msg = consumer.get(timeout=min(0.25, remaining))
+        except queue.Empty:
+            continue
+        if msg[0] != "CHUNK":
+            continue
+        _, _sentence, chunk_path, ack = msg
+        final_audio_paths.append(chunk_path)
+        combined_audio = _combine_audio_chunks(final_audio_paths, audio_dir)
+        late = (out[0], str(combined_audio) if combined_audio else None, new_history, panel(), biomarker_str)
+        yield (*late, session_id_val, "", None)
+        consumer.accept(ack)
+        late_yields += 1
+        out = late
+    consumer.close()
+    # The flag/lifestyle note is persisted only after its ack, i.e. after the
+    # yield that carried its audio rendered the panel: one panel-only refresh
+    # (same history, same audio) once the background thread has finished.
+    if late_yields and (bg is None or not bg.is_alive()):
+        yield (out[0], out[1], new_history, panel(), biomarker_str, session_id_val, "", None)
 
 def run_proactive_turn_streaming(history, session, sim_time, trigger_type):
     yield from run_demo_turn_streaming(None, None, history, session, sim_time, is_proactive=True, trigger_type=trigger_type)
@@ -1228,9 +1388,11 @@ def _run_demo_turn_impl(
     # real thread to join; implementing it literally was dead code (Codex
     # review, PR #90). Flagged back on #11: if AUDIT flags a reply unsafe
     # after this returns, its spoken disclosure is generated but has already
-    # missed this turn's `audio_out` -- same gap as before this PR, not
-    # introduced by it, but now a known one instead of a silently-skipped
-    # "fix". `_join_previous_turn` (called at the top of this function, on
+    # missed this turn's `audio_out`. The STREAMING path closes that gap
+    # (#23231: it keeps consuming after DONE and attests only chunks the
+    # browser received); this non-streaming path passes no `on_chunk`, so
+    # such a disclosure is still recorded undisclosed, honestly.
+    # `_join_previous_turn` (called at the top of this function, on
     # the NEXT turn) still bounds how long a stale thread can run before the
     # next turn's MemoryStore write would otherwise race it.
     _remember_background_thread(session_id, result.background_thread)
