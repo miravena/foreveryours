@@ -141,6 +141,9 @@ deadline gets close:
 - A caregiver-facing UI beyond the web page's caregiver column (see `PRD.md`'s non-goals — a
   full dashboard was deliberately cut once already; don't re-add it under time pressure)
 - The early-memory-loss framing angle (optional/secondary, not required either way)
+- A guided get-to-know-you interview mode for the caregiver (the companion asks Sarah the
+  profile questions one at a time) -- follow-up idea from the one-click sample household
+  (Office #23218); the sample seed in `caregiver.SAMPLE_FAMILY` is the shape it would fill
 - Anything from `IMPLEMENTATION_PLAN.md`'s backlog not listed as a milestone above
 
 ## How to follow this

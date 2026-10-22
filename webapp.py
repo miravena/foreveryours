@@ -75,7 +75,17 @@ from pathlib import Path
 
 import gradio as gr
 
-from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags, split_memo_facts
+from caregiver import (
+    DEFAULT_CAREGIVER_NAME,
+    DEFAULT_PROFILE_ID,
+    DEMO_MEMO,
+    SAMPLE_FAMILY,
+    SAMPLE_FAMILY_LABEL,
+    CaregiverFlags,
+    sample_family_texts,
+    split_memo_facts,
+    validate_sample_profile,
+)
 from memory.store import CAREGIVER_SOURCES, MemoryScope, MemoryStore, PrivacyLevel
 from pipeline import hear
 from pipeline.orchestrator import run_turn
@@ -614,6 +624,63 @@ def init_session() -> tuple[str, str]:
     return session_id, _format_caregiver_panel(session_id)
 
 
+_SAMPLE_CARD_GROUPS = (
+    ("persona", "Who Dad is"),
+    ("family", "Family and visitors"),
+    ("likes", "Likes"),
+    ("routine", "Daily routine"),
+    ("reminder", "Medication reminders"),
+    ("avoid", "Topics to avoid"),
+    ("health", "Caregiver notes (never spoken to Dad)"),
+)
+
+
+def _sample_family_loaded(store: MemoryStore, now: float) -> bool:
+    """True once the one-click seed (caregiver.SAMPLE_FAMILY) is in this
+    session's store: its persona line is an active caregiver_memo item.
+    Checked against the store, never a flag file, so the sweep/_end_session
+    delete path needs nothing extra (#23218)."""
+    anchor = sample_family_texts()[0]
+    return any(
+        item.text == anchor and item.source == "caregiver_memo" and item.is_active(now)
+        for item in store.all()
+    )
+
+
+def _format_sample_family_card(store: MemoryStore, now: float) -> list[str]:
+    """The caregiver-side profile card for the seeded household, grouped by
+    the seed's own groups, labelled fictional, with every reminder shown as a
+    plain schedule line attributed to the caregiver by name -- never dosing
+    advice (docs/PRD.md non-goal; caregiver.validate_sample_profile is the
+    guard at load time). Only items actually active in the store are listed,
+    so the card never claims more than Briefed memory holds."""
+    active = {
+        item.text for item in store.all()
+        if item.source == "caregiver_memo" and item.is_active(now)
+    }
+    caregiver = SAMPLE_FAMILY["caregiver_name"]
+    lines = [
+        f"### 🏠 {SAMPLE_FAMILY_LABEL}",
+        f"_**Fictional sample data** -- loaded with one click so you can see a caregiver-configured "
+        f"household before anyone speaks. Entered as {caregiver}'s notes; reminders are schedule items only, "
+        f"not medical advice._",
+    ]
+    for group, heading in _SAMPLE_CARD_GROUPS:
+        texts = [text for g, text, _p in SAMPLE_FAMILY["items"] if g == group and text in active]
+        if not texts:
+            continue
+        lines.append(f"**{heading}**")
+        for text in texts:
+            if group == "reminder":
+                lines.append(f"- 🔔 {text} _(reminder set by {caregiver})_")
+            elif group == "health":
+                lines.append(f"- 🔒 {text}")
+            else:
+                lines.append(f"- {text}")
+    lines.append("")
+    return lines
+
+
 def _format_caregiver_panel(session_id: str | None) -> str:
     """Reads straight from disk every call -- this is what makes it a live
     panel rather than a snapshot: whatever this session's turns (or, with
@@ -664,11 +731,22 @@ def _format_caregiver_panel(session_id: str | None) -> str:
         disclosed = "✅ Dad was told" if flag.disclosed_to_senior else "⚠️ NOT yet disclosed to Dad"
         lines.append(f"- **({flag.severity})** {flag.text}\n  {disclosed}")
 
-    lines.append("\n### Briefed memory")
     now = time.time()
+    sample_loaded = _sample_family_loaded(store, now)
+    if sample_loaded:
+        lines.append("")
+        lines.extend(_format_sample_family_card(store, now))
+
+    lines.append("\n### Briefed memory")
     items = _dedupe_briefed_memory(
         [item for item in store.all() if _caregiver_panel_may_show(item)], now
     )
+    if sample_loaded:
+        # The seed is listed once, on the card above, grouped and labelled
+        # fictional (#23218, same one-listing rule as #23215).
+        seed_texts = set(sample_family_texts())
+        items = [item for item in items if not (item.source == "caregiver_memo" and item.text in seed_texts)]
+        lines.append(f"_(plus the {SAMPLE_FAMILY_LABEL.lower()} above)_")
     if not items:
         lines.append("_(nothing briefed yet)_")
     for item in items:
@@ -1233,6 +1311,34 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
     return _format_caregiver_panel(session_id), session_id
 
 
+def load_sample_family(session_id: str | None) -> tuple[str, str]:
+    """One click, before anyone speaks: seed this session's own MemoryStore
+    with caregiver.SAMPLE_FAMILY (a labelled-fictional senior, family, likes,
+    daily routine and caregiver-entered medication REMINDER times) and return
+    the caregiver panel showing it (#23218). Structured items are written
+    directly with their scope/privacy, never through the memo splitter.
+    Validates the whole seed BEFORE the first write, so an invalid seed
+    writes nothing. store.add no-ops on duplicates, so a second click adds
+    nothing. Lives only under the session's data dir, so _end_session and
+    _sweep_stale_sessions delete it with everything else."""
+    session_id = session_id or _new_session()
+    try:
+        data_dir, _ = _session_dirs(session_id)
+    except ValueError:
+        return _format_caregiver_panel(session_id), session_id  # malformed/foreign id (#149)
+    validate_sample_profile(SAMPLE_FAMILY["items"])  # refuse dosing/diagnosis/clinical text up front
+    _join_previous_turn(session_id)  # see save_caregiver_text_memo
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
+    for _group, text, privacy in SAMPLE_FAMILY["items"]:
+        store.add(
+            text,
+            source="caregiver_memo",
+            scope=MemoryScope.PERMANENT.value,  # clock-time items auto-scope TEMPORARY in add()
+            privacy=PrivacyLevel.CAREGIVER_ONLY.value if privacy == "caregiver_only" else PrivacyLevel.PUBLIC_TO_SENIOR.value,
+        )
+    return _format_caregiver_panel(session_id), session_id
+
+
 PAGE_CSS = """
 .mobile-alert-strip { display: none; }
 @media (max-width: 768px) {
@@ -1335,6 +1441,11 @@ def build_demo() -> gr.Blocks:
                 gr.Markdown("## 👩 Caregiver side (live)")
                 caregiver_panel = gr.Markdown(_format_caregiver_panel(None))
                 biomarkers_panel = gr.Markdown("### 📊 Acoustic Biomarkers\n_Awaiting voice input..._", visible=DEV_MODE)
+                # One click seeds a labelled-fictional household into this
+                # session only (#23218). Sits inside the caregiver column, next
+                # to the memo accordion, so the Senior/Caregiver split-screen
+                # the video script uses is unchanged.
+                load_sample_btn = gr.Button("Load sample family", variant="secondary")
                 with gr.Accordion("📝 Submit Caregiver Memo (Beat 1 Onboarding)", open=False):
                     with gr.Tabs():
                         with gr.TabItem("Type Note"):
@@ -1425,6 +1536,12 @@ def build_demo() -> gr.Blocks:
         save_audio_memo_btn.click(
             fn=save_caregiver_voice_memo,
             inputs=[memo_audio_in, session_state],
+            outputs=[caregiver_panel, session_state],
+        )
+
+        load_sample_btn.click(
+            fn=load_sample_family,
+            inputs=[session_state],
             outputs=[caregiver_panel, session_state],
         )
 

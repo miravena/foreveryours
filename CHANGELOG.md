@@ -11,6 +11,12 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Added
+- One-click **Load sample family** button on the caregiver side (Office #23218): seeds this
+  session's household with a labelled-fictional senior (Walter), family, likes, a daily routine
+  and caregiver-entered medication reminder times as plain schedule items, shown as a
+  "Fictional sample household" card and recalled in the senior's replies; `validate_sample_profile`
+  refuses dosing, diagnosis and clinical-claim language, and the session-end sweep removes the seed
+  with everything else.
 - The Space deploys from GitHub Actions (`.github/workflows/deploy-space.yml`, Office #23226,
   #11): before the freeze every push to `main` deploys and runs the live judge check suite; after
   it, only a published Release or a manual *Run workflow* deploys. Each deploy records the commit
