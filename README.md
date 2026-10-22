@@ -168,7 +168,10 @@ a short clip and hit Send; the memory panel updates live underneath.
 `MAX_DAILY_REQUESTS` (default **50**, keyed per browser session so one judge filling theirs up
 never blocks another judge's link) caps how many turns actually reach Nebius Token Factory per
 day once the app is public — an empty send, a turn that fails for lack of a key, and the offline
-safety fast-path never count against it. The deploy script and `docs/decisions/ADR-003-hosting.md`
+safety fast-path never count against it. The fast-path still answers at the cap: "I fell down" or
+"I can't breathe" still gets its spoken reassurance and the caregiver flag, and only the paid
+continuation after it is withheld (with a one-line cap notice); any other utterance at the cap
+gets the daily-cap message. The deploy script and `docs/decisions/ADR-003-hosting.md`
 use this same number. Bump it locally with `MAX_DAILY_REQUESTS=1000 .venv/bin/python webapp.py`
 if you're iterating and hitting it.
 

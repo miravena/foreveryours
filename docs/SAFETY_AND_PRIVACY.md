@@ -9,10 +9,13 @@ conversation — `CaregiverFlags.add()` takes `disclosed_to_senior` as a
 required argument, not a default, specifically so this can't quietly drift
 from true to false:
 
-- **Fast-path flags** (`safety/fastpath.py`) are always disclosed — the
-  immediate reply the senior hears ("I'm letting your family know right now
-  so someone can check on you.") *is* the disclosure, spoken before anything
-  else happens.
+- **Fast-path flags** (`safety/fastpath.py`) are always recorded, and
+  disclosed whenever speech works — the immediate reply the senior hears
+  ("I'm letting your family know right now so someone can check on you.")
+  *is* the disclosure, spoken before anything else happens. If speech
+  synthesis fails or times out (`TTS_TIMEOUT_S`), the flag is still recorded
+  with `disclosed_to_senior: False` and "spoken disclosure failed; shown as
+  text only", and the same sentence reaches the senior as text (Office #23233).
 - **Audit flags** (`pipeline/audit.py`, see below) try to disclose via a
   spoken follow-up line after the fact. If that follow-up fails for some
   reason, the flag is recorded as `disclosed_to_senior=False` — honestly,
@@ -59,6 +62,9 @@ senior as a follow-up, not silently dropped.
    than ending the turn — a distress signal shouldn't make the companion go
    silent right after. Deliberately conservative patterns — a false positive
    here (an unnecessary caregiver note) is far cheaper than a false negative.
+   The public demo's daily request cap never blocks it: at the cap the
+   fast-path still speaks and flags, and only the paid THINK continuation is
+   withheld (`webapp._cap_decision`, Office #23228).
 2. **Audit** (`pipeline/audit.py`) — asynchronous, a second small-model pass
    over every *other* reply and the senior's transcript. It checks for
    medical-hallucination or unsafe-advice risk and provides a wider,

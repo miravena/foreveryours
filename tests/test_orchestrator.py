@@ -247,8 +247,50 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(lifestyle_items[0].text, "Slept poorly due to back pain")
         self.assertEqual(len(delivered), 2)
 
+    def test_run_turn_allow_hosted_call_false_skips_think(self):
+        """#23228: at the daily request cap webapp passes allow_hosted_call=False.
+        The offline fast-path still speaks and flags; THINK and the background
+        AUDIT/extraction thread never run."""
+        with patch("pipeline.think.stream_reply", side_effect=AssertionError("THINK must not be called at the cap")) as stream_mock, \
+             patch("pipeline.think.extract_memory_llm", side_effect=AssertionError("no hosted background work at the cap")) as extract_mock:
+            result = run_turn(
+                "I fell down earlier and I'm scared",
+                self.store,
+                self.flags,
+                self.audio_dir,
+                caregiver_name="Sarah",
+                allow_hosted_call=False,
+            )
+        stream_mock.assert_not_called()
+        extract_mock.assert_not_called()
+        self.assertIsNone(result.background_thread)
+        self.assertIn("daily request cap", result.audit_verdict)
+        self.assertTrue(result.audio_paths)
+        self.assertIn("letting your family know", result.reply_text.lower())
+        self.assertEqual(len(self.flags.all()), 1)
+        self.assertFalse(result.is_fallback)
+
+    def test_run_turn_allow_hosted_call_false_keeps_conflicts_pending(self):
+        """A capped turn never reaches THINK, so a pending memory clarification
+        must not be marked asked (Codex review of #23228)."""
+        self.store.add_conflict("Leo is a grandson", "Leo is a nephew", "relationship unclear")
+        with patch("pipeline.think.stream_reply", side_effect=AssertionError("THINK must not be called at the cap")):
+            run_turn("I fell down earlier and I'm scared", self.store, self.flags, self.audio_dir, allow_hosted_call=False)
+        self.assertEqual(len(self.store.get_pending_conflicts()), 1)
+
+    def test_run_turn_allow_hosted_call_false_rejects_non_fast_path(self):
+        """allow_hosted_call=False with nothing for the fast-path to say is a
+        caller bug -- it must raise, never return a silent empty turn."""
+        with patch("pipeline.think.stream_reply", side_effect=AssertionError("THINK must not be called")) as stream_mock:
+            with self.assertRaises(ValueError):
+                run_turn("Hello there", self.store, self.flags, self.audio_dir, allow_hosted_call=False)
+        stream_mock.assert_not_called()
+        self.assertEqual(self.flags.all(), [])
+
     @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
-    def test_fastpath_flag_stays_undelivered_when_no_audio_is_synthesized(self, mock_speak):
+    def test_fastpath_flag_is_recorded_undisclosed_when_no_audio_is_synthesized(self, mock_speak):
+        # Office #23233: an emergency is flagged whether or not TTS produced
+        # audio; disclosed_to_senior is False because nothing was spoken.
         result = run_turn(
             "I fell down earlier and I'm scared",
             self.store,
@@ -258,7 +300,43 @@ class TestOrchestrator(unittest.TestCase):
         )
 
         self.assertEqual(result.audio_paths, [])
-        self.assertEqual(self.flags.all(), [])
+        items = self.flags.all()
+        self.assertEqual(len(items), 1)
+        self.assertFalse(items[0].disclosed_to_senior)
+
+    def test_fastpath_flag_is_on_disk_before_think_when_tts_hangs(self):
+        # Office #23233: a hung in-process TTS engine is abandoned after
+        # TTS_TIMEOUT_S and the undisclosed flag is already on disk when THINK
+        # is entered; the immediate reply still comes back as text.
+        import threading
+        from unittest.mock import MagicMock
+
+        from safety import fastpath
+
+        release = threading.Event()
+        self.addCleanup(release.set)
+        engine = MagicMock()
+        engine.runAndWait.side_effect = lambda: release.wait()
+        seen_on_disk = []
+
+        def think_entered(*args, **kwargs):
+            seen_on_disk.extend(CaregiverFlags(self.profile_id, self.data_dir).all())
+            raise NebiusNotConfigured("no key in tests")
+
+        transcript = "I fell down earlier and I'm scared"
+        with patch("pipeline.speak.TTS_TIMEOUT_S", 0.05), \
+             patch("sys.platform", "linux"), \
+             patch("pipeline.speak._get_piper_cli", return_value=None), \
+             patch("pipeline.speak._get_espeak_cli", return_value=None), \
+             patch("pipeline.speak._get_tts_engine", return_value=engine), \
+             patch("pipeline.think.stream_reply", side_effect=think_entered):
+            result = run_turn(transcript, self.store, self.flags, self.audio_dir, caregiver_name="Sarah")
+
+        self.assertEqual(len(seen_on_disk), 1)
+        self.assertFalse(seen_on_disk[0].disclosed_to_senior)
+        self.assertEqual(result.audio_paths, [])
+        self.assertIn(fastpath.check(transcript).immediate_reply, result.reply_text)
+        self.assertEqual(len(self.flags.all()), 1)
 
     @patch("pipeline.orchestrator.fastpath.check")
     @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
