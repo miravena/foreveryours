@@ -97,7 +97,9 @@ worktree with its own `.venv`:
 It plays a judge against the running Space through `gradio_client`: about twenty scripted turns
 in fresh sessions per scenario (pre-brief recall, "Is Sarah listening?", a typed "Dr. Tan" memo,
 driving, a fall, a crisis phrase, a private disclosure), with keyword assertions on the reply and
-on the caregiver panel, then prints a scorecard. Exit 0 means every turn passed, 1 means a turn
+on the caregiver panel, then prints a scorecard. The privacy group ends with a linger line
+that waits the full settle window again and re-reads the panel, because AUDIT and memory
+extraction run in the background and can land after the panel looked settled. Exit 0 means every turn passed, 1 means a turn
 failed or errored, 2 means the call cap stopped the run.
 
 - **A deploy is not done until the check exits 0, or every failing turn is on a GitHub Issue.**

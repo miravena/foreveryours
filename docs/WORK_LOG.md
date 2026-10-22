@@ -18,7 +18,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
   hard cap on submitted reply turns (`--max-calls`, default 25; exit 2 when reached). `--fake
   good|bad` runs the same turns against an in-process stub; `tests/test_live_judge_check.py`
   (22 tests, offline) covers good/bad runs, the cap (the stub's own counter shows exactly 3
-  calls under `--max-calls 3`), an unsettling panel, and secret redaction.
+  calls under `--max-calls 3`), an unsettling panel, and secret redaction. `scripts/openai_review.sh`
+  on the first commit found two real gaps, both fixed in the follow-up commit: a panel read error
+  escaped the per-turn handler (now that turn's ERROR, run continues), and two identical reads can
+  look settled while AUDIT / extraction are still running (the privacy group now ends with a
+  linger line, T21, that waits the full window again and re-reads the panel).
 - **Endpoint mapping (view_api, gradio_client 2.7.2):** `/init_session`, `/_format_caregiver_panel`,
   `/save_caregiver_text_memo(memo_text)` are free local calls; `/run_demo_turn_streaming(audio_in,
   text_in_or_history, simulated_time_in)` is the one that costs Nebius credit. `gr.State` inputs

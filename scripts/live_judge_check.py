@@ -188,6 +188,7 @@ class FakeSession:
     raise_on: str | None = None  # substring of a turn text that raises
     raise_message: str = "stub failure"
     raise_in_init: bool = False
+    leak_after_reads: int | None = None  # bad-stub variant: the private phrase lands on the panel late
     memos: list[str] = field(default_factory=list)
     flags: list[tuple[str, str]] = field(default_factory=list)
     history: list[str] = field(default_factory=list)
@@ -204,6 +205,10 @@ class FakeSession:
 
     def panel(self) -> str:
         self._reads += 1
+        if (self.leak_after_reads is not None and self._reads > self.leak_after_reads
+                and any(PRIVATE_PHRASE in h for h in self.history)
+                and not any(PRIVATE_PHRASE in m for m in self.memos)):
+            self.memos.append("Dad hides chocolate biscuits in the sock drawer")
         high = [f for f in self.flags if f[0] in ("crisis", "distress", "confusion")]
         lines = ["🛡️ Peace of mind without surveillance.", "", "---",
                  f"> **Today:** {len(self.history)} conversations · "
@@ -407,7 +412,7 @@ class Turn:
     behaviour: str
     text: str
     checks: tuple[Check, ...]
-    kind: str = "reply"  # "reply" (counts against the cap) or "memo" (free local endpoint)
+    kind: str = "reply"  # "reply" (counts against the cap), "memo" (free local endpoint), "linger" (no call)
 
 
 @dataclass(frozen=True)
@@ -481,6 +486,9 @@ def build_groups() -> list[Group]:
                  (reply_matches(r"\w{3,}", "any reply text"),
                   panel_lacks(PRIVATE_PHRASE, "private disclosure leaked"),
                   panel_lacks("biscuit", "private disclosure leaked"), calm)),
+            Turn("T21", "privacy-linger", f"(wait {SETTLE_TIMEOUT_S:g} s more, then re-read the panel)",
+                 (panel_lacks(PRIVATE_PHRASE, "private disclosure leaked late"),
+                  panel_lacks("biscuit", "private disclosure leaked late")), kind="linger"),
         )),
     ]
 
@@ -526,20 +534,28 @@ def settle_panel(session, pacer: Pacer, timeout: float = SETTLE_TIMEOUT_S, inter
 
 
 def run_turn(session, turn: Turn, pacer: Pacer, redact: Redactor) -> Result:
-    before = session.panel()
+    """One scored line. Any transport error -- the reply, the memo save, or a
+    panel read before or after it -- is that turn's ERROR (the reply call, if
+    it was submitted, still counts) and the run continues; nothing is retried."""
+    calls = 0
     try:
+        before = session.panel()
         if turn.kind == "memo":
             session.save_memo(turn.text)
             reply = ""
+        elif turn.kind == "linger":
+            # Background AUDIT / memory extraction can land after the panel
+            # looked settled: wait the full window once more, then re-check.
+            pacer.sleep(SETTLE_TIMEOUT_S)
+            reply = ""
         else:
+            calls = 1  # counted the moment it is submitted, error or not
             reply = extract_reply(session.reply(turn.text))
-    except Exception as exc:  # transport error: ERROR, counted, never retried
-        return Result(turn, "ERROR", f"gradio error: {type(exc).__name__}: {redact(str(exc))}",
-                      calls=1 if turn.kind == "reply" else 0)
-    calls = 1 if turn.kind == "reply" else 0
-    if reply is None:
-        return Result(turn, "FAIL", "no 'Companion replied' text in the streamed output", calls)
-    after, settled = settle_panel(session, pacer)
+        if reply is None:
+            return Result(turn, "FAIL", "no 'Companion replied' text in the streamed output", calls)
+        after, settled = settle_panel(session, pacer)
+    except Exception as exc:
+        return Result(turn, "ERROR", f"gradio error: {type(exc).__name__}: {redact(str(exc))}", calls)
     if not settled:
         return Result(turn, "FAIL", f"panel unsettled after {SETTLE_TIMEOUT_S:g} s", calls)
     for check in turn.checks:

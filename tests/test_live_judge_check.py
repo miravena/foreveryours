@@ -93,7 +93,7 @@ class TestCallCap(unittest.TestCase):
         self.assertEqual(factory.counter.reply_calls, 3)
         self.assertIn("call cap 3 reached before T04", out)
         skipped = [line for line in scored_lines(out) if " SKIPPED " in line]
-        self.assertEqual(len(skipped), 17, out)
+        self.assertEqual(len(skipped), 18, out)
         self.assertIn("live reply calls used: 3 of cap 3", out)
 
     def test_cap_counts_reply_turns_not_free_endpoints(self):
@@ -125,6 +125,39 @@ class TestCallCap(unittest.TestCase):
 
 
 class TestPanelSettling(unittest.TestCase):
+    def test_panel_read_error_is_that_turns_error_and_the_run_continues(self):
+        class FlakyPanel(ljc.FakeSession):
+            def panel(self):
+                if self._reads == 2:  # the pre-turn snapshot of the second turn
+                    self._reads += 1
+                    raise RuntimeError("panel HTTP 503")
+                return super().panel()
+
+        factory = ljc.FakeSessionFactory("good")
+        factory_cls = FlakyPanel
+
+        def make():
+            s = factory_cls(mode="good", counter=factory.counter)
+            return s
+
+        code, out = run(["--fake", "good"], make_session=make)
+        self.assertEqual(code, 1, out)
+        self.assertIn("ERROR", out)
+        self.assertIn("panel HTTP 503", out)
+        self.assertIn("passed=", out)                       # the scorecard still printed
+        self.assertGreaterEqual(len(scored_lines(out)), 20)  # every turn got a line
+
+    def test_linger_catches_a_leak_that_lands_after_the_panel_looked_settled(self):
+        # The leak appears only several panel reads after the disclosure turn
+        # settled; T18-T20 pass, the linger line (T21) fails.
+        factory = ljc.FakeSessionFactory("good", leak_after_reads=10)  # reads 1-10 are init, T18-T20 and their settles
+        code, out = run(["--fake", "good"], make_session=factory)
+        self.assertEqual(code, 1, out)
+        self.assertIn("[T21] FAIL", out)
+        self.assertIn("leaked late", out)
+        self.assertIn("[T20] PASS", out)
+
+
     def test_unsettled_panel_fails_that_turn_without_hanging(self):
         factory = ljc.FakeSessionFactory("good", unsettled=True)
         started = time.monotonic()
