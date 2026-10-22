@@ -83,6 +83,34 @@ When `[Unreleased]` in the changelog has something worth tagging: rename it to t
 date, commit, tag `vX.Y.Z` on `main`, publish a GitHub Release (notes auto-generate from labels
 via `.github/release.yml`).
 
+## Deploying the Space
+
+The judge-facing demo is the Hugging Face Space `elevenbaselab/foreveryours` (#11). Nobody
+deploys it by hand: `.github/workflows/deploy-space.yml` does, so a collaborator deploys by
+**merging to `main`** or by **Actions -> deploy-space -> Run workflow**.
+
+- **Before the freeze** (the `FREEZE_UTC` date in the workflow): every push to `main` runs the
+  tests, deploys that commit, waits for the Space to come up, checks the deployed sha, smokes the
+  Gradio API and runs the live judge check suite (`scripts/live_judge_check.py`) with a small
+  call cap.
+- **After the freeze:** a push to `main` only runs the tests. Deploy by publishing a GitHub
+  Release (see *Releases*) or by *Run workflow* with `action=deploy`. Rollback = publish or re-run
+  the workflow on the previous tag. Nothing deploys automatically.
+- **`Run workflow` with `action=check`** only proves the token works and the Space is reachable;
+  it uploads nothing.
+- **Token:** the repo secret `HF_TOKEN_FY_SPACE` (a fine-grained Hugging Face token with write
+  access to this one Space), exported to the scripts as `HF_TOKEN`. Without it the workflow skips
+  the deploy with a notice. The workflow never runs on `pull_request`, so a fork never sees it.
+- **Which commit is live:** every deploy stages a one-line `BUILD_INFO` (full git sha) and sets
+  the Space variable `BUILD_SHA`; the app shows `Build: <sha7>` under *About this demo
+  household*. `python scripts/verify_space_sha.py elevenbaselab/foreveryours` exits 0 only when
+  the Space runs your local `HEAD` (`--sha <sha>` to compare against another commit,
+  `--wait 900` to first wait for a build, `--smoke` to also call `view_api()`).
+- **By hand, if Actions is unavailable:** from a clean, pushed `main`,
+  `HF_TOKEN=... NEBIUS_API_KEY= python scripts/deploy_hf_space.py elevenbaselab/foreveryours --hardware zero-a10g`
+  then `python scripts/verify_space_sha.py elevenbaselab/foreveryours --wait 900 --smoke`.
+  The deploy script refuses a dirty tree, so the recorded sha is always a real commit.
+
 ## After every Space deploy: the live judge check
 
 The unit tests stub the LLM, so they cannot see what the hosted model actually says (the

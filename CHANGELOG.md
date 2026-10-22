@@ -17,14 +17,28 @@ rename `Unreleased` to the version and date, then tag it.
   disclosure) with keyword assertions on the reply and the caregiver panel, a scorecard, and a
   hard cap on submitted reply turns (default 25). `--fake good|bad` runs the same turns against
   an offline stub. `HOW_TO_WORK_HERE.md` names it as the required check after every Space deploy.
+- One-click **Load sample family** button on the caregiver side (Office #23218): seeds this
+  session's household with a labelled-fictional senior (Walter), family, likes, a daily routine
+  and caregiver-entered medication reminder times as plain schedule items, shown as a
+  "Fictional sample household" card and recalled in the senior's replies; `validate_sample_profile`
+  refuses dosing, diagnosis and clinical-claim language, and the session-end sweep removes the seed
+  with everything else.
+- The Space deploys from GitHub Actions (`.github/workflows/deploy-space.yml`, Office #23226,
+  #11): before the freeze every push to `main` deploys and runs the live judge check suite; after
+  it, only a published Release or a manual *Run workflow* deploys. Each deploy records the commit
+  it was built from (`BUILD_INFO` file + `BUILD_SHA` Space variable), the app shows it as
+  `Build: <sha7>` under *About this demo household*, `scripts/verify_space_sha.py` checks a Space
+  against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
+
+## [0.2.0] - 2026-10-22
 
 ### Fixed
-- The companion no longer tells Dad that Sarah is listening to the conversation (Office #23219,
-  judge-sim findings 1 and 9): THINK's system prompt now carries a no-listening honesty rule (a
+- The companion no longer tells Dad that Sarah is listening to the conversation (judge-sim
+  findings 1 and 9): THINK's system prompt now carries a no-listening honesty rule (a
   caregiver only ever receives a safety flag or a disclosed wellbeing note, and Dad is always told when one is sent) and a
   remembered-facts attribution rule (state only facts in the provided memories, never add detail,
   and say "Sarah mentioned..." for caregiver-sourced facts rather than "you've always told me").
-- The caregiver panel's "Briefed memory" lists each memo fact once (Office #23215): every memo
+- The caregiver panel's "Briefed memory" lists each memo fact once: every memo
   path (pre-brief, typed memo, voice memo, `main.py beat1`) now splits sentences with one shared
   rule (`caregiver.split_memo_facts`), so a dictated memo ending sentences in "!" or "?" is no
   longer stored whole beside its own facts, and the panel skips an entry that only repeats facts
