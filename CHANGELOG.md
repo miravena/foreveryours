@@ -10,13 +10,15 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-22
+
 ### Fixed
-- The companion no longer tells Dad that Sarah is listening to the conversation (Office #23219,
-  judge-sim findings 1 and 9): THINK's system prompt now carries a no-listening honesty rule (a
+- The companion no longer tells Dad that Sarah is listening to the conversation (judge-sim
+  findings 1 and 9): THINK's system prompt now carries a no-listening honesty rule (a
   caregiver only ever receives a safety flag or a disclosed wellbeing note, and Dad is always told when one is sent) and a
   remembered-facts attribution rule (state only facts in the provided memories, never add detail,
   and say "Sarah mentioned..." for caregiver-sourced facts rather than "you've always told me").
-- The caregiver panel's "Briefed memory" lists each memo fact once (Office #23215): every memo
+- The caregiver panel's "Briefed memory" lists each memo fact once: every memo
   path (pre-brief, typed memo, voice memo, `main.py beat1`) now splits sentences with one shared
   rule (`caregiver.split_memo_facts`), so a dictated memo ending sentences in "!" or "?" is no
   longer stored whole beside its own facts, and the panel skips an entry that only repeats facts
