@@ -224,6 +224,14 @@ class TestTtsTimeoutBound(unittest.TestCase):
             self.assertEqual(speak._parse_tts_timeout(raw), 10.0, raw)
         self.assertEqual(speak._parse_tts_timeout("2.5"), 2.5)
 
+    def test_reload_picks_up_env_loaded_after_import(self):
+        from unittest.mock import patch
+
+        with patch("pipeline.speak.TTS_TIMEOUT_S", speak.TTS_TIMEOUT_S), \
+             patch.dict("os.environ", {"TTS_TIMEOUT_S": "3"}, clear=False):
+            self.assertEqual(speak.reload_tts_timeout(), 3.0)
+            self.assertEqual(speak.TTS_TIMEOUT_S, 3.0)
+
     def test_run_bounded_abandons_a_hung_call(self):
         import subprocess as _sp
         import threading

@@ -66,6 +66,15 @@ def _parse_tts_timeout(raw: str | None) -> float:
 TTS_TIMEOUT_S = _parse_tts_timeout(os.environ.get("TTS_TIMEOUT_S"))
 
 
+def reload_tts_timeout() -> float:
+    """Re-read ``TTS_TIMEOUT_S`` from the environment. A caller that loads
+    ``.env`` after importing this module (main.py) calls this so the file's
+    value takes effect."""
+    global TTS_TIMEOUT_S
+    TTS_TIMEOUT_S = _parse_tts_timeout(os.environ.get("TTS_TIMEOUT_S"))
+    return TTS_TIMEOUT_S
+
+
 def _run_bounded(fn, label: str):
     """Run in-process ``fn()`` in a daemon thread, wait at most TTS_TIMEOUT_S.
 
