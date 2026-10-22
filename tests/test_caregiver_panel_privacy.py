@@ -8,13 +8,14 @@ and disclosed safety flags are shown by design and must keep showing.
 """
 
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 import webapp
 from caregiver import CaregiverFlags
-from memory.store import MemoryScope, MemoryStore
+from memory.store import MemoryScope, MemoryStore, PrivacyLevel
 
 
 class TestCaregiverPanelPrivacy(unittest.TestCase):
@@ -475,3 +476,29 @@ class TestBriefedMemoryDedupe(unittest.TestCase):
         for text in ("Dad loves jazz on Sunday mornings", "Leo `(caregiver_note)`", "Dad said he enjoys the garden"):
             self.assertIn(text, briefed)
         self.assertEqual(briefed.count("Dad loves jazz"), 2)  # the fact and the distinct Sunday one
+
+    def test_dedupe_keeps_facts_that_differ_in_value_script_privacy_or_lifetime(self):
+        # openai_review findings on the first cut: the fact key must not erase
+        # digits/decimals or non-ASCII words, and two copies of the same words
+        # that differ in privacy both stay (they mean different things to the
+        # caregiver); two active copies differing only in lifetime show once
+        # with the longer-lived copy's badge.
+        session_id, _ = webapp.init_session()
+        store = self._store(session_id)
+        store.add("Dose: 1.5 mg", source="caregiver_memo")
+        store.add("Dose: 15 mg", source="caregiver_memo")
+        store.add("爸爸喜欢爵士乐", source="caregiver_memo")  # two distinct CJK facts
+        store.add("孙子叫小明", source="caregiver_memo")
+        store.add("Call Sarah", source="caregiver_memo", privacy=PrivacyLevel.CAREGIVER_ONLY.value)
+        store.add("Call Sarah.", source="caregiver_memo")
+        store.add("Sarah visits", source="caregiver_note", scope=MemoryScope.TEMPORARY.value, expires_at=time.time() + 600)
+        store.add("Sarah visits.", source="caregiver_note", scope=MemoryScope.TEMPORARY.value, expires_at=time.time() + 5 * 3600)
+        briefed = self._briefed(webapp._format_caregiver_panel(session_id))
+        for text in ("Dose: 1.5 mg", "Dose: 15 mg", "爸爸喜欢爵士乐", "孙子叫小明"):
+            self.assertEqual(briefed.count(text), 1, briefed)
+        self.assertIn("Hidden from Dad]** Call Sarah `(caregiver_memo)`", briefed)
+        self.assertIn("🟢 **[Permanent]** Call Sarah. `(caregiver_memo)`", briefed)
+        self.assertEqual(briefed.count("Sarah visits"), 1, briefed)
+        self.assertIn("expires in 4h 59m]** Sarah visits. `(caregiver_note)`", briefed)
+        self.assertNotIn("expires in 9m", briefed)
+

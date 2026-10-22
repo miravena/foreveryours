@@ -182,61 +182,91 @@ def _caregiver_panel_may_show(item) -> bool:
 # Fixes #23215: Briefed memory must list each caregiver-memo fact once. The
 # splitters are now shared (caregiver.split_memo_facts), but a store written
 # before that, or by any future path that stores a whole memo beside its
-# fragments, would still render the fragments AND the whole memo. Compare
-# facts by a punctuation/case-insensitive key so "Dad loves jazz." and
-# "Dad loves jazz" are one fact, and drop a caregiver item whose key is just
-# other shown active caregiver items joined end to end. Only CAREGIVER_SOURCES
-# items are ever dropped; what _caregiver_panel_may_show hides is unchanged.
-_FACT_KEY_RE = re.compile(r"[^a-z0-9]+")
+# fragments, would still render the fragments AND the whole memo. Facts are
+# compared by a key that ignores case, whitespace and sentence punctuation
+# but keeps every word (Unicode included) and in-word punctuation, so
+# "Dad loves jazz." and "Dad loves jazz" are one fact while "Dose: 1.5 mg"
+# and "Dose: 15 mg" are two. The key includes the item's privacy level: a
+# caregiver-only copy and a public copy of the same words mean different
+# things to the caregiver and both stay. A caregiver item is dropped only
+# when its key repeats a listed fact, or is other shown active caregiver
+# items joined end to end (the whole memo). Only CAREGIVER_SOURCES items are
+# ever dropped; what _caregiver_panel_may_show hides is unchanged.
+_FACT_TOKEN_RE = re.compile(r"\w+(?:[.,:/'\u2019-]\w+)*")
 
 
-def _fact_key(text: str) -> str:
-    return _FACT_KEY_RE.sub("", text.lower())
+def _fact_tokens(text: str) -> tuple[str, ...]:
+    return tuple(_FACT_TOKEN_RE.findall(text.lower()))
 
 
-def _is_concatenation_of(key: str, parts: set[str]) -> bool:
-    """True if `key` can be spelled by joining two or more of `parts`
+def _fact_key(item) -> tuple:
+    return (item.privacy, _fact_tokens(item.text))
+
+
+def _is_concatenation_of(tokens: tuple[str, ...], parts: set[tuple[str, ...]]) -> bool:
+    """True if `tokens` can be spelled by joining two or more of `parts`
     (each usable any number of times) end to end."""
     parts = {p for p in parts if p}
     dead: set[tuple[int, int]] = set()
 
     def covers(pos: int, used: int) -> bool:
-        if pos == len(key):
+        if pos == len(tokens):
             return used >= 2
         if (pos, min(used, 2)) in dead:
             return False
         for part in parts:
-            if key.startswith(part, pos) and covers(pos + len(part), used + 1):
+            if tokens[pos:pos + len(part)] == part and covers(pos + len(part), used + 1):
                 return True
         dead.add((pos, min(used, 2)))
         return False
 
-    return bool(key) and covers(0, 0)
+    return bool(tokens) and covers(0, 0)
+
+
+def _longer_lived(a, b):
+    """Of two active copies of one fact, the one valid longest (no expiry
+    beats any expiry) -- the deadline the panel shows must not be the one
+    that lapses first while another copy of the same fact lives on."""
+    if a.expires_at is None:
+        return a
+    if b.expires_at is None or b.expires_at > a.expires_at:
+        return b
+    return a
 
 
 def _dedupe_briefed_memory(items: list, now: float) -> list:
     """Render-time dedupe for the Briefed memory list (#23215): returns
     `items` in order minus caregiver items that repeat a fact already listed
-    -- same key as an active caregiver item kept earlier, or a key that is the
+    -- same key as an active caregiver item, or a key that is the
     concatenation of other active caregiver items' keys. Non-caregiver items
-    pass through untouched."""
-    active_keys: dict[str, int] = {}
+    and items with no words pass through untouched."""
+    active: dict[tuple, object] = {}  # key -> the copy to show for that fact
     for item in items:
         if item.source in CAREGIVER_SOURCES and item.is_active(now):
-            active_keys[_fact_key(item.text)] = active_keys.get(_fact_key(item.text), 0) + 1
+            key = _fact_key(item)
+            if key[1]:
+                active[key] = _longer_lived(active[key], item) if key in active else item
     kept: list = []
-    seen: set[str] = set()
+    seen: set[tuple] = set()
     for item in items:
         if item.source not in CAREGIVER_SOURCES:
             kept.append(item)
             continue
-        key = _fact_key(item.text)
+        key = _fact_key(item)
+        if not key[1]:
+            kept.append(item)  # no words to compare on; never guess
+            continue
         if key in seen:
             continue  # same fact, different punctuation/case
-        if not item.is_active(now) and key in active_keys:
-            continue  # an active copy of this fact is (or will be) listed
-        others = {k for k in active_keys if k != key}
-        if _is_concatenation_of(key, others):
+        if key in active and item is not active[key]:
+            if item.is_active(now):
+                # Another active copy lives longer; show the fact once, at its
+                # place in the list, carrying the longest-lived copy's badge.
+                item = active[key]
+            else:
+                continue  # an active copy of this fact is listed
+        others = {k[1] for k in active if k[0] == key[0] and k[1] != key[1]}
+        if _is_concatenation_of(key[1], others):
             continue  # the whole memo, already listed fact by fact
         seen.add(key)
         kept.append(item)
