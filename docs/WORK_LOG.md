@@ -9,6 +9,15 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-22 (Fixes #176, #177: browser retention notice grammar and audio cache disclosure)
+- **Who:** SirTehTarik (assisted by Antigravity)
+- **What:** Addressed backlog bugs #176 and #177 caught in the automated daily review:
+  1. Fixed ungrammatical wording in `webapp.py` line 1343 ("removed about the session cleanup timer runs" -> "are removed when the session cleanup timer runs").
+  2. Aligned the browser notice in `webapp.py`, `docs/PRIVACY.md`, and `docs/SAFETY_AND_PRIVACY.md` to state that both recorded input audio and Gradio's cached reply audio copies remain in Gradio's separate file cache until its periodic sweep runs.
+  3. Added regression tests in `tests/test_retention_notice.py` guarding notice grammar and reply audio cache disclosure in both docs.
+- **Result:** `tests/test_retention_notice.py` -> 9 tests OK. `tests/test_webapp.py` -> 25 tests OK. All 22 mature benchmarks pass.
+- **Next:** Proceed with video shot list and recording (#21 / #5).
+
 ### 2026-10-21 (Ticket #16084 round 4: perseveration disclosure regression from #88)
 - **What:** Office ticket #16084 round 4 (prior rounds landed `d624ab0`..`088c9c2`, merged
   `0598d3e`). The review bounce found that the unrelated #88 "public-demo release candidate" PR

@@ -10,6 +10,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Fixed
+- Fixed ungrammatical wording in the browser retention notice and clarified that both recorded input audio and Gradio's cached reply audio copies remain until the separate cache sweep runs (`webapp.py`, `docs/PRIVACY.md`, `docs/SAFETY_AND_PRIVACY.md`, fixes #176, fixes #177).
+
 ## [0.2.0] - 2026-10-22
 
 ### Fixed
