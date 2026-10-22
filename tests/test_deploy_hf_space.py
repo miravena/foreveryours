@@ -96,14 +96,15 @@ class TestHardwareRequest(unittest.TestCase):
     SHA = "0123456789abcdef0123456789abcdef01234567"
     TOKEN = "hf_SENTINEL_never_printed_0000"
 
-    def _run(self, hardware="zero-a10g", requested=None, dirty=False, argv_extra=()):
+    def _run(self, hardware="zero-a10g", requested=None, dirty=False, argv_extra=(), env=None):
         from types import SimpleNamespace
         from unittest import mock
         api = mock.MagicMock()
         api.get_space_runtime.return_value = SimpleNamespace(hardware=hardware, requested_hardware=requested)
         argv = ["deploy", "me/demo", "--hardware", "zero-a10g", "--gradio-version", "6.0.0", *argv_extra]
         hub = SimpleNamespace(HfApi=lambda **kw: api)
-        env = {"HF_TOKEN": self.TOKEN, "NEBIUS_API_KEY": ""}
+        if env is None:
+            env = {"HF_TOKEN": self.TOKEN, "NEBIUS_API_KEY": ""}
         printed = []
         with mock.patch("sys.argv", argv), mock.patch.dict("sys.modules", {"huggingface_hub": hub}), \
                 mock.patch.dict(deploy.os.environ, env, clear=True), \
@@ -135,6 +136,28 @@ class TestHardwareRequest(unittest.TestCase):
         api.add_space_variable.assert_any_call("me/demo", "BUILD_SHA", self.SHA)
         self.assertIn(self.SHA[:7], out)
         self.assertNotIn(self.TOKEN, out)
+
+    def test_missing_hf_token_refuses_before_any_hub_call(self):
+        # Negative control for the deploy guard: with HF_TOKEN unset the script must
+        # exit non-zero naming HF_TOKEN, touch nothing on the Hub, and print no secret.
+        # Removing the `if not token` guard makes this fail (HfApi runs, rc becomes 0).
+        nebius = "nebius_SENTINEL_never_printed_1111"
+        for unset in ({"NEBIUS_API_KEY": nebius}, {"HF_TOKEN": "", "NEBIUS_API_KEY": nebius}):
+            with self.subTest(env=sorted(unset)):
+                rc, api, out = self._run(env=unset)
+                self.assertNotEqual(rc, 0)
+                self.assertIn("HF_TOKEN", out)
+                self.assertNotIn(nebius, out)
+                self.assertNotIn(self.TOKEN, out)
+                api.create_repo.assert_not_called()
+                api.add_space_secret.assert_not_called()
+                api.upload_folder.assert_not_called()
+
+    def test_workflow_skips_with_a_notice_when_the_secret_is_missing(self):
+        wf = (ROOT / ".github" / "workflows" / "deploy-space.yml").read_text()
+        self.assertIn("HF_TOKEN: ${{ secrets.HF_TOKEN_FY_SPACE }}", wf)
+        self.assertIn('if [ -z "$HF_TOKEN" ]; then', wf)
+        self.assertIn("::notice::Repo secret HF_TOKEN_FY_SPACE is not set; skipping the Space deploy.", wf)
 
     def test_pending_switch_away_is_overridden(self):
         self.assertTrue(self._deploy("zero-a10g", "cpu-basic"))
