@@ -419,9 +419,11 @@ class TestBriefedMemoryDedupe(unittest.TestCase):
         # every fact twice -- once alone, once inside the whole-memo entry.
         session_id, _ = webapp.init_session()  # pre-briefs the 4 fragments
         whole_memo = "Dad loves jazz! His grandson is named Leo? Avoid talking about driving"
+        legacy_memo = "Dad loves jazz.His grandson is named Leo.Avoid talking about driving."  # no space after "."
         store = self._store(session_id)
         self.assertIsNotNone(store.add(whole_memo, source="caregiver_memo"))
-        self.assertEqual(len(store.all()), len(self.FACTS) + 1)  # stored, so the panel must hide it
+        self.assertIsNotNone(store.add(legacy_memo, source="caregiver_memo"))
+        self.assertEqual(len(store.all()), len(self.FACTS) + 2)  # stored, so the panel must hide them
 
         emotional_text = "I feel lonely since my wife died"
         store.add(emotional_text, source="conversation_extract", scope=MemoryScope.EMOTIONAL.value)
@@ -430,6 +432,7 @@ class TestBriefedMemoryDedupe(unittest.TestCase):
         for fact in self.FACTS:
             self.assertEqual(briefed.count(fact), 1, f"{fact!r} listed {briefed.count(fact)}x:\n{briefed}")
         self.assertNotIn(whole_memo, briefed)
+        self.assertNotIn(legacy_memo, briefed)
         self.assertNotIn(emotional_text, briefed)  # #140 rules untouched by the dedupe
 
     def test_dedupe_same_fact_different_punctuation_listed_once(self):

@@ -193,7 +193,10 @@ def _caregiver_panel_may_show(item) -> bool:
 # when its key repeats a listed fact, or is other shown active caregiver
 # items joined end to end (the whole memo). Only CAREGIVER_SOURCES items are
 # ever dropped; what _caregiver_panel_may_show hides is unchanged.
-_FACT_TOKEN_RE = re.compile(r"[-+]?\w+(?:[.,:/'\u2019-]\w+)*")
+# A word may carry apostrophes/hyphens ("o'clock", "well-known") and a number
+# may carry .,:/ followed by MORE DIGITS ("1.5", "3:30", "1/2"); "jazz.His"
+# (legacy no-space period) is two words, not one (openai_review on #23215).
+_FACT_TOKEN_RE = re.compile(r"[-+]?\w+(?:['\u2019-]\w+)*(?:[.,:/]\d+)*")
 
 
 def _fact_tokens(text: str) -> tuple[str, ...]:
