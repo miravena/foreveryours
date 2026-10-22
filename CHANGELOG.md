@@ -10,6 +10,14 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Added
+- The Space deploys from GitHub Actions (`.github/workflows/deploy-space.yml`, Office #23226,
+  #11): before the freeze every push to `main` deploys and runs the live judge check suite; after
+  it, only a published Release or a manual *Run workflow* deploys. Each deploy records the commit
+  it was built from (`BUILD_INFO` file + `BUILD_SHA` Space variable), the app shows it as
+  `Build: <sha7>` under *About this demo household*, `scripts/verify_space_sha.py` checks a Space
+  against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
+
 ### Fixed
 - The companion no longer tells Dad that Sarah is listening to the conversation (Office #23219,
   judge-sim findings 1 and 9): THINK's system prompt now carries a no-listening honesty rule (a

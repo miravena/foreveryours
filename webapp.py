@@ -83,6 +83,10 @@ from pipeline.orchestrator import run_turn
 DATA_DIR = Path(__file__).resolve().parent / "data"
 AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
 SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
+# Written by scripts/deploy_hf_space.py into the staged Space folder (one line: the
+# full git sha the Space was built from). Absent in a checkout, so local runs show no
+# build line and the Space shows exactly the commit judges are looking at.
+BUILD_INFO_PATH = Path(__file__).resolve().parent / "BUILD_INFO"
 SAMPLE_CLIPS = ("senior_schedule.wav", "senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav")
 MAX_DAILY_REQUESTS = int(os.environ.get("MAX_DAILY_REQUESTS", "50"))
 MAX_HISTORY_TURNS = 4  # (user, assistant) pairs kept -- bounds prompt growth, not a product limit
@@ -1238,6 +1242,17 @@ footer { display: none !important; }
 """
 
 
+def _build_line(path: Path = BUILD_INFO_PATH) -> str:
+    """"Build: <sha7>" when a deploy wrote BUILD_INFO next to this file, else ""."""
+    try:
+        sha = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    if not sha:
+        return ""
+    return f"Build: `{sha[:7]}`"
+
+
 def build_demo() -> gr.Blocks:
     _start_session_sweeper()
     with gr.Blocks(
@@ -1351,6 +1366,10 @@ def build_demo() -> gr.Blocks:
                 f"{_CACHE_MAX_MIN} minutes. We never promise deletion the instant the "
                 f"tab closes."
             )
+
+            build_line = _build_line()
+            if build_line:
+                gr.Markdown(build_line)
 
         if DEV_MODE:
             with gr.Accordion("Model & Pipeline Info", open=False):

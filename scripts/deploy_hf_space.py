@@ -15,6 +15,11 @@ What it does, in order:
 3. Creates the Space if it doesn't exist, uploads the folder, and sets
    NEBIUS_API_KEY as a Space *secret* (never a committed file) plus the
    non-secret variables below.
+4. Records which commit it deployed: the staged folder carries a one-line
+   BUILD_INFO file (the full 40-char HEAD sha), which webapp.py shows as
+   "Build: <sha7>" in the "About this demo household" accordion, and the Space
+   gets a non-secret BUILD_SHA variable. A dirty tree is refused (except with
+   --dry-run) so the recorded sha is always a commit that exists.
 
 Why a script instead of "push app.py to a Space": the Space needs a config
 header our GitHub README shouldn't carry, and the key must go in as a
@@ -37,11 +42,13 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+BUILD_INFO = "BUILD_INFO"  # staged file: one line, the full git sha the Space was built from
 
 STAGE_FILES = [
     "app.py", "webapp.py", "caregiver.py", "envload.py", "__init__.py",
@@ -85,7 +92,29 @@ Source, setup and docs: https://github.com/miravena/foreveryours
 """
 
 
-def stage(dest: Path, gradio_version: str, hardware: str = "cpu-basic") -> list[str]:
+def git_head_sha(root: Path = ROOT) -> str:
+    """Full 40-char sha of HEAD in the repo at `root`."""
+    return subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def git_tree_is_dirty(root: Path = ROOT) -> bool:
+    """True when tracked files differ from HEAD (untracked files don't count:
+    the staged folder copies only tracked paths, and out/ is always untracked)."""
+    out = subprocess.run(
+        ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    return bool(out.strip())
+
+
+def stage(dest: Path, gradio_version: str, hardware: str = "cpu-basic",
+          build_sha: str | None = None) -> list[str]:
+    if build_sha is None:
+        build_sha = git_head_sha()
+    (dest / BUILD_INFO).write_text(build_sha + "\n", encoding="utf-8")
     for name in STAGE_FILES:
         shutil.copy2(ROOT / name, dest / name)
     if hardware.startswith("zero-"):
@@ -126,11 +155,17 @@ def main() -> int:
             print("gradio not installed; pass --gradio-version", file=sys.stderr)
             return 2
 
+    if not args.dry_run and git_tree_is_dirty():
+        print("Refusing to deploy from a dirty tree: BUILD_INFO must name a commit that exists. "
+              "Commit or stash your changes (or use --dry-run to stage only).", file=sys.stderr)
+        return 2
+    build_sha = git_head_sha()
+
     with tempfile.TemporaryDirectory() as tmp:
         stage_dir = Path(tmp)
-        files = stage(stage_dir, gradio_version, args.hardware)
+        files = stage(stage_dir, gradio_version, args.hardware, build_sha)
         print(f"Staged {len(files)} files for {args.space_id} "
-              f"(gradio {gradio_version}, hardware {args.hardware}):")
+              f"(gradio {gradio_version}, hardware {args.hardware}, build {build_sha[:7]}):")
         for f in files:
             print(f"  {f}")
         if args.keep_stage:
@@ -165,10 +200,11 @@ def main() -> int:
             api.add_space_secret(args.space_id, "NEBIUS_API_KEY", nebius_key)
         for key, value in SPACE_VARIABLES.items():
             api.add_space_variable(args.space_id, key, value)
+        api.add_space_variable(args.space_id, "BUILD_SHA", build_sha)
         api.upload_folder(folder_path=str(stage_dir), repo_id=args.space_id, repo_type="space",
                           commit_message="Deploy ForeverYours demo")
 
-    print(f"Deployed. Space: https://huggingface.co/spaces/{args.space_id} "
+    print(f"Deployed {build_sha[:7]}. Space: https://huggingface.co/spaces/{args.space_id} "
           "(first build takes a few minutes; watch its Logs tab).")
     return 0
 

@@ -9,6 +9,20 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-22 (Office #23226: deploy from Actions, show the deployed sha)
+- **What:** `.github/workflows/deploy-space.yml` (push to main until the freeze, Release,
+  Run workflow; token check first; concurrency group; skips with a notice when the
+  `HF_TOKEN_FY_SPACE` secret is absent). `scripts/deploy_hf_space.py` stages `BUILD_INFO`
+  (full HEAD sha), sets the `BUILD_SHA` Space variable and refuses a dirty tree unless
+  `--dry-run`; `webapp.py` shows `Build: <sha7>` when `BUILD_INFO` exists.
+  `scripts/verify_space_sha.py` waits for RUNNING, compares the Space's `BUILD_INFO` to a sha
+  and can smoke `view_api()`. Offline tests: `tests/test_space_release.py`, additions to
+  `tests/test_deploy_hf_space.py` and `tests/test_webapp.py`.
+- **Gotcha:** `huggingface_hub`'s `SpaceRuntime.stage` is an enum in newer versions and a plain
+  string in older ones; the verify script normalises `SpaceStage.RUNNING` -> `RUNNING`.
+- **Gotcha:** `NEBIUS_API_KEY=` set but empty makes the deploy script leave the Space's
+  existing secret alone; unset, it refuses. The workflow sets it empty on purpose.
+
 ### 2026-10-21 (Ticket #16084 round 4: perseveration disclosure regression from #88)
 - **What:** Office ticket #16084 round 4 (prior rounds landed `d624ab0`..`088c9c2`, merged
   `0598d3e`). The review bounce found that the unrelated #88 "public-demo release candidate" PR
