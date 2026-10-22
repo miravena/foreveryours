@@ -201,7 +201,9 @@ def _speak_turn(sentences, audio_out_dir: Path, on_chunk=None) -> tuple[str, lis
     for each chunk the moment it is synthesized -- this lets a caller play a
     sentence while the next one is still being synthesized (issue #17). When
     ``on_chunk`` is None (the default), behavior is exactly as before, so
-    callers like webapp.py that only read ``audio_paths`` are unaffected."""
+    callers like webapp.py that only read ``audio_paths`` are unaffected.
+    The callback's return value is the consumer's acknowledgement; see
+    ``_speak_disclosure`` for how it gates attestation (#23231)."""
     t0 = time.monotonic()
     parts: list[str] = []
     paths: list[Path] = []
@@ -221,12 +223,38 @@ def _speak_disclosure(
     audio_out_dir: Path,
     on_chunk=None,
 ) -> tuple[list[Path], bool]:
-    """Synthesize and deliver a disclosure before it can be recorded as told."""
-    _, paths, _ = _speak_turn(iter([text]), audio_out_dir, on_chunk=on_chunk)
-    # A late disclosure is only delivered when the caller accepts it in the
-    # current output stream. Returning a WAV path alone is not enough: the
-    # non-streaming browser path has already handed its response to Gradio.
-    return paths, bool(paths) and on_chunk is not None
+    """Synthesize and deliver a disclosure before it can be recorded as told.
+
+    Returns ``(paths, disclosed)``. ``disclosed`` is True only when audio was
+    synthesized AND an ``on_chunk`` consumer exists AND it ACCEPTED every
+    chunk (Office #23231). Acceptance is the callback's return value, in the
+    ``queue.task_done()`` sense -- an item counts as delivered only when the
+    consumer says it took it, never because it was handed over: an explicit
+    ``False`` (e.g. webapp's ``_ChunkConsumer.offer`` after the browser
+    stopped listening, or a chunk that was enqueued but never dequeued and
+    yielded) refuses attestation. Any other return value, including
+    ``None`` from a plain callback that returns nothing, counts as accepted.
+    A callback may instead return a pending acknowledgement -- any object
+    with a ``wait_accepted()`` method, as webapp's streaming ``_on_chunk``
+    does so the main reply never blocks on the browser -- and it is resolved
+    here, blocking until the consumer settles it (bounded by the consumer).
+    Without ``on_chunk`` (the non-streaming browser path, which has already
+    handed its response to Gradio) a disclosure is never attested."""
+    refused = False
+
+    def _tracking(sentence, audio_path):
+        nonlocal refused
+        ack = on_chunk(sentence, audio_path)
+        wait_accepted = getattr(ack, "wait_accepted", None)
+        if callable(wait_accepted):
+            ack = wait_accepted()
+        if ack is False:
+            refused = True
+
+    _, paths, _ = _speak_turn(
+        iter([text]), audio_out_dir, on_chunk=_tracking if on_chunk is not None else None
+    )
+    return paths, bool(paths) and on_chunk is not None and not refused
 
 
 def run_turn(

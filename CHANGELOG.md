@@ -31,6 +31,11 @@ rename `Unreleased` to the version and date, then tag it.
   against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
 
 ### Fixed
+- A late audit or lifestyle disclosure is recorded as told only when the browser actually got
+  its audio (Office #23231): the streaming turn keeps playing the follow-up line after the reply
+  (bounded by `_BG_JOIN_TIMEOUT_S`), and a line spoken after the browser stopped listening is
+  recorded `disclosed_to_senior=False` and its lifestyle note is suppressed, instead of the
+  panel saying "Dad was told".
 - The daily request cap no longer blocks the offline safety fast-path (Office #23228): once a
   session hits `MAX_DAILY_REQUESTS`, "I fell down" / "I can't breathe" / "I want to die" /
   "Where am I?" still get the spoken fast-path reply and the caregiver flag, with a one-line cap
