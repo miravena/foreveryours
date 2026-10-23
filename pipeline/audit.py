@@ -45,7 +45,8 @@ AUDIT_SYSTEM_PROMPT += CRISIS_EXAMPLES_BLOCK
 # (ADR-010); the return shape of audit_reply() stays (status, text).
 LAST_USAGE = None
 
-DEFAULT_AUDIT_MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+# Super, not Nano: ADR-016 (amends ADR-010). THINK stays on Nano (pipeline/think.py).
+DEFAULT_AUDIT_MODEL = "nvidia/nemotron-3-super-120b-a12b"
 
 
 def audit_reply(transcript: str, reply: str) -> tuple[str, str]:

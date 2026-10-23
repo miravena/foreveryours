@@ -1,6 +1,6 @@
 # ADR-014: One outbound caregiver notification channel: SMTP e-mail, webhook second, off by default
 
-**Status:** Accepted
+**Status:** Accepted (founder 2026-10-23; teammate review open on the issue)
 **Date:** 2026-10-23
 **Decided by:** Team
 **Affects:** `notify.py` (new), `caregiver.py` (two optional flag fields), `pipeline/orchestrator.py`, `webapp.py` (caregiver panel wording), `.env.example`

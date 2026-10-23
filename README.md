@@ -41,8 +41,9 @@ Written down on purpose: a judge or a family should know where this stops.
 
 - A fall described in other words ("I'm on the floor and can't reach the phone") is not caught by
   the rules. It depends on the background backstop, which runs after the reply and, on Nemotron 3
-  Nano, caught 12 of 19 labelled events (five of six falls missed). Nemotron 3 Super caught all 19;
-  switching is an open decision ([ADR-010](docs/decisions/ADR-010-audit-model-eval.md)).
+  Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
+  including falls; [ADR-016](docs/decisions/ADR-016-audit-model-super.md)). A small labelled set is
+  not proof of coverage.
 - Some crisis paraphrases come back SAFE from the backstop; the rules catch the direct phrases.
 - On the hosted demo the alert stays on the caregiver's half of the screen. Nothing reaches a phone.
 - A flag is marked "Dad was told" once the spoken line is synthesised, not once it is heard; a
@@ -63,8 +64,8 @@ HEAR (speech-to-text via local faster-whisper, offline-resilient)
   -> RECALL (memory search, scoped by caregiver-supplied context)
   -> THINK (NVIDIA Nemotron 3 Nano via Nebius Token Factory, streamed)
   -> SPEAK (streamed TTS, starts on the first sentence)
-  -> [async, off the critical path] AUDIT (reply safety + transcript distress/crisis backstop) +
-     memory extraction (via Nebius Nemotron)
+  -> [async, off the critical path] AUDIT (NVIDIA Nemotron 3 Super: reply safety + transcript
+     distress/crisis backstop) + memory extraction (Nemotron 3 Nano)
 ```
 
 Latency is treated as a first-class judging risk: the fast-path skips the LLM entirely for
@@ -212,8 +213,9 @@ offers $25 in sponsor credits via activation code `NEBIUS-DEVPOST-GLOBAL26`, plu
 through the free [Nebius Builders Program](https://dev.nebius.com/builders) (which also unlocks
 Tavily credits).
 
-**Which NVIDIA models run where.** THINK and AUDIT both use
-`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` on Token Factory. Each is overridable with `THINK_MODEL`
+**Which NVIDIA models run where.** THINK (the reply) uses
+`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` on Token Factory; AUDIT (the background safety backstop)
+uses `nvidia/nemotron-3-super-120b-a12b`. Each is overridable with `THINK_MODEL`
 or `AUDIT_MODEL`. We chose AUDIT's model with a 36-row labelled eval across the NVIDIA models
 Token Factory serves ([ADR-010](docs/decisions/ADR-010-audit-model-eval.md),
 `scripts/audit_eval.py`):
@@ -224,8 +226,11 @@ Token Factory serves ([ADR-010](docs/decisions/ADR-010-audit-model-eval.md),
 | Nemotron 3 Super 120B | 1.00 | 0/17 | 0.00011 USD |
 | Nemotron 3 Ultra 550B | 0.95 | 0/17 | 0.00037 USD |
 
-Nano stays the AUDIT default. Our pre-set rule switches models only on fewer false flags, and
-all three had none. The ADR records the recall gap and how to switch.
+AUDIT defaults to Super ([ADR-016](docs/decisions/ADR-016-audit-model-super.md)). On the later
+43-row set Nano's recall was 0.88, under our 0.90 floor, and Super's was 1.00; both had 0/17
+false flags. Super costs about $0.0002 per AUDIT call (Nano about $0.00004) and measured a median
+1.09 s (max 3.00 s) against Nano's 0.65 s (max 1.47 s); AUDIT runs after the reply, so that
+time is off the critical path.
 
 ## Licences of the voice components
 

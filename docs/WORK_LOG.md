@@ -756,6 +756,7 @@ One line each; the reasoning is in the ADR.
 | Attribution | Human = author, AI = `Co-Authored-By` trailer; warn-only guardrails | 10-05 | [007](decisions/ADR-007-attribution.md) |
 | Build vs reuse | Keep privacy layer, fast-path, voice loop; licence check on `piper-tts`; trial embedding retrieval (Proposed, review #114) | 10-09 | [009](decisions/ADR-009-build-vs-reuse.md) |
 | AUDIT model eval | Nano kept for AUDIT under the fixed rule; Super recall 1.00 vs Nano 0.63, both 0/17 false flags | 10-22 | [010](decisions/ADR-010-audit-model-eval.md) |
+| AUDIT model: Super | AUDIT default moves to Nemotron 3 Super (live 43-row eval: recall 1.00 vs Nano 0.88, 0/17 false flags each); THINK stays on Nano; amends 010 and 002 | 10-23 | [016](decisions/ADR-016-audit-model-super.md) |
 | Outbound caregiver notification | SMTP e-mail default, webhook second, off when unset and on the hosted Space; fixed-text body, hourly cap | 10-23 | [014](decisions/ADR-014-outbound-notification.md) |
 
 ## How to update this

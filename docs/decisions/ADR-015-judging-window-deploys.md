@@ -1,6 +1,6 @@
 # ADR-015: During judging only `v1.0.x` patches deploy, and rollback is by tag
 
-**Status:** Proposed
+**Status:** Accepted (founder 2026-10-23; teammate review open on the issue)
 **Date:** 2026-10-23
 **Decided by:** Both maintainers (comment on the issue before the freeze)
 **Affects:** `.github/workflows/deploy-space.yml` (no change), `HOW_TO_WORK_HERE.md`, `CHANGELOG.md`

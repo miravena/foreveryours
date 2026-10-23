@@ -122,9 +122,9 @@ anymore"), and what costs points. One line each: rubric item, then the proposed 
   caregiver column, marked "NOT yet disclosed". *Quality of the Idea.* Fix: the team decides
   whether to qualify the sentence; it is required verbatim, so README.md,
   docs/Project_Description.md and the draft change together (#14).
-- The safety backstop on Nano caught 12 of 19 true events and five of six falls slipped past it
-  (ADR-010). *Technological Implementation.* Fix: revisit ADR-010's rule and move AUDIT to
-  Nemotron 3 Super, which caught all 19.
+- The safety backstop was Nano, which caught 12 of 19 true events (ADR-010). *Technological
+  Implementation.* Fixed 2026-10-23: AUDIT now runs Nemotron 3 Super (ADR-016), which caught every
+  labelled row; the set is small, so coverage is not proven.
 - One scorer only. Fix: second human score, compared after both are written down.
 
 ## When to run this

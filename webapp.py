@@ -2111,15 +2111,20 @@ _FLAG_ORIGINS = {
     "perseveration": "raised by: repeated-question check",
 }
 
-_NEMOTRON_ID = re.compile(r"^NVIDIA-(Nemotron-.+?)(?:-A\d+B)?$")
+_NEMOTRON_ID = re.compile(r"^(?:NVIDIA-)?(Nemotron-.+?)(?:-A\d+B)?$", re.IGNORECASE)
 
 
 def _model_label(model_id: str) -> str:
     """Readable name for a Token Factory model id: "NVIDIA Nemotron 3 Nano
-    30B" for the Nemotron ids, the bare id after the vendor prefix otherwise."""
+    30B" for the Nemotron ids (either casing: the Super id is lower-case), the
+    bare id after the vendor prefix otherwise."""
     name = model_id.rsplit("/", 1)[-1]
     m = _NEMOTRON_ID.match(name)
-    return f"NVIDIA {m.group(1).replace('-', ' ')}" if m else name
+    if not m:
+        return name
+    words = [w.upper() if re.fullmatch(r"\d+b", w, re.IGNORECASE) else w.capitalize()
+             for w in m.group(1).replace("_", ".").split("-")]
+    return "NVIDIA " + " ".join(words)
 
 
 def _think_model() -> str:
@@ -2324,7 +2329,8 @@ def build_demo() -> gr.Blocks:
 
         if DEV_MODE:
             with gr.Accordion("Model & Pipeline Info", open=False):
-                gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
+                gr.Markdown(f"**Reply (THINK):** `{_think_model()}` (Nebius Token Factory)\n\n"
+                            f"**Safety backstop (AUDIT):** `{_audit_model()}` (Nebius Token Factory)\n\n"
                             "**Audio Perception (HEAR):** `faster-whisper` (local CPU)\n\n"
                             "*Background memory extraction & safety audit run asynchronously via Nebius Token Factory.*")
 

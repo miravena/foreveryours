@@ -1,6 +1,6 @@
 # ADR-013: Crisis phrases: which live in the regex tier, which in the AUDIT backstop
 
-**Status:** Proposed (live numbers measured 2026-10-23, below; awaiting maintainer review)
+**Status:** Accepted (founder 2026-10-23; teammate review open on the issue)
 **Date:** 2026-10-23
 **Decided by:** Team (founder reads this ADR; safety-critical)
 **Affects:** `safety/fastpath.py` (`CRISIS_PATTERNS`, `_BENIGN_CRISIS_IDIOMS`), `pipeline/audit.py` (prompt examples), `pipeline/orchestrator.py` (next-turn carry, 988-once guard), `tests/fixtures/crisis_eval_set.jsonl`, `scripts/crisis_eval.py`
