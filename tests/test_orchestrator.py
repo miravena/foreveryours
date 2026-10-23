@@ -178,6 +178,28 @@ class TestOrchestrator(unittest.TestCase):
         if res.background_thread:
             res.background_thread.join(timeout=10)
 
+    @patch("pipeline.orchestrator.fastpath.check")
+    @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
+    @patch("pipeline.orchestrator.think.stream_reply", return_value=["Reply"])
+    def test_general_appointments_question_hands_think_the_memo(self, mock_stream, mock_speak, mock_fast):
+        # #189 (judge turns T09/T11): a general, plural "appointments" question
+        # must reach THINK with the caregiver memo, not as a CASUAL turn with
+        # no updates.
+        from safety.fastpath import FastPathResult
+        mock_fast.return_value = FastPathResult(False, "none", None, None, None)
+        memo = "Dad has a check-up with Dr. Tan on Thursday at 10 AM."
+        self.store.add(memo, source="caregiver_memo")
+        with patch("pipeline.orchestrator.think.extract_new_memory", return_value=None):
+            res = run_turn(
+                "Do I have any appointments this week?",
+                self.store, self.flags, self.audio_dir, caregiver_name="Sarah",
+            )
+            if res.background_thread:
+                res.background_thread.join(timeout=10)
+        kwargs = mock_stream.call_args.kwargs
+        self.assertIn(memo, kwargs["caregiver_updates"])
+        self.assertEqual(kwargs["intent"], "LOGISTICAL")
+
     @patch("pipeline.think.stream_reply")
     def test_empty_reply_triggers_graceful_fallback(self, mock_stream):
         # When model returns empty tokens (e.g. token exhaustion during CoT),

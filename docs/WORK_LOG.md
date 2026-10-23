@@ -9,6 +9,18 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-23 (Judge turns T09/T11: a general appointments question recalls the memo)
+- **What:** the Space answered "Do I have any appointments this week?" with "I don't have any
+  appointments listed" right after the Dr. Tan memo (#189). The memo was stored and passed the
+  schedule filter; the turn never asked for it. `detect_intent` matched `\bappointment\b`, so the
+  plural fell through to CASUAL, and a CASUAL turn hands THINK no caregiver updates. The
+  LOGISTICAL noun pattern now takes `appointments?|doctors?|visits?`.
+- **Result:** red then green on `TestIntentDetection.test_plural_schedule_nouns_are_logistical` and
+  `TestOrchestrator.test_general_appointments_question_hands_think_the_memo` (stubbed THINK).
+  Live, local app, custom-memo group only (3 reply calls each): before the fix T09/T10/T11 FAIL
+  with the Space's own wording; after, T08-T11 PASS ("You have a check-up with Dr. Tan on
+  Thursday at 10 AM.").
+
 ### 2026-10-23 (Voice: public-domain Piper voice, warm server, shipped to the Space)
 - **What:** the Piper voice `en_US-lessac-medium` is trained on Blizzard 2013 data whose licence is
   research-only (named licensee, no sub-licence, excludes voice-synthesis products), so the default
