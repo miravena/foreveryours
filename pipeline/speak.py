@@ -20,6 +20,11 @@ pyttsx3 raises ``subprocess.TimeoutExpired`` to the caller.
 
 Needs the `espeak-ng` system package on Linux (`apt install espeak-ng`) when
 Piper is not used -- pyttsx3.init() raises OSError without it.
+
+Each sentence WAV is then smoothed in place (``_smooth_wav``, #194): the
+engine's own leading/trailing silence is trimmed, the edges get a short fade
+so joins don't click, and a fixed pause is appended, so sentences flow
+evenly whichever tier produced them and however they are played.
 """
 from __future__ import annotations
 
@@ -33,6 +38,8 @@ import subprocess
 import sys
 import threading
 import time
+import wave
+from array import array
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -54,6 +61,14 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_PIPER_MODEL = "models/piper/en_US-lessac-medium.onnx"
 
 _DEFAULT_TTS_TIMEOUT_S = 10.0
+
+# Sentence smoothing (#194). A 16-bit sample at or below the threshold
+# (about -40 dBFS) counts as silence; the margin keeps soft consonants
+# ("f", "h") that start or end below it.
+_SILENCE_THRESHOLD = 300
+_TRIM_MARGIN_S = 0.03
+_FADE_S = 0.008
+_SENTENCE_PAUSE_S = 0.2
 
 
 def _parse_tts_timeout(raw: str | None) -> float:
@@ -294,6 +309,61 @@ def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
     raise RuntimeError("Speech synthesis unavailable: install espeak-ng or pyttsx3")
 
 
+def _smooth_wav(path: Path) -> None:
+    """Trim, fade and pad one sentence WAV in place (#194).
+
+    Only uncompressed 16-bit PCM is touched. A missing, unreadable or
+    all-silent file, or any other format, is left exactly as it was, and the
+    result is written to a temp file and swapped in, so a failure here never
+    damages the original or fails the turn."""
+    try:
+        with wave.open(str(path), "rb") as w:
+            params = w.getparams()
+            frames = w.readframes(params.nframes)
+    except (OSError, EOFError, wave.Error):
+        return
+    if params.sampwidth != 2 or params.comptype != "NONE" or not frames:
+        return
+
+    channels = params.nchannels
+    samples = array("h")
+    samples.frombytes(frames[: len(frames) - len(frames) % (2 * channels)])
+    if sys.byteorder == "big":
+        samples.byteswap()  # WAV data is little-endian
+
+    loud = [i for i, v in enumerate(samples) if abs(v) > _SILENCE_THRESHOLD]
+    if not loud:
+        return  # all silence: keep it, never hand back an empty clip (#28)
+    n_frames = len(samples) // channels
+    margin = int(params.framerate * _TRIM_MARGIN_S)
+    start = max(0, loud[0] // channels - margin)
+    end = min(n_frames, loud[-1] // channels + 1 + margin)
+    body = samples[start * channels:end * channels]
+
+    length = end - start
+    fade = min(int(params.framerate * _FADE_S), length // 2)
+    for k in range(fade):
+        gain = k / fade
+        for c in range(channels):
+            body[k * channels + c] = int(body[k * channels + c] * gain)
+            tail = (length - 1 - k) * channels + c
+            body[tail] = int(body[tail] * gain)
+    body.extend([0] * (int(params.framerate * _SENTENCE_PAUSE_S) * channels))
+
+    if sys.byteorder == "big":
+        body.byteswap()
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with wave.open(str(tmp), "wb") as out:
+            out.setnchannels(channels)
+            out.setsampwidth(2)
+            out.setframerate(params.framerate)
+            out.writeframes(body.tobytes())
+        os.replace(tmp, path)
+    except (OSError, wave.Error):
+        tmp.unlink(missing_ok=True)
+
+
 def speak_sentences(sentences: Iterator[str], out_dir: Path) -> Iterator[tuple[str, Path]]:
     """Consume the WHOLE sentence stream for one turn in a single call --
     each call gets its own turn id, so calling this once per sentence (as
@@ -306,6 +376,7 @@ def speak_sentences(sentences: Iterator[str], out_dir: Path) -> Iterator[tuple[s
     for i, sentence in enumerate(sentences):
         out_path = out_dir / f"reply_{turn_id}_{i:03d}.wav"
         _synthesize_file(sentence, out_path, engine)
+        _smooth_wav(out_path)
         yield sentence, out_path
 
 

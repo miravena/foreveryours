@@ -75,6 +75,81 @@ class TestSpeak(unittest.TestCase):
         )
 
 
+def _write_wav(path, samples, rate=1000, sampwidth=2):
+    import wave
+    from array import array
+
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(sampwidth)
+        w.setframerate(rate)
+        if sampwidth == 2:
+            w.writeframes(array("h", samples).tobytes())
+        else:
+            w.writeframes(bytes(samples))
+
+
+def _read_wav(path):
+    import wave
+    from array import array
+
+    with wave.open(str(path), "rb") as w:
+        data = array("h")
+        data.frombytes(w.readframes(w.getnframes()))
+        return list(data)
+
+
+class TestSmoothWav(unittest.TestCase):
+    """#194: each sentence WAV is trimmed, faded and padded with a fixed pause.
+    At rate=1000 one frame is 1 ms: margin 30, fade 8, pause 200 frames."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.path = Path(self.temp_dir.name) / "s.wav"
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_trims_silence_and_appends_fixed_pause(self):
+        _write_wav(self.path, [0] * 500 + [10000] * 100 + [0] * 700)
+        speak._smooth_wav(self.path)
+        out = _read_wav(self.path)
+        # 30 margin + 100 speech + 30 margin + 200 pause
+        self.assertEqual(len(out), 360)
+        self.assertEqual(out[:30], [0] * 30)
+        self.assertEqual(out[-230:], [0] * 230)
+        self.assertEqual(out[30 + 50], 10000)
+
+    def test_fades_hard_edges(self):
+        _write_wav(self.path, [10000] * 100)
+        speak._smooth_wav(self.path)
+        out = _read_wav(self.path)
+        self.assertEqual(out[0], 0, "fade-in starts from silence (no click)")
+        self.assertLess(out[3], 10000)
+        self.assertEqual(out[50], 10000)
+        self.assertLess(abs(out[99]), 10000, "fade-out before the pause")
+        self.assertEqual(len(out), 100 + 200)
+
+    def test_all_silence_left_untouched(self):
+        _write_wav(self.path, [0] * 400)
+        before = self.path.read_bytes()
+        speak._smooth_wav(self.path)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_unsupported_format_left_untouched(self):
+        _write_wav(self.path, [128, 255, 0] * 100, sampwidth=1)
+        before = self.path.read_bytes()
+        speak._smooth_wav(self.path)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_missing_or_garbage_file_is_a_no_op(self):
+        speak._smooth_wav(self.path)  # missing: must not raise
+        self.assertFalse(self.path.exists())
+        self.path.write_bytes(b"not a wav")
+        speak._smooth_wav(self.path)
+        self.assertEqual(self.path.read_bytes(), b"not a wav")
+
+
 class TestPipelinedPlayer(unittest.TestCase):
     """Issue #17: playback overlaps synthesis, in order, and reports
     time-to-first-SOUND. Playback is always mocked -- no audio hardware."""
