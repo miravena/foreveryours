@@ -2144,7 +2144,15 @@ def _model_footer() -> str:
         hearing = f"{_model_label(asr)} on Nebius Token Factory"
     else:
         hearing = "faster-whisper, on this app's server"
-    voice = "Piper" if speak._piper_available() else "eSpeak NG"
+    # Same order as pipeline/speak.py: Piper, Windows System.Speech, espeak, pyttsx3.
+    if speak._piper_available():
+        voice = "Piper"
+    elif sys.platform == "win32":
+        voice = "Windows System.Speech"
+    elif speak._get_espeak_cli() is not None:
+        voice = "eSpeak NG"
+    else:
+        voice = "pyttsx3"
     return f"{models} · Hearing: {hearing} · Voice: {voice}, on this app's server"
 
 
