@@ -160,8 +160,32 @@ def split_memo_facts(memo: str | None) -> list[str]:
 _CLOCK_TIME_RE = re.compile(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b")
 # Standalone digit runs only: a number glued to a letter names the subject
 # ("vitamin B12" vs "B6", "room 4b") and stays (Codex P1).
-_DIGITS_RE = re.compile(r"(?<!\w)\d+(?!\w)")
-_SENTENCE_PUNCT_RE = re.compile(r"[.,!?;:]+(?=\s|$)")
+# Both helpers below are plain loops, not regexes: on user text, a regex with
+# a lookaround after a repeated class backtracks polynomially (CodeQL
+# py/polynomial-redos).
+_SENTENCE_PUNCT = ".,!?;:"
+
+
+def _is_word_char(ch: str) -> bool:
+    return ch.isalnum() or ch == "_"
+
+
+def _blank_standalone_digits(text: str) -> str:
+    """Every run of digits with no word character on either side becomes
+    "<n>"; "B12", "4b" and "12b" stay as written."""
+    out, i, n = [], 0, len(text)
+    while i < n:
+        if text[i].isdigit() and (i == 0 or not _is_word_char(text[i - 1])):
+            j = i
+            while j < n and text[j].isdigit():
+                j += 1
+            standalone = j == n or not _is_word_char(text[j])
+            out.append("<n>" if standalone else text[i:j])
+            i = j
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
 
 
 _CLOCK_TIME_PARTS_RE = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b")
@@ -179,7 +203,9 @@ def normalize_fact_text(text: str) -> str:
     "call  sarah", "pill, 8 AM" and "pill, 8:00 am" normalize the same (a
     restatement, not an update)."""
     lowered = _CLOCK_TIME_PARTS_RE.sub(_canonical_clock_time, (text or "").lower())
-    return " ".join(_SENTENCE_PUNCT_RE.sub("", lowered).split())
+    # sentence punctuation is what ends a whitespace-separated word
+    words = (w.rstrip(_SENTENCE_PUNCT) for w in lowered.split())
+    return " ".join(w for w in words if w)
 
 
 def fact_subject_key(text: str) -> str:
@@ -187,7 +213,7 @@ def fact_subject_key(text: str) -> str:
     blanked out (see the comment above). Equal keys + different normalized
     text = the newer fact replaces the older one."""
     key = _CLOCK_TIME_RE.sub(" <time> ", (text or "").lower())
-    key = _DIGITS_RE.sub("<n>", key)
+    key = _blank_standalone_digits(key)
     return normalize_fact_text(key)
 
 

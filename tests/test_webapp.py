@@ -39,6 +39,9 @@ from unittest.mock import patch
 import webapp
 from memory.store import MemoryStore
 
+# Gradio hands over uploads under the temp dir; webapp refuses audio paths outside it.
+FAKE_UPLOAD = os.path.join(tempfile.gettempdir(), "fake.wav")
+
 # Test prints (benchmarks, TTS fallbacks) go to a block-buffered stdout that is
 # flushed only at exit, AFTER unittest's stderr summary, so
 # `unittest discover tests 2>&1 | tail -1` never showed OK. Line-buffering keeps
@@ -91,7 +94,7 @@ class TestWebappSessions(unittest.TestCase):
 
         with patch.object(webapp.hear, "transcribe", return_value=(said, {"wpm": 0.0, "avg_pause_s": 0.0})):
 
-            return webapp.run_demo_turn("fake.wav", [], session_id)
+            return webapp.run_demo_turn(FAKE_UPLOAD, [], session_id)
 
 
 
@@ -118,7 +121,7 @@ class TestWebappSessions(unittest.TestCase):
         gets a fresh household and says so, instead of silently looking like
         a reset conversation."""
         with patch.object(webapp.hear, "transcribe", return_value=("Hello", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp.run_demo_turn("fake.wav", [], None)
+            result = webapp.run_demo_turn(FAKE_UPLOAD, [], None)
         self.assertIn("reset after a period of inactivity", result[0])
         self.assertIsNotNone(result[5])  # a new session_id was minted
 
@@ -382,7 +385,7 @@ class TestWebappSessions(unittest.TestCase):
 
             transcript_out, audio_out, history_state, panel, biomarkers, out_sess_id, out_text_in, out_audio_in = webapp.run_demo_turn(
 
-                audio_in="fake.wav",
+                audio_in=FAKE_UPLOAD,
 
                 text_in_or_history="Text transcript",
 
@@ -471,7 +474,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         """Requirement 2.1/2.3: empty transcript -> consistent 5-tuple + message."""
         session_id, _ = webapp.init_session()
         with patch.object(webapp.hear, "transcribe", return_value=("", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+            result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
         self.assertEqual(len(result), 5)
         self.assertIn("try again", result[0])
         self.assertIn("Acoustic Biomarkers", result[4])
@@ -480,7 +483,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         """Requirement 2.1: whitespace-only transcript -> consistent 5-tuple."""
         session_id, _ = webapp.init_session()
         with patch.object(webapp.hear, "transcribe", return_value=("   ", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+            result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
         self.assertEqual(len(result), 5)
         self.assertIn("try again", result[0])
         self.assertIn("Acoustic Biomarkers", result[4])
@@ -490,7 +493,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         the 8th clearing audio_in so a stale sample clip isn't re-sent (#83, #80 2.B3)."""
         session_id, _ = webapp.init_session()
         with patch.object(webapp.hear, "transcribe", return_value=("", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp.run_demo_turn("fake.wav", [], session_id)
+            result = webapp.run_demo_turn(FAKE_UPLOAD, [], session_id)
         self.assertEqual(len(result), 8)
         self.assertIn("try again", result[0])
         self.assertIsNone(result[7])
@@ -514,7 +517,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         with patch.dict(os.environ, {"NEBIUS_API_KEY": "dummy-key-for-cap-test"}), \
              patch.object(webapp.hear, "transcribe", return_value=("Hello there", {"wpm": 0.0, "avg_pause_s": 0.0})), \
              patch.object(webapp, "_rate_limit_ok", return_value=False):
-            result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+            result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
         self.assertEqual(len(result), 5)
         self.assertIn("daily request cap", result[0])
         self.assertIn("_Rate limited_", result[4])
@@ -587,7 +590,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
             with self.subTest(utterance=utterance):
                 session_id, _ = webapp.init_session()
                 with self._cap_patches(utterance):
-                    result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                    result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
                     self._assert_no_hosted_work()
                     # The non-streaming handler registers only run_turn's own
                     # background thread, which must be None here.
@@ -600,7 +603,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
             with self.subTest(utterance=utterance):
                 session_id, _ = webapp.init_session()
                 with self._cap_patches(utterance):
-                    outputs = list(webapp.run_demo_turn_streaming("fake.wav", [], session_id))
+                    outputs = list(webapp.run_demo_turn_streaming(FAKE_UPLOAD, [], session_id))
                     self._assert_no_hosted_work()
                 last = outputs[-1]
                 # The reply audio rides its own CHUNK yield(s), once;
@@ -623,9 +626,9 @@ class TestEmptyTranscriptArity(unittest.TestCase):
                         patch.object(webapp, "_combine_audio_chunks", return_value=None), \
                         patch.object(webapp, "_chunk_readable", return_value=False):
                     if streaming:
-                        result = list(webapp.run_demo_turn_streaming("fake.wav", [], session_id))[-1][:5]
+                        result = list(webapp.run_demo_turn_streaming(FAKE_UPLOAD, [], session_id))[-1][:5]
                     else:
-                        result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                        result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
                 self.assertIsNone(result[1])
                 self.assertIn("daily request cap", result[0])
                 self.assertNotIn("still played", result[0])
@@ -646,7 +649,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
             with self.subTest(utterance=utterance):
                 session_id, _ = webapp.init_session()
                 with self._cap_patches(utterance):
-                    result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                    result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
                     self._assert_no_hosted_work()
                 self.assertIsNotNone(result[1])
                 self.assertIn("URGENT", webapp._format_caregiver_panel(session_id))
@@ -667,7 +670,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         utterance = "I fell down earlier and I'm scared"
         for _ in range(2):
             with self._cap_patches(utterance, rate_limit_ok=None):
-                result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
                 self._assert_no_hosted_work()
             self.assertIsNotNone(result[1])
             self.assertIn("_Rate limited_", result[4])
@@ -682,7 +685,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         """Requirement 3.1/3.4: a valid transcript still returns its 5-tuple with reply + audio."""
         session_id, _ = webapp.init_session()
         with patch.object(webapp.hear, "transcribe", return_value=("I fell down earlier and I'm scared", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+            result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
         self.assertEqual(len(result), 5)
         self.assertIn("Dad said:", result[0])
         self.assertIsNotNone(result[1])
@@ -741,6 +744,18 @@ class TestAudioInputGuard(unittest.TestCase):
         self.assertIn("[hear] transcription failed: RuntimeError", err.getvalue())
         self.assertNotIn("/secret/path", err.getvalue())
 
+
+    def test_audio_path_outside_upload_dirs_is_refused_unread(self):
+        # The path comes from the browser: one outside the temp/upload and
+        # sample dirs gets the retry-or-type reply and is never opened.
+        outside = os.path.abspath(webapp.__file__)
+        with patch.object(webapp.hear, "probe_duration") as probe, \
+                patch.object(webapp.hear, "transcribe") as transcribe:
+            transcript, _bio, refusal = webapp._guarded_transcribe(outside, True)
+        self.assertIsNone(transcript)
+        self.assertIn("type what Dad says", refusal)
+        probe.assert_not_called()
+        transcribe.assert_not_called()
     def test_transcription_failure_nonstreaming_returns_type_instead(self):
         wav = _make_wav(self.tmp / "one.wav", 1.0)
         with self._asr_failure() as m:
@@ -820,7 +835,7 @@ class TestAudioInputGuard(unittest.TestCase):
         with patch.object(webapp, "MAX_AUDIO_UPLOAD_BYTES", 1), \
                 patch.object(webapp, "MAX_AUDIO_SECONDS", 0), \
                 patch.object(webapp.hear, "transcribe", return_value=("", {"wpm": 0.0, "avg_pause_s": 0.0})) as m:
-            for path in ("fake.wav", str(empty)):
+            for path in (FAKE_UPLOAD, str(empty)):
                 result = webapp._run_demo_turn(path, None, [], self.sid)
                 self.assertEqual(len(result), 5)
                 self.assertIn("Couldn't make out any speech or text", result[0])

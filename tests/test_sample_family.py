@@ -26,6 +26,9 @@ from caregiver import (
 )
 from memory.store import MemoryStore, PrivacyLevel
 
+# Gradio hands over uploads under the temp dir; webapp refuses audio paths outside it.
+FAKE_UPLOAD = os.path.join(tempfile.gettempdir(), "fake.wav")
+
 REMINDER_LINE = "Blood pressure pill, 8 AM"
 
 
@@ -240,7 +243,7 @@ class TestSeniorSideRecall(_SessionCase):
         with patch("pipeline.orchestrator.think.stream_reply", side_effect=fake_stream), \
              patch("pipeline.orchestrator._speak_turn", return_value=("", [], 0.0)), \
              patch.object(webapp.hear, "transcribe", return_value=("What time is my pill today?", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            webapp.run_demo_turn("fake.wav", [], session_id)
+            webapp.run_demo_turn(FAKE_UPLOAD, [], session_id)
         self.assertEqual(captured.get("transcript"), "What time is my pill today?")
         self.assertIn(REMINDER_LINE, captured.get("caregiver_updates") or [])
         # The caregiver-only health note never reaches the senior's prompt.

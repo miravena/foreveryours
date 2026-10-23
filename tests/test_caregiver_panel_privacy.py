@@ -6,6 +6,7 @@ senior's own words during conversation -- showing those to a caregiver is
 exactly the surveillance #140 warns about. Caregiver-authored memos/notes
 and disclosed safety flags are shown by design and must keep showing.
 """
+import os
 
 import tempfile
 import time
@@ -16,6 +17,9 @@ from unittest.mock import patch
 import webapp
 from caregiver import CaregiverFlags
 from memory.store import MemoryScope, MemoryStore, PrivacyLevel
+
+# Gradio hands over uploads under the temp dir; webapp refuses audio paths outside it.
+FAKE_MEMO_UPLOAD = os.path.join(tempfile.gettempdir(), "memo.wav")
 
 
 class TestCaregiverPanelPrivacy(unittest.TestCase):
@@ -450,7 +454,7 @@ class TestBriefedMemoryDedupe(unittest.TestCase):
         session_id, _ = webapp.init_session()
         dictated = "Dad loves jazz! His grandson is named Leo? Avoid talking about driving.I'm dropping off groceries at 4 PM today."
         with patch.object(webapp.hear, "transcribe", return_value=dictated):
-            webapp.save_caregiver_voice_memo("memo.wav", session_id)
+            webapp.save_caregiver_voice_memo(FAKE_MEMO_UPLOAD, session_id)
         webapp.save_caregiver_text_memo(dictated, session_id)
         self.assertEqual([i.text for i in self._store(session_id).all()], list(self.FACTS))
 
@@ -462,7 +466,7 @@ class TestBriefedMemoryDedupe(unittest.TestCase):
         self.assertEqual(before[len(self.FACTS):], ["Dad loves chicken soup", "Doctor appointment tomorrow at 2 PM"])
         webapp.save_caregiver_text_memo(memo, session_id)
         with patch.object(webapp.hear, "transcribe", return_value=memo):
-            webapp.save_caregiver_voice_memo("memo.wav", session_id)
+            webapp.save_caregiver_voice_memo(FAKE_MEMO_UPLOAD, session_id)
         self.assertEqual([i.text for i in self._store(session_id).all()], before)
         briefed = self._briefed(webapp._format_caregiver_panel(session_id))
         self.assertEqual(briefed.count("Dad loves chicken soup"), 1)
@@ -490,7 +494,7 @@ class TestBriefedMemoryDedupe(unittest.TestCase):
         # Through the real paths, so the shared splitter keeps "1.5" whole and
         # the panel keeps the two doses (and the signed values) apart.
         with patch.object(webapp.hear, "transcribe", return_value="Dose: 1.5 mg today. Temperature -5 C!"):
-            webapp.save_caregiver_voice_memo("memo.wav", session_id)
+            webapp.save_caregiver_voice_memo(FAKE_MEMO_UPLOAD, session_id)
         webapp.save_caregiver_text_memo("Dose: 15 mg today. Temperature 5 C. Call if temperature < 38 C\nCall if temperature > 38 C", session_id)
         store = self._store(session_id)
         self.assertEqual(

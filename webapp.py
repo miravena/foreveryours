@@ -606,6 +606,23 @@ CAP_NOTICE = _cap_notice(spoke=True, flagged=True)
 CAP_BIOMARKERS = "### 📊 Acoustic Biomarkers\n_Rate limited_"
 
 
+def _audio_upload_path(audio_in: str) -> Path | None:
+    """`audio_in` resolved, if it lies under a directory audio legitimately
+    comes from: the temp dir (Gradio's upload cache sits there unless
+    GRADIO_TEMP_DIR moves it) or the bundled samples. None otherwise. The path
+    reaches us from the browser, so realpath + startswith is the containment
+    check CodeQL py/path-injection recognises."""
+    real = os.path.realpath(audio_in)
+    bases = [tempfile.gettempdir(), str(SAMPLES_DIR)]
+    if os.environ.get("GRADIO_TEMP_DIR"):
+        bases.append(os.environ["GRADIO_TEMP_DIR"])
+    for base in bases:
+        base = os.path.realpath(base)
+        if real.startswith(base + os.sep):
+            return Path(real)
+    return None
+
+
 def _guarded_transcribe(audio_in: str, return_metrics: bool) -> tuple[str | None, dict, str | None]:
     """Transcribe `audio_in`, or refuse it with a short retry-or-type-instead
     reply. Returns (transcript, biomarkers, refusal); exactly one of
@@ -614,7 +631,10 @@ def _guarded_transcribe(audio_in: str, return_metrics: bool) -> tuple[str | None
     A missing or zero-byte path skips the probes: transcribe() already returns
     "" for it, which reaches the caller's "Couldn't make out any speech" branch."""
     biomarkers = {"wpm": 0.0, "avg_pause_s": 0.0}
-    path = Path(audio_in)
+    path = _audio_upload_path(audio_in)
+    if path is None:
+        print("[hear] refused an audio path outside the upload and sample dirs", file=sys.stderr)
+        return None, biomarkers, _transcription_failed(ValueError("audio path"))
     if path.exists() and path.stat().st_size > 0:
         size = path.stat().st_size
         if size > MAX_AUDIO_UPLOAD_BYTES:
@@ -777,9 +797,11 @@ def _session_active(session_id: str, *, refuse_if_deleted: bool):
         yield None
         return
     root = _session_root(session_id)
-    entry = SESSIONS_DIR / session_id  # the literal, unresolved entry, as _end_session checks it
     with _session_fs_lock:
-        if refuse_if_deleted and not os.path.isdir(entry):
+        # root is SESSIONS_DIR/<id> after the containment check; isdir follows
+        # a symlinked entry the same way, so this is the check _end_session's
+        # removal is seen by.
+        if refuse_if_deleted and not os.path.isdir(root):
             raise SessionGone(session_id)
         _active_turns[session_id] = _active_turns.get(session_id, 0) + 1
         _touch_session(root)

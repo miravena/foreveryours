@@ -115,11 +115,11 @@ class TestProfileWriteRaces(unittest.TestCase):
     def test_memo_save_after_end_session_is_refused(self):
         sid = webapp._new_session()
         webapp._end_session(sid)
-        self.assertFalse((self.sessions_dir / sid).exists())
+        self.assertFalse(webapp._session_root(sid).exists())
         panel, new_sid, box = webapp.save_caregiver_text_memo(MEMO, sid)
-        self.assertFalse((self.sessions_dir / sid).exists(), "deleted household was recreated")
+        self.assertFalse(webapp._session_root(sid).exists(), "deleted household was recreated")
         self.assertNotEqual(new_sid, sid)
-        self.assertTrue((self.sessions_dir / new_sid).is_dir())
+        self.assertTrue(webapp._session_root(new_sid).is_dir())
         self.assertEqual(box, MEMO, "the typed memo must be handed back, not dropped")
         self.assertTrue(
             panel.startswith("_Your demo household was reset after a period of inactivity._"),
@@ -164,7 +164,7 @@ class TestProfileWriteRaces(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertFalse(webapp._is_session_busy(sid))
         webapp._end_session(sid)
-        self.assertFalse((self.sessions_dir / sid).exists())
+        self.assertFalse(webapp._session_root(sid).exists())
 
     # (f)
     def test_flush_uses_unique_temp_file_per_write(self):
@@ -212,7 +212,7 @@ class TestProfileWriteRaces(unittest.TestCase):
         audio = Path(self.temp_dir.name) / "memo.wav"  # never created: probes are skipped
         with patch.object(webapp.hear, "transcribe", return_value=MEMO):
             panel, new_sid = webapp.save_caregiver_voice_memo(str(audio), sid)
-        self.assertFalse((self.sessions_dir / sid).exists(), "deleted household was recreated")
+        self.assertFalse(webapp._session_root(sid).exists(), "deleted household was recreated")
         self.assertNotEqual(new_sid, sid)
         self.assertTrue(
             panel.startswith("_Your demo household was reset after a period of inactivity._"),
