@@ -15,6 +15,11 @@ rename `Unreleased` to the version and date, then tag it.
   says which layer raised it (safety rules, Nemotron backstop, or repeated-question check);
   `CaregiverFlag` gains a persisted `source` field, old flag files load as unknown (#214).
 
+### Changed
+- Hosted page puts the action first: a bold "Try this first" line with a one-click example that
+  fills the type box, one-line AI notice with the privacy link, plain sample clip names, and the
+  "household was reset" note only after a real expiry, not on the first turn of a fresh page (#215).
+
 ### Docs
 - Submission review against the judges' advice (`docs/plans/SUBMISSION-REVIEW-2026-10-23.md`) and
   the changes it asked for (#216, #217): README opens with the scenario and the one-sentence
