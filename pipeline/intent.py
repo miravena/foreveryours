@@ -41,6 +41,22 @@ MEMORY_REQUEST_PATTERNS = [
 ]
 
 
+# The senior hands the choice of subject to ForeverYours ("What should we talk
+# about?", "I've got nothing to talk about"). The orchestrator answers these
+# with one briefed anchor and today's updates so SYSTEM_PROMPT rule 21 has
+# something to offer; without it a CASUAL turn reaches THINK with no facts.
+TOPIC_INVITATION_PATTERNS = [
+    re.compile(r"\bwhat\s+(should|shall|can|could|do|would)\s+(we|i|you)\s+(want\s+to\s+)?(talk|chat)\s+about\b", re.IGNORECASE),
+    re.compile(r"\b(nothing|anything)\s+(much\s+)?to\s+(talk|chat)\s+about\b", re.IGNORECASE),
+    re.compile(r"\b(don't|do\s+not|dont)\s+know\s+what\s+to\s+(talk|chat)\s+about\b", re.IGNORECASE),
+]
+
+
+def is_topic_invitation(transcript: str) -> bool:
+    """True when the senior invites a topic without naming one of his own."""
+    return bool(transcript) and any(p.search(transcript) for p in TOPIC_INVITATION_PATTERNS)
+
+
 def detect_intent(transcript: str) -> Intent:
     """Classifies the senior's utterance to gate memory retrieval and prompt construction."""
     if not transcript:

@@ -27,6 +27,11 @@ This folder is the **decision log**: *why* we made each major choice. Use it whe
 | [ADR-008](ADR-008-neural-tts.md) | Offline neural voice (Piper) preferred, with espeak-ng/System.Speech/pyttsx3 as fallbacks (supplements ADR-001) | Accepted | 2026-10-09 |
 | [ADR-009](ADR-009-build-vs-reuse.md) | Build vs reuse: keep privacy layer, fast-path and voice loop; licence check on `piper-tts` (GPL-3.0-or-later); trial embedding retrieval | Proposed | 2026-10-09 |
 | [ADR-010](ADR-010-audit-model-eval.md) | AUDIT model chosen by a labelled 36-row eval across served NVIDIA models; Nano kept (Super: recall 1.00 vs 0.63, same 0/17 false flags) | Accepted | 2026-10-22 |
+| [ADR-011](ADR-011-voice-licence-and-warm-piper.md) | Public-domain Piper voice (`en_US-ljspeech`), kept warm in its own process; GPL engines stay separate programs (amends ADR-008) | Accepted | 2026-10-23 |
+| [ADR-012](ADR-012-fall-long-tail.md) | Falls outside the canonical words: three more first-person fast-path patterns, AUDIT prompt reads the transcript; amends ADR-005 and ADR-010 | Proposed | 2026-10-23 |
+| [ADR-013](ADR-013-crisis-tiers.md) | Crisis phrases: explicit first-person statements in the regex tier, euphemism and context in the AUDIT backstop; next-turn carry and a 988-once guard (amends ADR-005) | Proposed | 2026-10-23 |
+| [ADR-014](ADR-014-outbound-notification.md) | One outbound caregiver notification: SMTP e-mail by default, webhook second, off when unset and always off on the hosted Space; fixed-text body, per-household hourly cap | Accepted | 2026-10-23 |
+| [ADR-015](ADR-015-judging-window-deploys.md) | During judging only `v1.0.x` patches deploy (safety exception), each a published Release; rollback by re-running the previous tag (amends ADR-003) | Proposed | 2026-10-23 |
 
 ## Superseded / reconsidered
 

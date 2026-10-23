@@ -10,7 +10,46 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Docs
+- [ADR-015](docs/decisions/ADR-015-judging-window-deploys.md) (#197): during judging only `v1.0.x`
+  patches deploy, rollback is by tag; `HOW_TO_WORK_HERE.md` Releases gains the release lines and a
+  "During judging" paragraph.
+- One-week trial documents (`docs/trial/`): consent sheet (states that transcripts go to
+  Nebius Token Factory), caregiver setup guide, fixed measurements, and exit interview questions
+  for #202. Setup-guide testing and the trial itself are still to do.
+- After-submission plan (`docs/plans/AFTER-SUBMISSION-PLAN-2026-10-23.md`): the judging window
+  (patch-only, the demo stays up through 2026-12-15) and the post-judging backlog, with a PRD and
+  a plan per issue under `docs/specs/` for #196 to #206; `docs/ROADMAP.md` gains the section and
+  drops the interview-mode stretch line now tracked by #206.
+
 ### Added
+- Caregiver panel previews the exact outbound message (#201) when no channel is active (always on the hosted demo), labelled "Not sent"; the chat disclosure says nothing is sent.
+- Caregiver outbound notification ([ADR-014](docs/decisions/ADR-014-outbound-notification.md), #201):
+  `notify.py` sends one fixed-text message per safety flag by SMTP or webhook when
+  `FY_NOTIFY_CHANNEL` is set (off when unset and always off on a Hugging Face Space), capped per
+  household per hour. The result is recorded on the flag (`notified`, `notify_error` as a type
+  name) and the caregiver panel says "notified" or "notification failed" in place of
+  "dispatched". The message never carries the transcript or a key.
+- Fall long tail (#198, [ADR-012](docs/decisions/ADR-012-fall-long-tail.md)): three first-person
+  fast-path patterns ("I hit the floor", "my legs gave way", "I went down in the ...") with near-miss
+  tests, an AUDIT prompt that reads the senior's transcript first, seven more fall rows in the eval
+  fixture (three tagged `holdout`), and a late-disclosure test for a backstop fall. Live recall is
+  not yet measured.
+- Guided interview mode (#206): a caregiver-side accordion that asks five questions mirroring the
+  sample household (people, likes, a usual day, topics to avoid, times today), with skip, visible
+  progress and resume. Each confirmed answer is checked for dosing, diagnosis and clinical claims,
+  then saved through the same helper as the memo box (`_save_memo_text`, extracted with no change
+  to memo-box behaviour). Offline; no model call; the senior side is untouched.
+- Crisis paraphrases (#199, [ADR-013](docs/decisions/ADR-013-crisis-tiers.md)): a committed crisis fixture
+  (`tests/fixtures/crisis_eval_set.jsonl`, 23 crisis and 14 benign rows, each tagged with the tier that
+  must catch it, US 988 only) and `scripts/crisis_eval.py` (offline fast-path table, stub or live
+  backstop). The regex tier gains explicit paraphrases ("I don't want to live anymore", "killing
+  myself", "tired of living", "never been born", "sleep and never wake up") with benign idioms for
+  hyperbole and housing talk; the AUDIT prompt gains a separate block of euphemistic crisis examples
+  (the `audit_reply` contract is unchanged). A backstop `CRISIS` verdict is carried into the next turn
+  so the 988 line is given once and the family is named, and a reply never repeats it (#191).
+  Benchmark 6 now feeds a crisis query through the stubbed pipeline instead of asserting the
+  constant prompt. Live recall and false-flag numbers for the backstop rows are still to be measured.
 - AUDIT model eval ([ADR-010](docs/decisions/ADR-010-audit-model-eval.md)):
   `scripts/audit_eval.py` lists the models Token Factory serves (`--list-models`) and scores AUDIT
   over a committed 36-row labelled fixture (`tests/fixtures/audit_eval_set.jsonl`). It keeps one
@@ -28,8 +67,9 @@ rename `Unreleased` to the version and date, then tag it.
   session's household with a labelled-fictional senior (Walter), family, likes, a daily routine
   and caregiver-entered medication reminder times as plain schedule items, shown as a
   "Fictional sample household" card and recalled in the senior's replies; `validate_sample_profile`
-  refuses dosing, diagnosis and clinical-claim language, and the session-end sweep removes the seed
-  with everything else.
+  refuses dosing (any unit however it is joined to the number, "20-mg" included), diagnosis (any
+  word after "for your", any medicine "for" something) and clinical-claim language, and the
+  session-end sweep removes the seed with everything else.
 - The Space deploys from GitHub Actions (`.github/workflows/deploy-space.yml`,
   #11): before the freeze every push to `main` deploys and runs the live judge check suite; after
   it, only a published Release or a manual *Run workflow* deploys. Each deploy records the commit
@@ -38,6 +78,30 @@ rename `Unreleased` to the version and date, then tag it.
   against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
 
 ### Fixed
+- Interview mode (#206): a bare "topics to avoid" answer ("Politics") is saved as "Avoid talking about
+  politics", so it becomes a companion guardrail instead of an ordinary fact it might raise.
+- Physical emergencies are no longer sent to 988 (#211): chest pain, trouble breathing, bleeding
+  or "call 911" get a fast-path reply that says to call 911; a mixed crisis report names both
+  988 and 911; the THINK prompt's crisis rule covers only suicidal ideation and severe depression,
+  and a new PHYSICAL EMERGENCY rule names 911.
+- The confusion fast-path reply ("Where am I?") now tells Dad "I'm letting your family know so
+  someone can check on you." Before, the caregiver panel showed "Dad was told" for a confusion
+  flag he was never told about. A new test checks that every fast-path branch that raises a flag
+  says the family will be told.
+- A first-person fall report (#198) now gets its own fast-path reply, "Are you hurt? Can you get up
+  safely?", and its own fixed caregiver flag ("Dad reported a fall", no quote and no time claim);
+  a third-person fall or ambiguous distress such as "I can't get up" still triggers, with the
+  generic reply. On a fast-path crisis turn the THINK continuation no longer repeats the apology
+  (#191): the orchestrator removes apology-only clauses before they are spoken and keeps any
+  sentence whose apology says more, the 988 line stays once (THINK is told to give it when the
+  canned line's audio failed), and THINK rule 18a and the crisis note say the same.
+- With no outbound channel configured (always the case on the hosted demo), the caregiver panel,
+  the mobile alert strip and the chat's safety disclosure call the fall or crisis alert a simulated
+  caregiver alert shown on the caregiver panel, instead of claiming a notification went out; a real
+  send (#201) shows "notification sent". `docs/Project_Description.md` and `docs/VIDEO_SCRIPT.md`
+  say the same.
+- Crisis carry (#199, #191): a 988 sentence the consumer refused is no longer recorded as heard, and a second
+  backstop `CRISIS` turn right after an attested one does not repeat 988 in its disclosure.
 - Natural voice on the demo (#207): the Piper voice is now `en_US-ljspeech-medium` (LJ Speech,
   public domain; the Lessac voice's training data is licensed for research only and is never
   shipped), Piper stays warm in one loopback server process so a sentence no longer pays about
@@ -47,6 +111,37 @@ rename `Unreleased` to the version and date, then tag it.
   leading/trailing silence trimmed, a short fade on both edges (no click where clips join) and a
   fixed 0.2 s pause after it, so sentences flow evenly in the CLI, the streamed browser reply and
   the combined WAV, whichever voice produced them. Unsupported or unreadable WAVs are left as they were.
+- Live judge check (`scripts/live_judge_check.py`) no longer passes the fall turn on a reply
+  that never asks whether Dad is hurt: the injury words must sit inside a question, and the fall
+  and crisis turns also check the panel's alert badge shows `DISTRESS` / `CRISIS`. Every turn now
+  asserts on the caregiver panel, a failing turn's line lists every failed assertion, and a
+  group whose session cannot open still gets one ERROR line per turn. PASS lines show the
+  reply excerpt so the safety turns can be read by eye (#179).
+- Live judge check: recall and repeat turns (Sarah at 4 PM, Dr. Tan on Thursday at 10 AM) now
+  fail on a contradicting time or weekday ("10 PM", "Wednesday at 3 PM"), not just on a missing
+  keyword, so a repeat question has to get the same answer (#179).
+- Live judge check: the listening turns no longer pass "No need to worry, Sarah is always
+  listening to us": an adverb between "is" and "listening" now counts as an affirmation, and a
+  denial word only covers hear/listen inside its own clause, not across a comma or "but" (#179).
+- Judges can find caregiver mode and see that the household is fictional. The caregiver accordion
+  is now "Brief Dad companion (as Sarah, his daughter)" and starts open (it no longer says "Beat 1").
+  The intro points at the caregiver on the right, and "Sample household (fictional), pre-briefed by
+  Sarah" sits above Briefed memory. Each sample clip is labelled with what it says, taken from
+  `samples/generate_samples.py`, which now ships to the Space. The retention minutes moved into a
+  collapsed "How long your recordings and household data are kept" section next to the privacy link,
+  and the short recording notice stays above the mic. Tests: `tests/test_judge_findings_ui.py`.
+- A caregiver memo with an abbreviation is stored as whole sentences: "Dad has a check-up with
+  Dr. Tan on Thursday at 10 AM." used to become "Dad has a check-up with Dr" and "Tan on Thursday
+  at 10 AM", so the companion said it had no appointments listed. The one memo splitter
+  (`caregiver.split_memo_facts`, used by the typed, dictated, demo and `main.py beat1` paths) no
+  longer ends a fact after Dr., Mr., Mrs., Ms., St., Prof., inside a.m./p.m., or after a unit such
+  as "5 mg." unless a capitalised word follows; decimals, "!", "?" and newlines are unchanged.
+- An open-ended invitation ("What should we talk about this afternoon?") now gets an offer of one
+  pre-brief item by name instead of a generic "How are you feeling today?". SYSTEM_PROMPT rule 21
+  (OFFER A BRIEFED TOPIC) tells the model to offer one memory or today's update, attributed per
+  rule 20. The CASUAL zero-memory gate now hands THINK one anchor plus today's updates when the
+  senior asks what to talk about. Before this, it passed no facts at all for that turn.
+  The offer is one sentence, and a question of his own gets just the answer, with no offer added.
 - Caregiver fact updates: a caregiver memo that changes a fact ("groceries at
   6 PM" over "groceries at 4 PM") now supersedes the earlier caregiver fact with the same subject,
   so only one reaches the model; and the caregiver panel shows a "Replaced by" text only when the

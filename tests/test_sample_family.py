@@ -99,6 +99,33 @@ class TestSampleSeedAndValidator(unittest.TestCase):
                 validate_sample_profile([text])
             self.assertIn("clinical claim", str(ctx.exception))
 
+    def test_validator_refuses_dosing_however_the_unit_is_joined(self):
+        # Review bounce: "20-mg" slipped past a pattern that wanted a space or nothing.
+        for text in ("Take 20-mg at 8 AM", "Take 20mg at 8 AM", "Take 20 – mg", "Take 0.5mg",
+                     "Take 20ｍｇ at 8", "Take 5 µg", "500 milligram capsule",
+                     "Insulin 10 units at dinner", "Take ½ tablet", "Take 2-tablets",
+                     "Twice a day with food", "Every 8 hours"):
+            with self.assertRaises(ValueError, msg=text) as ctx:
+                validate_sample_profile([text])
+            self.assertIn("dosing", str(ctx.exception))
+
+    def test_validator_refuses_any_condition_after_for_your(self):
+        # Review bounce: "for your epilepsy" / "for your migraine" passed because only a
+        # fixed list of organs and conditions was refused after "for your".
+        for text in ("Pill for your epilepsy, 8 AM", "Pill for your migraine, 8 AM",
+                     "Pill for your gout", "Pill for your sciatica 9 AM", "Pill for epilepsy, 8 AM",
+                     "Pills for seizures at 8", "Medication for his kidneys", "Tablet for her zzyzx, 9 AM",
+                     "Has bronchitis", "He has heart failure", "Diagnosed with COPD"):
+            with self.assertRaises(ValueError, msg=text) as ctx:
+                validate_sample_profile([text])
+            self.assertIn("diagnosis", str(ctx.exception))
+
+    def test_validator_still_accepts_plain_schedule_lines(self):
+        for text in ("Blood pressure pill, 8 AM", "Evening pill with dinner, 6:30 PM",
+                     "Coffee for the road, 7 AM", "He wears hearing aids",
+                     "Sarah's evening phone call, 8 PM", "Leo visits, Saturday 3 PM"):
+            validate_sample_profile([text])
+
     def test_validator_refuses_combined_dosing_and_diagnosis_line(self):
         with self.assertRaises(ValueError):
             validate_sample_profile(["Take 2 tablets of 20 mg lisinopril for your hypertension at 8 AM"])

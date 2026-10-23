@@ -93,6 +93,13 @@ class TestStagedSpace(unittest.TestCase):
             missing = (_imported_top_levels(py) & local) - staged
             self.assertFalse(missing, f"{py.relative_to(dest)} imports unstaged repo modules: {missing}")
 
+    def test_sample_script_ships_with_the_clips(self):
+        # webapp.py imports samples.generate_samples for the sample-chip labels;
+        # samples/ has no __init__.py, so the module check above cannot see it.
+        dest = self._stage()
+        self.assertTrue((dest / "samples" / "generate_samples.py").is_file())
+        self.assertIn("samples.generate_samples", (dest / "webapp.py").read_text(encoding="utf-8"))
+
     def test_never_stages_secrets_or_private_dirs(self):
         dest = self._stage()
         for name in (".env", "data", "out", "tests", "video", "docs"):

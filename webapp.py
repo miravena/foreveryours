@@ -3,7 +3,7 @@
 The point of this file isn't "put the CLI in a browser" -- it's to make the
 ONE thing a general-purpose voice assistant can't do visible in a single
 screen: when the senior says something worrying, the companion tells HIM
-that it's notifying the caregiver, and in the SAME moment the caregiver side
+that it's raising a caregiver flag, and in the SAME moment the caregiver side
 lights up with that exact flag. Two columns, side by side, on purpose --
 that's the demo, not a design choice to revisit later.
 
@@ -53,6 +53,7 @@ from __future__ import annotations
 import contextlib
 import datetime
 import functools
+import html
 import os
 
 if __name__ == "__main__":
@@ -82,17 +83,21 @@ from caregiver import (
     DEFAULT_CAREGIVER_NAME,
     DEFAULT_PROFILE_ID,
     DEMO_MEMO,
+    INTERVIEW_QUESTIONS,
     SAMPLE_FAMILY,
     SAMPLE_FAMILY_LABEL,
     CaregiverFlags,
     sample_family_texts,
+    interview_answer_memo,
     split_memo_facts,
     validate_sample_profile,
 )
 from memory.store import CAREGIVER_SOURCES, MemoryScope, MemoryStore, PrivacyLevel
+import notify
 from pipeline import hear
 from pipeline.orchestrator import run_turn
 from safety import fastpath
+from samples.generate_samples import SAMPLES as SAMPLE_SCRIPTS
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 AUDIO_DIR = Path(__file__).resolve().parent / "out" / "audio"
@@ -102,6 +107,10 @@ SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
 # build line and the Space shows exactly the commit judges are looking at.
 BUILD_INFO_PATH = Path(__file__).resolve().parent / "BUILD_INFO"
 SAMPLE_CLIPS = ("senior_schedule.wav", "senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav")
+# Each sample chip is labelled with what the clip says. The words come from
+# samples/generate_samples.py (the script that synthesises the clips), so a
+# label can never drift from its audio.
+SAMPLE_CLIP_LABELS = tuple(f'"{SAMPLE_SCRIPTS[name]}"' for name in SAMPLE_CLIPS)
 MAX_DAILY_REQUESTS = int(os.environ.get("MAX_DAILY_REQUESTS", "50"))
 # Audio input bounds, checked before any ASR runs. 25 MB is the ceiling
 # OpenAI-compatible transcription endpoints enforce; 120 s is far above any demo
@@ -1007,19 +1016,92 @@ def _format_sample_family_card(store: MemoryStore, now: float) -> list[str]:
     return lines
 
 
+# Shown directly above "### Briefed memory" in every render of the caregiver
+# panel (the placeholder before the session exists too), so a judge never
+# mistakes the pre-briefed household for a real family.
+SAMPLE_HOUSEHOLD_LINE = "_Sample household (fictional), pre-briefed by Sarah_"
+_PANEL_PLACEHOLDER = (
+    "_Setting up your demo household..._\n\n"
+    f"{SAMPLE_HOUSEHOLD_LINE}\n\n### Briefed memory\n_(loading...)_"
+)
+
+
+
+# With no outbound channel configured (the default, and always on the hosted
+# Space) a flag is only written to the local flags file this panel polls: no
+# caregiver is contacted. Every judge-visible label then says "simulated
+# caregiver alert" and where it appears, and never claims a send (#201's
+# senders are the only thing that contacts anyone).
+SIMULATED_ALERT_STATUS = (
+    "Simulated caregiver alert -- in this demo it appears on this panel only; "
+    "no caregiver is contacted"
+)
+SIMULATED_ALERT_CARD = "> 🚨 **HIGH PRIORITY SAFETY ALERT (simulated caregiver alert, shown on this demo panel)**"
+SIMULATED_ALERT_SUMMARY = "⚠️ **Simulated caregiver alert raised**"
+SIMULATED_DISCLOSURE_NOTE = (
+    "\n\n*(📢 Honest Safety Disclosure: simulated caregiver alert raised on the "
+    "caregiver panel, with Dad's knowledge; demo: nothing is sent, "
+    f"{DEFAULT_CAREGIVER_NAME} would be notified)*"
+)
+LIVE_DISCLOSURE_NOTE = (
+    "\n\n*(📢 Honest Safety Disclosure: caregiver alert raised on the caregiver "
+    "panel, with Dad's knowledge; its outbound notification status shows there)*"
+)
+
+
+def _channel_off() -> bool:
+    """True when no outbound notification channel is configured (#201)."""
+    return isinstance(notify.get_notifier(), notify.NullNotifier)
+
+
+def _alert_is_simulated(flag) -> bool:
+    """A flag nobody was sent: no channel, and no send attempted for it."""
+    return getattr(flag, "notified", None) is None and _channel_off()
+
+
+def _disclosure_note() -> str:
+    """The note under a flagged turn: simulated unless a channel is on."""
+    return SIMULATED_DISCLOSURE_NOTE if _channel_off() else LIVE_DISCLOSURE_NOTE
+
+
+def _notification_preview(flag) -> str:
+    """What the caregiver would be sent, for a flag nobody was sent (#201): the
+    exact `notify.build_message` body (same redaction, no transcript text),
+    plus an honest line that nothing went out. "" when a channel is active."""
+    if not _alert_is_simulated(flag):
+        return ""
+    why = ("notifications are off in this demo" if os.environ.get("SPACE_ID")
+           else "no notification channel is set up")
+    msg = notify.build_message(
+        flag, os.environ.get("FY_NOTIFY_HOUSEHOLD_LABEL") or notify.DEFAULT_HOUSEHOLD_LABEL)
+    body = "\n".join(f"> {line}".rstrip() for line in msg.body.split("\n"))
+    return (f"> **Preview — the message {DEFAULT_CAREGIVER_NAME} would receive:**\n"
+            f"> *Not sent: {why}*\n>\n> **{msg.subject}**\n>\n{body}\n")
+
+
+def _notification_status(flag) -> str:
+    """Outbound-notification state of one flag (#201): sent, failed, or ""
+    when no send was attempted -- never a claim the code did not make."""
+    notified = getattr(flag, "notified", None)
+    if notified is True:
+        return "📨 Notification sent to caregiver"
+    if notified is False:
+        return "⚠️ Notification failed"
+    return ""
+
 def _format_caregiver_panel(session_id: str | None) -> str:
     """Reads straight from disk every call -- this is what makes it a live
     panel rather than a snapshot: whatever this session's turns (or, with
     FY_SHARED_PROFILE=1, main.py) wrote is reflected here within one poll
     interval (see the Timer below)."""
     if not session_id:
-        return "_Setting up your demo household..._"
+        return _PANEL_PLACEHOLDER
     try:
         data_dir, _ = _session_dirs(session_id)
     except ValueError:
         # Malformed/foreign id (#149) -- same placeholder as "no session yet",
         # never an exception out of a polled panel.
-        return "_Setting up your demo household..._"
+        return _PANEL_PLACEHOLDER
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, data_dir)
 
@@ -1027,7 +1109,13 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     distress_flags = [f for f in flag_items if f.severity in HIGH_PRIORITY_SEVERITIES]
     turn_count = _get_turn_count(data_dir)
     
-    wellbeing_status = "⚠️ **Safety alert dispatched**" if distress_flags else "🟢 **Calm · No safety concerns**"
+    simulated = bool(distress_flags) and _alert_is_simulated(distress_flags[-1])
+    if not distress_flags:
+        wellbeing_status = "🟢 **Calm · No safety concerns**"
+    elif simulated:
+        wellbeing_status = SIMULATED_ALERT_SUMMARY
+    else:
+        wellbeing_status = "⚠️ **Safety alert raised**"
     wellbeing_summary = f"> **Today:** {turn_count} conversation{'s' if turn_count != 1 else ''} · {wellbeing_status}\n"
 
     lines = [
@@ -1043,19 +1131,25 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     if distress_flags:
         latest = distress_flags[-1]
         disclosed = "✅ **Disclosed to Senior in conversation**" if latest.disclosed_to_senior else "⚠️ **NOT yet disclosed**"
+        status = SIMULATED_ALERT_STATUS if simulated else _notification_status(latest)
+        title = SIMULATED_ALERT_CARD if simulated else "> 🚨 **HIGH PRIORITY SAFETY ALERT**"
         lines.append(
-            "> 🚨 **HIGH PRIORITY SAFETY ALERT DISPATCHED**\n"
+            f"{title}\n"
             f"> **Event:** {latest.text}\n"
-            f"> **Severity:** `{latest.severity.upper()}` | **Status:** Caregiver notified\n"
+            f"> **Severity:** `{latest.severity.upper()}`" + (f" | **Status:** {status}" if status else "") + "\n"
             f"> **Disclosure:** {disclosed}\n"
         )
+        preview = _notification_preview(latest)
+        if preview:
+            lines.append(preview)
 
     lines.append("### What ForeverYours has told you")
     if not flag_items:
         lines.append("_No flags yet. You'll see something here the moment Dad says something worth knowing about._")
     for flag in reversed(flag_items):  # newest first -- this is the thing a caregiver glances at
         disclosed = "✅ Dad was told" if flag.disclosed_to_senior else "⚠️ NOT yet disclosed to Dad"
-        lines.append(f"- **({flag.severity})** {flag.text}\n  {disclosed}")
+        status = _notification_status(flag)
+        lines.append(f"- **({flag.severity})** {flag.text}\n  {disclosed}" + (f" · {status}" if status else ""))
 
     now = time.time()
     sample_loaded = _sample_family_loaded(store, now)
@@ -1063,6 +1157,8 @@ def _format_caregiver_panel(session_id: str | None) -> str:
         lines.append("")
         lines.extend(_format_sample_family_card(store, now))
 
+    lines.append("")
+    lines.append(SAMPLE_HOUSEHOLD_LINE)
     lines.append("\n### Briefed memory")
     all_items = store.all()
     items = _dedupe_briefed_memory(
@@ -1127,6 +1223,8 @@ def _format_mobile_alert_strip(session_id: str | None) -> str:
         return ""
     latest = distress_flags[-1]
     disclosed = "told Dad already" if latest.disclosed_to_senior else "not yet disclosed to Dad"
+    if _alert_is_simulated(latest):
+        return f"🚨 **Simulated caregiver alert:** {latest.text} ({disclosed}; shown on the caregiver panel only)"
     return f"🚨 **Caregiver alert:** {latest.text} ({disclosed})"
 
 
@@ -1464,7 +1562,7 @@ def _run_demo_turn_streaming_impl(
         transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
     
     if result.caregiver_flag:
-        transcript_and_reply += "\n\n*(📢 Honest Safety Disclosure: Caregiver notified with Dad\'s knowledge)*"
+        transcript_and_reply += _disclosure_note()
     
     turn_count = _next_turn_count(data_dir)
     if turn_count % REMINDER_EVERY_N_TURNS == 0:
@@ -1627,7 +1725,9 @@ def _run_demo_turn_impl(
     # bounded join "only on turns where the crisis tier fired" -- but
     # `background_thread` is only ever set on NON-fast-path turns
     # (`orchestrator.run_turn`: the background task is created iff
-    # `not fast.triggered`), so that condition can never be true alongside a
+    # `not fast.triggered`; the outbound-notification senders (#201) live in
+    # `result.notify_threads` and are never joined, so a slow mail server
+    # cannot stall this or the next turn), so that condition can never be true alongside a
     # real thread to join; implementing it literally was dead code (Codex
     # review, PR #90). Flagged back on #11: if AUDIT flags a reply unsafe
     # after this returns, its spoken disclosure is generated but has already
@@ -1663,7 +1763,7 @@ def _run_demo_turn_impl(
     else:
         transcript_and_reply = f'**Dad said:** "{transcript}"\n\n**Companion replied:** "{result.reply_text}"'
     if result.caregiver_flag:
-        transcript_and_reply += "\n\n*(📢 Honest Safety Disclosure: Caregiver notified with Dad's knowledge)*"
+        transcript_and_reply += _disclosure_note()
     turn_count = _next_turn_count(data_dir)
     if turn_count % REMINDER_EVERY_N_TURNS == 0:
         transcript_and_reply += "\n\n*(🤖 Reminder: this is an AI companion, and this conversation is recorded and transcribed.)*"
@@ -1692,6 +1792,28 @@ def _session_id_invalid(session_id: str) -> bool:
     return False
 
 
+def _save_memo_text(session_id: str, memo_text: str, scope: str | None = None) -> None:
+    """The one place caregiver memo text is written to a session's store:
+    the memo box and the interview (#206) both come through here, so fact
+    splitting and fact supersede apply identically. The caller holds
+    `_session_active(session_id, refuse_if_deleted=True)` and has checked the
+    text is not blank. It does NOT validate medical content (the memo box
+    never did); the interview calls caregiver.validate_sample_profile first.
+    `scope` is None for the memo box (the store infers it); the interview passes
+    the question's declared scope so "Sarah visits at 15:00" is TEMPORARY too."""
+    extra = {"scope": scope} if scope else {}
+    data_dir, _ = _session_dirs(session_id)
+    # A conversation turn's background extraction can still be writing
+    # this session's MemoryStore; join it so writes stay ordered. The
+    # per-profile lock (memory/profile_io.py) is what keeps a
+    # writer still alive after the bounded join from dropping this save.
+    _join_previous_turn(session_id)
+    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
+    facts = split_memo_facts(memo_text)  # one shared splitter
+    for line in facts:  # facts of one memo never supersede each other
+        store.add(line, source="caregiver_memo", keep_texts=facts, **extra)
+
+
 def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> tuple[str, str, str]:
     """Caregiver submits context via text note (e.g. from work / phone).
 
@@ -1711,16 +1833,7 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
         with _session_active(session_id, refuse_if_deleted=True):
             if not memo_text or not memo_text.strip():
                 return _format_caregiver_panel(session_id), session_id, ""
-            data_dir, _ = _session_dirs(session_id)
-            # A conversation turn's background extraction can still be writing
-            # this session's MemoryStore; join it so writes stay ordered. The
-            # per-profile lock (memory/profile_io.py) is what keeps a
-            # writer still alive after the bounded join from dropping this save.
-            _join_previous_turn(session_id)
-            store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
-            facts = split_memo_facts(memo_text)  # one shared splitter
-            for line in facts:  # facts of one memo never supersede each other
-                store.add(line, source="caregiver_memo", keep_texts=facts)
+            _save_memo_text(session_id, memo_text)
             return _format_caregiver_panel(session_id), session_id, ""
     except SessionGone:
         # Never _format_caregiver_panel(old id): it builds a store and would
@@ -1757,6 +1870,164 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
         # no textbox to hand it back in) and nothing is written anywhere.
         new_sid = _new_session()
         return _RESET_NOTICE + "\n\n" + _format_caregiver_panel(new_sid), new_sid
+
+
+# Guided interview (#206). The state lives in a per-tab gr.State (it dies with
+# the tab; the memos it saved live in the session directory and are deleted by
+# _end_session and the sweeper): {"answered": [keys], "skipped": [keys]}.
+# "index" is derived, never stored, so a resume cannot re-ask an answered question.
+def _interview_binding(session_id: str | None) -> str | None:
+    """Identifies one household, not just one id: the session id plus a nonce
+    file inside its directory. A swept household that is recreated under the
+    same id (the sample loader does that) has no nonce file, so state built for
+    the old one no longer matches. Never creates a directory."""
+    if not session_id:
+        return None
+    if SHARED_PROFILE:
+        return session_id
+    try:
+        root = _session_root(session_id)
+    except ValueError:
+        return f"{session_id}:invalid"
+    marker = root / "interview_nonce"
+    try:
+        return f"{session_id}:{marker.read_text(encoding='utf-8').strip()}"
+    except OSError:
+        pass
+    if not root.is_dir():
+        return f"{session_id}:none"
+    nonce = uuid.uuid4().hex
+    try:
+        with open(marker, "x", encoding="utf-8") as fh:
+            fh.write(nonce)
+    except FileExistsError:
+        return _interview_binding(session_id)
+    except OSError:
+        return f"{session_id}:none"
+    return f"{session_id}:{nonce}"
+
+
+def _interview_new_state(session_id: str | None = None) -> dict:
+    return {"answered": [], "skipped": [], "sid": session_id}
+
+
+def _interview_state(state, session_id: str | None) -> dict:
+    """A well-formed copy of whatever the browser handed back. The state is
+    bound to the household it was built for: a different session id (the old
+    one was swept and a new one issued) means a fresh interview, because the
+    answers it remembers are gone with that household."""
+    known = {q["key"] for q in INTERVIEW_QUESTIONS}
+    if not isinstance(state, dict) or state.get("sid") != session_id:
+        return _interview_new_state(session_id)
+    clean: dict = {"sid": session_id}
+    for name in ("answered", "skipped"):
+        raw = state.get(name)
+        keys = [k for k in raw if isinstance(k, str) and k in known] if isinstance(raw, list) else []
+        clean[name] = list(dict.fromkeys(keys))
+    return clean
+
+
+def _interview_index(state: dict) -> int:
+    """First question neither answered nor skipped; len(questions) when done."""
+    seen = set(state["answered"]) | set(state["skipped"])
+    for i, q in enumerate(INTERVIEW_QUESTIONS):
+        if q["key"] not in seen:
+            return i
+    return len(INTERVIEW_QUESTIONS)
+
+
+def _render_interview(state: dict, notice: str = "") -> str:
+    total = len(INTERVIEW_QUESTIONS)
+    lines = []
+    if notice:
+        lines.append(notice)
+    lines.append(f"**{len(state['answered'])} of {total} answered, {len(state['skipped'])} skipped**")
+    i = _interview_index(state)
+    if i >= total:
+        lines.append("All done. Dad's companion now has this in Briefed memory.")
+    else:
+        q = INTERVIEW_QUESTIONS[i]
+        lines.append(f"**Question {i + 1} of {total}:** {q['prompt']}")
+        lines.append(f"_For example: {q['example']}_")
+        if not q["skippable"]:
+            lines.append("_This one can't be skipped._")
+    return "\n\n".join(lines)
+
+
+def interview_refresh(state, session_id: str | None):
+    """Timer tick: if the state belongs to a household that no longer exists,
+    reset it and its text; otherwise change nothing (a refusal notice stays)."""
+    binding = _interview_binding(session_id)
+    if isinstance(state, dict) and state.get("sid") == binding:
+        return gr.skip(), gr.skip()
+    fresh = _interview_new_state(binding)
+    return fresh, _render_interview(fresh)
+
+
+def interview_next(state, session_id: str | None = None) -> tuple[dict, str]:
+    """Start or resume: show the first question not yet answered or skipped."""
+    state = _interview_state(state, _interview_binding(session_id))
+    return state, _render_interview(state)
+
+
+def interview_skip(state, session_id: str | None = None) -> tuple[dict, str]:
+    """Skip the current question if it may be skipped. Saves nothing."""
+    state = _interview_state(state, _interview_binding(session_id))
+    i = _interview_index(state)
+    if i >= len(INTERVIEW_QUESTIONS):
+        return state, _render_interview(state)
+    q = INTERVIEW_QUESTIONS[i]
+    if not q["skippable"]:
+        return state, _render_interview(state, "⚠️ This question can't be skipped.")
+    state["skipped"].append(q["key"])
+    return state, _render_interview(state)
+
+
+def interview_confirm(answer: str | None, state, session_id: str | None) -> tuple[str, str, dict, str, str]:
+    """Confirm the typed answer to the current question. It is first checked
+    with caregiver.validate_sample_profile (dosing, diagnosis, clinical claims;
+    the memo path itself does not do that): a refused answer is shown with its
+    reason, nothing is saved and the question stays open. Otherwise it is saved
+    through _save_memo_text, exactly as a typed memo, and the interview moves
+    on. No model call is made and the senior side is not involved.
+    Returns (caregiver panel, session id, state, interview text, answer box)."""
+    session_id = session_id or _new_session()
+    state = _interview_state(state, _interview_binding(session_id))
+    if _session_id_invalid(session_id):
+        return _format_caregiver_panel(session_id), session_id, state, _render_interview(state), ""
+    answer = answer or ""
+    try:
+        # Everything that renders the panel runs inside the registration, so a
+        # swept household is never recreated by a refused or blank answer.
+        with _session_active(session_id, refuse_if_deleted=True):
+            i = _interview_index(state)
+            panel = lambda notice="", box="": (
+                _format_caregiver_panel(session_id), session_id, state, _render_interview(state, notice), box)
+            if i >= len(INTERVIEW_QUESTIONS):
+                return panel()
+            if not answer.strip():
+                return panel("⚠️ Type an answer, or skip this question.", answer)
+            try:
+                validate_sample_profile(answer)
+            except ValueError as exc:
+                m = re.match(r"sample profile refused: (.+?) language \((.*?)\) in ", str(exc))
+                what = f"{m.group(1)} language ({m.group(2)})" if m else "medical wording"
+                # The matched text is the caregiver's own: escape before it reaches Markdown.
+                return panel(
+                    html.escape(f"⚠️ Not saved: the answer contains {what}. "
+                                "Describe people, routines and preferences only, or skip this question."),
+                    answer)
+            q = INTERVIEW_QUESTIONS[i]
+            _save_memo_text(session_id, interview_answer_memo(q["key"], answer), scope=q["scope"])
+            state["answered"].append(q["key"])
+            return panel()
+    except SessionGone:
+        # The household is gone: nothing was saved, the interview restarts
+        # with the new one, and the typed answer stays in the box.
+        new_sid = _new_session()
+        fresh = _interview_new_state(_interview_binding(new_sid))
+        return (_RESET_NOTICE + "\n\n" + _format_caregiver_panel(new_sid), new_sid, fresh,
+                _render_interview(fresh), answer)
 
 
 def load_sample_family(session_id: str | None) -> tuple[str, str]:
@@ -1825,13 +2096,26 @@ def build_demo() -> gr.Blocks:
         gr.Markdown(
             "# ForeverYours\n"
             "**⚠️ TRANSPARENCY NOTICE: You are interacting with an Artificial Intelligence (AI) companion, not a human.**\n\n"
-            "Talk or type as the senior on the left; the caregiver side on the right updates live. "
+            "Talk or type as the senior on the left, or brief the companion as the caregiver on the right "
+            "(Sarah, Dad's daughter); the caregiver side updates live. "
             "No mic? Use a sample clip below. Try \"I fell down earlier\" to see the honest-disclosure moment."
         )
         gr.Markdown(
             "🤖 **This is an AI companion, not a person.** "
             f"Read the [privacy notice]({PRIVACY_NOTICE_URL}) before you speak."
         )
+        # The retention minutes sit collapsed here, beside the privacy-notice
+        # link, so the short recording notice above the mic stays one glance
+        # long. The text is still in the page (tests/test_retention_notice.py).
+        with gr.Accordion("How long your recordings and household data are kept", open=False):
+            gr.Markdown(
+                f"Your household's memory, flags and audio are removed about {_CLOSED_TAB_MIN} "
+                f"minutes after you close this tab, or after {_SESSION_TTL_MIN} minutes of "
+                f"inactivity if the close never registers. Your recorded/uploaded input audio "
+                f"separately sits in Gradio's own cache, swept every {_CACHE_SWEEP_INTERVAL_MIN} "
+                f"minutes and removing files older than {_CACHE_MAX_AGE_MIN} minutes, so up to "
+                f"about {_CACHE_MAX_MIN} minutes. Nothing is removed the instant the tab closes."
+            )
         history_state = gr.State([])
         session_state = gr.State(None, time_to_live=SESSION_TTL_S, delete_callback=_end_session)
 
@@ -1847,12 +2131,8 @@ def build_demo() -> gr.Blocks:
                 gr.Markdown(
                     "🎙️ *When you speak or type here, it is recorded and turned into text. "
                     "That text (not your voice recording) is sent to Nebius Token Factory to write a "
-                    f"reply and run a safety check. Your household's memory, flags and audio are "
-                    f"removed about {_CLOSED_TAB_MIN} minutes after you close this tab, or after "
-                    f"{_SESSION_TTL_MIN} minutes of inactivity if the close never registers; your "
-                    f"recorded/uploaded input audio separately sits in Gradio's own cache, swept "
-                    f"every {_CACHE_SWEEP_INTERVAL_MIN} minutes and removing files older than "
-                    f"{_CACHE_MAX_AGE_MIN} minutes, so up to about {_CACHE_MAX_MIN} minutes.*"
+                    "reply and run a safety check. How long it is kept: open "
+                    "\"How long your recordings and household data are kept\" above.*"
                 )
                 audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Speak (as the senior)")
                 text_in = gr.Textbox(
@@ -1868,6 +2148,7 @@ def build_demo() -> gr.Blocks:
                 gr.Examples(
                     examples=[[str(SAMPLES_DIR / name)] for name in SAMPLE_CLIPS],
                     inputs=[audio_in],
+                    example_labels=list(SAMPLE_CLIP_LABELS),
                     label="No mic? Try a sample clip",
                     cache_examples=False,
                 )
@@ -1899,7 +2180,7 @@ def build_demo() -> gr.Blocks:
                 # to the memo accordion, so the Senior/Caregiver split-screen
                 # the video script uses is unchanged.
                 load_sample_btn = gr.Button("Load sample family", variant="secondary")
-                with gr.Accordion("📝 Submit Caregiver Memo (Beat 1 Onboarding)", open=False):
+                with gr.Accordion("Brief Dad companion (as Sarah, his daughter)", open=True):
                     with gr.Tabs():
                         with gr.TabItem("Type Note"):
                             memo_text_in = gr.Textbox(
@@ -1911,6 +2192,16 @@ def build_demo() -> gr.Blocks:
                         with gr.TabItem("Record Voice Memo"):
                             memo_audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Record context memo")
                             save_audio_memo_btn = gr.Button("Save Voice Memo", variant="secondary")
+                # Guided interview (#206): one question at a time, saved through
+                # the same helper as the memo box; the senior never hears it.
+                with gr.Accordion("Guided interview: brief the companion in five questions", open=False):
+                    interview_state = gr.State(_interview_new_state())
+                    interview_md = gr.Markdown(_render_interview(_interview_new_state()))
+                    interview_answer_in = gr.Textbox(label="Your answer", lines=2)
+                    with gr.Row():
+                        interview_start_btn = gr.Button("Start / resume", variant="secondary")
+                        interview_confirm_btn = gr.Button("Confirm answer", variant="primary")
+                        interview_skip_btn = gr.Button("Skip", variant="secondary")
 
         # Below the product on purpose (#21 / Design review): the split-screen
         # above is the hero, so the longer context and the dev telemetry sit
@@ -2010,6 +2301,22 @@ def build_demo() -> gr.Blocks:
             outputs=[caregiver_panel, session_state],
         )
 
+        interview_start_btn.click(
+            fn=interview_next,
+            inputs=[interview_state, session_state],
+            outputs=[interview_state, interview_md],
+        )
+        interview_skip_btn.click(
+            fn=interview_skip,
+            inputs=[interview_state, session_state],
+            outputs=[interview_state, interview_md],
+        )
+        interview_confirm_btn.click(
+            fn=interview_confirm,
+            inputs=[interview_answer_in, interview_state, session_state],
+            outputs=[caregiver_panel, session_state, interview_state, interview_md, interview_answer_in],
+        )
+
         load_sample_btn.click(
             fn=load_sample_family,
             inputs=[session_state],
@@ -2022,6 +2329,7 @@ def build_demo() -> gr.Blocks:
         # alert strip rides the same poll so a phone sees it within one tick too.
         timer = gr.Timer(2)
         timer.tick(fn=_format_caregiver_panel, inputs=[session_state], outputs=[caregiver_panel])
+        timer.tick(fn=interview_refresh, inputs=[interview_state, session_state], outputs=[interview_state, interview_md])
         timer.tick(fn=_format_mobile_alert_strip, inputs=[session_state], outputs=[mobile_alert])
         demo.load(fn=init_session, outputs=[session_state, caregiver_panel])
         demo.load(fn=_format_mobile_alert_strip, inputs=[session_state], outputs=[mobile_alert])

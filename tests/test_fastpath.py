@@ -53,7 +53,48 @@ class TestFastPath(unittest.TestCase):
                 self.assertEqual(res.severity, "distress")
                 self.assertIsNotNone(res.immediate_reply)
                 self.assertIn("notifying their family", res.continuation_note)
-                self.assertIn("URGENT: possible distress", res.caregiver_flag)
+                # Explicit falls carry the fall wording (TestFallReply below),
+                # chest pain / breathing / bleeding / 911 the medical one;
+                # every other distress phrase the generic one.
+                self.assertIn(
+                    res.caregiver_flag,
+                    (fastpath.CAREGIVER_FLAG_TEXT["distress"], fastpath.CAREGIVER_FLAG_TEXT["fall"],
+                     fastpath.CAREGIVER_FLAG_TEXT["medical"]),
+                )
+
+    def test_physical_emergency_reply_says_911_not_988(self):
+        # A medical emergency needs 911, not the 988 crisis line: a caregiver
+        # flag is a notification, not a 911 call, so the senior is told to call.
+        cases = [
+            "I can't breathe",
+            "I cannot breathe",
+            "I have bad chest pain",
+            "My chest hurts so much",
+            "I am bleeding from my hand",
+            "Call 911 right now",
+        ]
+        for phrase in cases:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered)
+                self.assertEqual(res.severity, "distress")
+                self.assertIn("911", res.immediate_reply)
+                self.assertNotIn("988", res.immediate_reply)
+
+    def test_mixed_crisis_and_physical_emergency_says_988_and_911(self):
+        # Crisis wins the severity and the flag; the reply carries both numbers.
+        for phrase in ("I want to die and I can't breathe. Call 911.",
+                       "I can't breathe and I want to die."):
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertEqual(res.severity, "crisis")
+                self.assertIn("988", res.immediate_reply)
+                self.assertIn("911", res.immediate_reply)
+                self.assertTrue(res.caregiver_flag.startswith("URGENT CRISIS:"))
+        # A crisis-only report still names 988 alone.
+        res = fastpath.check("I want to die")
+        self.assertIn("988", res.immediate_reply)
+        self.assertNotIn("911", res.immediate_reply)
 
     def test_conversational_help_requests_do_not_trigger(self):
         # Issue #15: conversational help requests must NOT trigger emergency distress
@@ -116,6 +157,25 @@ class TestFastPath(unittest.TestCase):
                 self.assertEqual(res.severity, "confusion")
                 self.assertIn("You're safe", res.immediate_reply)
                 self.assertIn("Possible confusion", res.caregiver_flag)
+
+    def test_confusion_reply_discloses_family_sharing(self):
+        # The orchestrator marks every fast-path flag disclosed_to_senior=True once
+        # the reply is spoken, so the confusion reply must actually say the family
+        # will be told -- otherwise the caregiver panel's "Dad was told" is false.
+        cases = [
+            "Where am I right now?",
+            "I don't know where I am",
+            "I don't know what day it is",
+        ]
+        for phrase in cases:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertEqual(res.severity, "confusion")
+                self.assertIn("family", res.immediate_reply.lower())
+                self.assertIn("You're safe", res.immediate_reply)
+                # THINK is told it already said so, so the continuation doesn't repeat it.
+                self.assertIn("family", res.continuation_note.lower())
+                self.assertIn("don't repeat", res.continuation_note.lower())
 
     def test_neutral_phrases_do_not_trigger(self):
         cases = [
@@ -207,12 +267,15 @@ class TestFastPath(unittest.TestCase):
         # caregiver-visible surface, so a flag that quotes the utterance turns
         # it into a transcript leak ("I fell. Also please keep my bank PIN
         # 1234 private" -> both sentences on the caregiver's screen).
+        # (severity, flag wording key, utterance): an explicit fall keeps
+        # severity "distress" but has its own fixed wording.
         cases = [
-            ("crisis", "I want to die, and please keep my bank PIN 1234 private"),
-            ("distress", "I fell. Also please keep my bank PIN 1234 private"),
-            ("confusion", "Where am I? My bank PIN is 1234"),
+            ("crisis", "crisis", "I want to die, and please keep my bank PIN 1234 private"),
+            ("distress", "fall", "I fell. Also please keep my bank PIN 1234 private"),
+            ("distress", "distress", "I can't get up. Also please keep my bank PIN 1234 private"),
+            ("confusion", "confusion", "Where am I? My bank PIN is 1234"),
         ]
-        for severity, utterance in cases:
+        for severity, wording, utterance in cases:
             with self.subTest(severity=severity):
                 res = fastpath.check(utterance)
                 self.assertTrue(res.triggered, f"Expected '{utterance}' to trigger")
@@ -226,7 +289,181 @@ class TestFastPath(unittest.TestCase):
                 self.assertNotIn("PIN", flag)
                 self.assertNotIn(utterance.strip(), flag)
                 # ... and the flag is exactly the fixed text for this category.
-                self.assertEqual(flag, fastpath.CAREGIVER_FLAG_TEXT[severity])
+                self.assertEqual(flag, fastpath.CAREGIVER_FLAG_TEXT[wording])
+
+
+
+class TestFallReply(unittest.TestCase):
+    """An explicit fall report gets its own reply (are you hurt, can you get up
+    safely) and flag wording; ambiguous or non-fall distress keeps the generic
+    reply. Severity stays "distress" either way."""
+
+    FALLS = [
+        "I fell down earlier and I'm scared",
+        "I fell down",
+        "I've had a fall",
+        "I have fall",
+        "I've fallen in the kitchen",
+        "I'm falling",
+        "I fell out of bed",
+        "I fell forward onto the floor",
+        "I had a nasty fall",
+        "I took a bad fall",
+    ]
+    GENERIC = [
+        "I can't get up",
+        # Triggers, but does not establish that he fell himself.
+        "My grandson fell off his bike",
+        "I fell in love with jazz",
+        "I fell out with my brother",
+        "The vase is falling over",
+        "I feel very unwell and I'm hurt",
+        "Help me, I'm scared",
+        "I'm stuck on the floor",
+    ]
+    GENERIC_REPLY = (
+        "I hear you, and I'm taking this seriously. "
+        "I'm letting your family know right now so someone can check on you. "
+        "I'll only tell them if I'm worried about your safety."
+    )
+
+    def test_fall_reply_asks_hurt_and_get_up_safely(self):
+        for phrase in self.FALLS:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered)
+                self.assertEqual(res.severity, "distress")
+                reply = res.immediate_reply.lower()
+                self.assertIn("are you hurt?", reply)
+                self.assertIn("can you get up safely?", reply)
+                self.assertIn("letting your family know right now", reply)
+                self.assertIn("reported a fall", res.caregiver_flag.lower())
+                self.assertEqual(res.caregiver_flag, fastpath.CAREGIVER_FLAG_TEXT["fall"])
+
+    def test_untimed_fall_flag_makes_no_time_claim(self):
+        res = fastpath.check("I fell down")
+        self.assertNotIn("earlier", res.caregiver_flag.lower())
+        self.assertNotIn("today", res.caregiver_flag.lower())
+
+    def test_fall_continuation_quotes_the_utterance_and_follows_up_on_injury(self):
+        res = fastpath.check("I fell down earlier and I'm scared")
+        note = res.continuation_note
+        # The THINK note carries the quoted utterance; the caregiver flag does not.
+        self.assertIn('"I fell down earlier and I\'m scared"', note)
+        self.assertNotIn("I fell down earlier", res.caregiver_flag)
+        self.assertIn("already asked whether they are hurt", note)
+        self.assertIn("don't repeat", note)
+        self.assertIn("injury", note)
+        self.assertIn("safe to get up", note)
+
+    def test_non_fall_distress_keeps_the_generic_text(self):
+        for phrase in self.GENERIC:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered)
+                self.assertEqual(res.severity, "distress")
+                self.assertEqual(res.immediate_reply, self.GENERIC_REPLY)
+                self.assertNotIn("hurt", res.immediate_reply.lower())
+                self.assertNotIn("get up", res.immediate_reply.lower())
+                self.assertEqual(res.caregiver_flag, fastpath.CAREGIVER_FLAG_TEXT["distress"])
+
+
+class TestCrisisContinuationNote(unittest.TestCase):
+    def test_crisis_note_forbids_repeating_hotline_and_apology(self):
+        res = fastpath.check("I want to die")
+        self.assertEqual(res.severity, "crisis")
+        # The canned reply keeps its hotline and apology ...
+        self.assertIn("988", res.immediate_reply)
+        self.assertIn("sorry", res.immediate_reply.lower())
+        # ... and the THINK note says both were given and must not be repeated.
+        note = res.continuation_note
+        self.assertIn("Do NOT repeat the 988 number or any hotline", note)
+        self.assertIn("do NOT apologize or say sorry again", note)
+
+
+class TestFallLongTail(unittest.TestCase):
+    """#198: falls phrased outside the canonical words. Each new pattern has a
+    positive and a near-miss negative; benign idioms must stay quiet."""
+
+    POSITIVES = [
+        "I hit the floor",
+        "I just hit the floor in the bathroom",
+        "My legs just gave way on the stairs",
+        "my knees gave out in the kitchen",
+        "I went down in the garden and I can't put any weight on my ankle",
+        "I went down on the stairs",
+        "I went down in the kitchen",
+        "I hit the floor",
+    ]
+    NEAR_MISSES = [
+        "The price of tea hit the floor",
+        "I hit the floor running with the cleaning this morning",
+        "The ball hit the floor and rolled under the sofa",
+        "The old table legs gave way to a newer set",
+        "My patience gave out waiting for the post",
+        "I went down to the shops this morning",
+        "I went down the stairs to put the kettle on",
+        "I went down to the garden to water the roses",
+        "my knees gave out on that hike years ago",
+        "my knees gave out when I was young",
+        "my legs gave way to a nicer pair",
+        "I went down in the basement to get the jam",
+        "I went down on the bus to town",
+        "I went down in the lift",
+        "I went down in the world",
+        "I hit the floor laughing",
+        "I just hit the floor mat for the dog",
+        "I went down in the garden to water the roses",
+    ]
+
+    def test_new_phrasings_trigger_distress(self):
+        for phrase in self.POSITIVES:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered)
+                self.assertEqual(res.severity, "distress")
+
+    def test_near_misses_do_not_trigger(self):
+        for phrase in self.NEAR_MISSES:
+            with self.subTest(phrase=phrase):
+                self.assertFalse(fastpath.check(phrase).triggered)
+
+
+class TestEveryBranchDiscloses(unittest.TestCase):
+    """Invariant: every triggering fast-path branch tells the senior the family
+    will be told. pipeline/orchestrator.py records each fast-path flag with
+    disclosed_to_senior=True once the immediate reply is spoken, so a branch whose
+    reply does not say so would make the caregiver panel claim "Dad was told"
+    falsely. A new branch needs a representative phrase here."""
+
+    # One representative phrase per triggering branch -> expected severity.
+    BRANCH_PHRASES = {
+        "crisis": ("I want to die", "crisis"),
+        "fall": ("I fell down", "distress"),
+        "distress": ("Help me, I'm scared", "distress"),
+        "medical": ("I can't breathe", "distress"),
+        "crisis_and_medical": ("I want to die and I can't breathe", "crisis"),
+        "confusion": ("Where am I?", "confusion"),
+    }
+
+    def test_every_triggering_branch_discloses_family_sharing(self):
+        for branch, (phrase, severity) in self.BRANCH_PHRASES.items():
+            with self.subTest(branch=branch, phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered, f"Expected '{phrase}' to trigger")
+                self.assertEqual(res.severity, severity)
+                self.assertIsNotNone(res.caregiver_flag)
+                self.assertIn("family", res.immediate_reply.lower())
+
+    def test_fall_phrase_takes_the_fall_branch(self):
+        # Guards the table above: the fall phrase must hit the fall reply, not
+        # the generic distress one, or the fall branch goes unchecked.
+        res = fastpath.check(self.BRANCH_PHRASES["fall"][0])
+        self.assertEqual(res.caregiver_flag, fastpath.CAREGIVER_FLAG_TEXT["fall"])
+
+    def test_medical_phrase_takes_the_medical_branch(self):
+        res = fastpath.check(self.BRANCH_PHRASES["medical"][0])
+        self.assertEqual(res.caregiver_flag, fastpath.CAREGIVER_FLAG_TEXT["medical"])
 
 
 if __name__ == "__main__":

@@ -113,7 +113,7 @@ This creates the core Personal AI loop:
 
 ### The AI can bring the family back into the loop when appropriate.
 
-If a conversation contains a potentially concerning safety signal, ForeverYours can create an alert for the designated caregiver.
+If a conversation contains a potentially concerning safety signal, ForeverYours can create an alert for the designated caregiver. In this demo the alert is simulated: it is shown on the caregiver panel and no external notification is sent (an optional e-mail or webhook channel is off by default and always off on the hosted demo).
 
 For example:
 
@@ -374,7 +374,7 @@ The AI retrieves relevant memories instead of treating every interaction as a bl
 
 ### Action
 
-The system can perform context-dependent workflows such as creating caregiver safety alerts and processing new memories in the background.
+The system can perform context-dependent workflows such as creating caregiver safety alerts (shown on the caregiver panel; simulated in this demo, so no external notification is sent) and processing new memories in the background.
 
 This aligns directly with the hackathon's Personal AI track, which calls for persistent memory, reusable skills, selected information/tools, and the ability to carry context across daily workflows.
 
@@ -406,7 +406,7 @@ The system shows the retrieved memories alongside the conversation.
 
 Dad says something potentially concerning.
 
-ForeverYours identifies the safety signal and creates a caregiver alert.
+ForeverYours identifies the safety signal and creates a caregiver alert, shown on the caregiver panel (simulated in this demo: no external notification is sent).
 
 The senior is informed about the safety boundary.
 
@@ -454,7 +454,7 @@ When an older adult tells ChatGPT: *"I fell earlier today and I'm scared,"* Chat
 ### 2. Clinical Disclosure Honesty (The Split-Screen Differentiator)
 ForeverYours operates with a **dual-column synchronized architecture**:
 * When Dad shares an emergency or confusion signal (*"I fell down earlier and I'm scared"*), ForeverYours **tells him honestly**: *"I hear you, and I'm taking this seriously. I'm letting your family know right now so someone can check on you."*
-* In that exact same second, the caregiver panel **lights up with an auditable alert tagged with disclosure proof**: `✅ Dad was told`.
+* In that exact same second, the caregiver panel **lights up with an auditable alert tagged with disclosure proof**: `✅ Dad was told`. In this demo it is a simulated caregiver alert: it is shown on the caregiver panel and no external notification is sent.
 * There are no secret wiretaps and no fake physical promises. The companion never claims it will physically visit or pick up groceries.
 
 ### 3. Deliberately Briefed, Person-Centered Memory vs. Scraping

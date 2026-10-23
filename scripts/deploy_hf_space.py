@@ -51,7 +51,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD_INFO = "BUILD_INFO"  # staged file: one line, the full git sha the Space was built from
 
 STAGE_FILES = [
-    "app.py", "webapp.py", "caregiver.py", "envload.py", "__init__.py",
+    "app.py", "webapp.py", "caregiver.py", "envload.py", "notify.py", "__init__.py",
     "requirements.txt", "packages.txt", "LICENSE",
 ]
 STAGE_DIRS = ["memory", "pipeline", "safety"]
@@ -60,6 +60,9 @@ STAGE_DIRS = ["memory", "pipeline", "safety"]
 VOICE_DIR = "models/piper"
 VOICE_FILES = ["en_US-ljspeech-medium.onnx", "en_US-ljspeech-medium.onnx.json"]
 SAMPLE_GLOB = "samples/*.wav"
+# webapp.py labels the sample chips from this script's SAMPLES text, so it
+# ships with the clips (it only imports pyttsx3 when run, never on import).
+SAMPLE_SCRIPT = "samples/generate_samples.py"
 
 HARDWARE_CHOICES = ["cpu-basic", "zero-a10g", "cpu-upgrade"]
 ZEROGPU_REQUIREMENT = "spaces  # ZeroGPU runtime; app.py registers its @spaces.GPU marker with it\n"
@@ -134,6 +137,7 @@ def stage(dest: Path, gradio_version: str, hardware: str = "cpu-basic",
     (dest / "samples").mkdir()
     for wav in sorted(ROOT.glob(SAMPLE_GLOB)):
         shutil.copy2(wav, dest / "samples" / wav.name)
+    shutil.copy2(ROOT / SAMPLE_SCRIPT, dest / SAMPLE_SCRIPT)
     if all((voice_dir / name).is_file() for name in VOICE_FILES):
         (dest / VOICE_DIR).mkdir(parents=True)
         for name in VOICE_FILES:

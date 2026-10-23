@@ -162,10 +162,10 @@ class TestWebappSessions(unittest.TestCase):
         panel = webapp._format_caregiver_panel(session_id)
         strip = webapp._format_mobile_alert_strip(session_id)
         
-        self.assertIn("HIGH PRIORITY SAFETY ALERT DISPATCHED", panel)
+        self.assertIn("HIGH PRIORITY SAFETY ALERT", panel)
         self.assertIn("CRISIS", panel)
         
-        self.assertIn("Caregiver alert:", strip)
+        self.assertIn("Simulated caregiver alert:", strip)
         self.assertNotIn("No flags yet", panel)
         self.assertNotEqual(strip, "")
 
@@ -329,7 +329,7 @@ class TestWebappSessions(unittest.TestCase):
 
         # Check that high priority alert banner appears in the caregiver panel
 
-        self.assertIn("🚨 **HIGH PRIORITY SAFETY ALERT DISPATCHED**", panel)
+        self.assertIn(webapp.SIMULATED_ALERT_CARD, panel)
 
         self.assertIn("Disclosed to Senior in conversation", panel)
 
@@ -367,7 +367,7 @@ class TestWebappSessions(unittest.TestCase):
 
         panel = webapp._format_caregiver_panel(session_id)
 
-        self.assertIn("> 🚨 **HIGH PRIORITY SAFETY ALERT DISPATCHED**", panel)
+        self.assertIn(webapp.SIMULATED_ALERT_CARD, panel)
 
         self.assertIn("Severity:** `DISTRESS`", panel)
 
@@ -1075,6 +1075,109 @@ class TestTurnLockHygiene(_TurnHarness, unittest.TestCase):
             with self.subTest(raw=bad):
                 with self.assertRaisesRegex(ValueError, "FY_TURN_CONCURRENCY"):
                     webapp._parse_turn_concurrency(bad)
+
+
+class TestPanelNotificationStates(unittest.TestCase):
+    """#201: the caregiver panel says "notification sent", "notification failed"
+    or, with the channel off, that the alert is simulated -- never "dispatched"."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self.temp_dir.cleanup)
+        self.patches = [
+            patch.object(webapp, "SESSIONS_DIR", Path(self.temp_dir.name) / "sessions"),
+            patch.object(webapp, "SHARED_PROFILE", False),
+            patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"),
+            patch.dict(os.environ, {"NEBIUS_API_KEY": ""}),
+        ]
+        for p in self.patches:
+            p.start()
+            self.addCleanup(p.stop)
+        webapp._request_log.clear()
+
+    def _fall(self, notifier):
+        session_id, _ = webapp.init_session()
+        said = "I fell down earlier and I'm scared"
+        with patch.object(webapp.hear, "transcribe", return_value=(said, {"wpm": 0.0, "avg_pause_s": 0.0})), \
+             patch("notify.get_notifier", return_value=notifier):
+            webapp.run_demo_turn(FAKE_UPLOAD, [], session_id)
+        self._drain()
+        return webapp._format_caregiver_panel(session_id)
+
+    def _drain(self):
+        """Wait for every notification thread this test started, so none
+        outlives the test (a leaked daemon thread imports modules and writes
+        files during other tests)."""
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            live = [t for t in threading.enumerate() if t.name.startswith("fy-notify")]
+            if not live:
+                return
+            for t in live:
+                t.join(timeout=0.1)
+        self.fail("notification threads still running")
+
+    def test_slow_notifier_does_not_stall_the_next_turn_join(self):
+        release = threading.Event()
+
+        class Slow:
+            def send(self, flag, household):
+                release.wait(30)
+
+        session_id, _ = webapp.init_session()
+        said = "I fell down earlier and I'm scared"
+        with patch.object(webapp.hear, "transcribe", return_value=(said, {"wpm": 0.0, "avg_pause_s": 0.0})), \
+             patch("notify.get_notifier", return_value=Slow()):
+            webapp.run_demo_turn(FAKE_UPLOAD, [], session_id)
+            t0 = time.monotonic()
+            webapp._join_previous_turn(session_id)
+            self.assertLess(time.monotonic() - t0, 2)
+        release.set()
+        self._drain()
+
+    def test_off_shows_no_notification_claim(self):
+        import notify
+        panel = self._fall(notify.NullNotifier())
+        self.assertIn("HIGH PRIORITY SAFETY ALERT", panel)
+        for claim in ("notified", "Notification failed", "dispatched", "DISPATCHED"):
+            self.assertNotIn(claim, panel)
+
+    def test_success_shows_notified(self):
+        class Ok:
+            def send(self, flag, household):
+                return None
+        panel = self._fall(Ok())
+        self.assertIn("Notification sent to caregiver", panel)
+        self.assertNotIn("Notification failed", panel)
+        self.assertNotIn("imulated", panel)
+        self.assertNotIn("ispatched", panel)
+
+    def test_failure_shows_notification_failed(self):
+        class Down:
+            def send(self, flag, household):
+                raise ConnectionRefusedError("nope")
+        panel = self._fall(Down())
+        self.assertIn("Notification failed", panel)
+        self.assertNotIn("Notification sent", panel)
+
+    def test_hosted_default_constructs_no_sender(self):
+        import notify
+        env = {"FY_NOTIFY_CHANNEL": "smtp", "FY_NOTIFY_TO": "x@example.com",
+               "FY_NOTIFY_SMTP_HOST": "smtp.example.com", "SPACE_ID": "user/space"}
+        with patch.dict(os.environ, env), patch("smtplib.SMTP") as smtp, \
+             patch("smtplib.SMTP_SSL") as ssl, patch("urllib.request.urlopen") as urlopen:
+            self.assertIsInstance(notify.get_notifier(), notify.NullNotifier)
+            panel = self._fall_real_env()
+        smtp.assert_not_called(); ssl.assert_not_called(); urlopen.assert_not_called()
+        self.assertNotIn("Notification sent", panel)
+        self.assertIn(webapp.SIMULATED_ALERT_STATUS, panel)
+
+    def _fall_real_env(self):
+        session_id, _ = webapp.init_session()
+        said = "I fell down earlier and I'm scared"
+        with patch.object(webapp.hear, "transcribe", return_value=(said, {"wpm": 0.0, "avg_pause_s": 0.0})):
+            webapp.run_demo_turn(FAKE_UPLOAD, [], session_id)
+        return webapp._format_caregiver_panel(session_id)
 
 
 if __name__ == "__main__":

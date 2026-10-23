@@ -12,5 +12,7 @@ ForeverYours is designed with a strict "companionship without surveillance" inva
 We do not sell your data. 
 Text transcripts are sent to the Nebius Inference API to generate AI responses. Nebius does not retain or train on this data. Audio is never sent to the cloud.
 
+**Caregiver notification (optional, off by default).** If the person running ForeverYours sets `FY_NOTIFY_CHANNEL`, each safety flag also sends one short message to the caregiver's own mailbox (SMTP) or to a webhook URL they chose. It contains only the fixed category text, the severity, whether the senior was told, a household label and a time. It never contains the transcript, anything the senior said, or a key. At most a configured number of messages per household per hour are sent (default 6). The hosted web demo never sends one. If a send fails, the caregiver panel says "notification failed" instead of claiming it was sent.
+
 ## Your Rights
 You own your memory. You may delete your profile at any time by deleting the `data/` folder on your machine. You may ask the AI to "Forget X", and it will permanently scrub that fact from its memory store.

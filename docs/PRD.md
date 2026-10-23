@@ -56,6 +56,20 @@ in it is a blocker for `main`, full stop — see `CONTRIBUTING.md`. In order:
 If a beat can't be demoed end to end, the build isn't done — a passing unit test over a mocked
 pipeline doesn't count. See `CONTRIBUTING.md`'s "keep main demo-able" rule.
 
+## Caregiver onboarding: guided interview
+
+A caregiver facing a blank memo box can instead open the **Guided interview** accordion and
+answer five questions one at a time: the important people, what Dad loves, a usual day, what to
+steer away from, and times to remember today. Each question has an example and says whether it
+may be skipped; the panel shows "N of 5 answered, M skipped"; the mode can be left and resumed in
+the same session without re-asking answered questions. Nothing is saved until the caregiver
+confirms an answer. A confirmed answer is first checked for dosing, diagnosis and clinical
+claims (the same check the sample household uses); a refused answer is shown with its reason and
+not saved. Otherwise it is saved through the same helper as the typed memo box, so fact splitting
+and fact supersede apply unchanged. It is caregiver-side only: the senior never hears the
+interview, no model call is made for it, and it works with no key. The plain memo box does not run
+the medical-content check; that is a separate decision.
+
 ## Judging-relevant framing
 
 Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackathon.devpost.com/)
