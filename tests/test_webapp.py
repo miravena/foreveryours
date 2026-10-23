@@ -119,9 +119,11 @@ class TestWebappSessions(unittest.TestCase):
     def test_expired_session_shows_reset_notice(self):
         """#83, #80 3.C7: a turn with no session_id (State expired mid-demo)
         gets a fresh household and says so, instead of silently looking like
-        a reset conversation."""
+        a reset conversation. Mid-demo means the browser still holds the
+        conversation; with no history it is a first turn (#215)."""
+        history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
         with patch.object(webapp.hear, "transcribe", return_value=("Hello", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp.run_demo_turn(FAKE_UPLOAD, [], None)
+            result = webapp.run_demo_turn(FAKE_UPLOAD, history, None)
         self.assertIn("reset after a period of inactivity", result[0])
         self.assertIsNotNone(result[5])  # a new session_id was minted
 

@@ -388,16 +388,13 @@ _BG_JOIN_TIMEOUT_S = 10
 _RESET_NOTICE = "_Your demo household was reset after a period of inactivity._"
 
 
-def _session_really_expired(session_id: str | None, history: list, legacy_form: bool) -> bool:
+def _session_really_expired(session_id: str | None, history: list) -> bool:
     """True only when an earlier session was really lost (#215). A missing
-    session id on the first turn of a fresh page is not an expiry: nothing was
-    reset, so the notice would be false. A real expiry leaves the browser's
-    conversation history behind (the history State has no time-to-live); the
-    three-argument (audio, history, session) form is the older call shape whose
-    caller always held a session, so a missing id there means it went away."""
-    if session_id is not None:
-        return False
-    return bool(history) or legacy_form
+    session id with no conversation is a first turn (the public API never runs
+    the page's load handler), not an expiry, so the notice would be false. A
+    real expiry mid-demo leaves the browser's history behind: the history State
+    has no time-to-live, the session State does."""
+    return session_id is None and bool(history)
 
 
 class SessionGone(Exception):
@@ -1302,7 +1299,6 @@ def run_demo_turn(
     is_proactive: bool = False,
     trigger_type: str = "silence",
 ) -> tuple[str, str | None, list[dict], str, str, str, str, None]:
-    legacy_form = isinstance(text_in_or_history, list)
     if isinstance(text_in_or_history, list):
         history = text_in_or_history
         session_id_val = history_or_session if isinstance(history_or_session, str) else session_id
@@ -1317,7 +1313,7 @@ def run_demo_turn(
     # A missing session_id here means the Gradio State expired mid-demo (#83,
     # #80 3.C7): a fresh, unbriefed household is about to answer, so say so
     # rather than silently looking like a reset conversation.
-    session_expired = _session_really_expired(session_id_val, history, legacy_form)
+    session_expired = _session_really_expired(session_id_val, history)
     session_id_val = session_id_val or _new_session()
     if not SHARED_PROFILE:
         session_id_val = _normalize_or_new_session(session_id_val)
@@ -1362,7 +1358,6 @@ def run_demo_turn_streaming(
     and Gradio closes this generator mid-turn (`gen.close()` throws
     GeneratorExit at the suspended yield, which unwinds through this
     `finally` on its way out), so `_active_turns` is always cleaned up."""
-    legacy_form = isinstance(text_in_or_history, list)
     if isinstance(text_in_or_history, list):
         history = text_in_or_history
         session_id_val = history_or_session if isinstance(history_or_session, str) else session_id
@@ -1374,7 +1369,7 @@ def run_demo_turn_streaming(
         session_id_val = session_id
         simulated_time_str = simulated_time_in or "Morning (Default)"
 
-    session_expired = _session_really_expired(session_id_val, history, legacy_form)
+    session_expired = _session_really_expired(session_id_val, history)
     session_id_val = session_id_val or _new_session()
     if not SHARED_PROFILE:
         session_id_val = _normalize_or_new_session(session_id_val)
