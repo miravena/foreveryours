@@ -60,10 +60,28 @@ def is_topic_invitation(transcript: str) -> bool:
     return bool(transcript) and any(p.search(transcript) for p in TOPIC_INVITATION_PATTERNS)
 
 
+# "Is anyone coming by today?" and its phrasings (#229). The answer is a fact
+# the caregiver wrote down, so the orchestrator answers it from the caregiver
+# updates instead of letting THINK improvise a visitor.
+VISITOR_QUESTION_RE = re.compile(
+    r"\b(anyone|anybody|someone|somebody|who|visitors?)\b[^?.!]*"
+    r"\b(coming|come|comes|visiting|visit|visits|stopping|stop|dropping|drop|popping|pop|arriving|expected|over|by)\b"
+    r"|\bany\s+(visitors?|company|guests?)\b",
+    re.IGNORECASE,
+)
+
+
+def is_visitor_question(transcript: str) -> bool:
+    """True when the senior asks who (if anyone) is visiting today."""
+    return bool(transcript) and bool(VISITOR_QUESTION_RE.search(transcript))
+
+
 def detect_intent(transcript: str) -> Intent:
     """Classifies the senior's utterance to gate memory retrieval and prompt construction."""
     if not transcript:
         return Intent.CASUAL
+    if is_visitor_question(transcript) and not any(p.search(transcript) for p in EMOTIONAL_PATTERNS):
+        return Intent.LOGISTICAL
 
     # Pure clock inquiries ("What time is it?") are factual/casual, not schedule retrieval
     if re.search(r"\b(what\s+time\s+is\s+it|what('s|\s+is)\s+the\s+time|do\s+you\s+have\s+the\s+time)\b", transcript, re.IGNORECASE):

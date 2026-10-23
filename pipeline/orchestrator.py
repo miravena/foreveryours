@@ -36,7 +36,7 @@ from memory.store import STOPWORDS, MemoryStore  # noqa: E402
 from safety import fastpath  # noqa: E402
 
 from . import audit, speak, think  # noqa: E402
-from .intent import Intent, detect_intent, is_topic_invitation  # noqa: E402
+from .intent import Intent, detect_intent, is_topic_invitation, is_visitor_question  # noqa: E402
 from .nebius_client import NebiusNotConfigured  # noqa: E402
 
 DISCLOSURE_LINE = "I want to let {caregiver} know about something I just said."
@@ -302,6 +302,32 @@ def _sanitize_caregiver_update(text: str, caregiver_name: str) -> str:
     cleaned = re.sub(r"^(i'm|i am)\s+", f"{caregiver_name} is ", text, flags=re.IGNORECASE)
     cleaned = re.sub(r"^(i will|i'll)\s+", f"{caregiver_name} will ", cleaned, flags=re.IGNORECASE)
     return cleaned
+
+
+_VISIT_UPDATE_RE = re.compile(
+    r"\b(groceries|grocery|dropping\s+off|drop(ping)?\s+by|stopping\s+by|stop\s+by|coming|come|visit(ing|s)?|"
+    r"arriv\w*|bring(ing|s)?|pick(ing)?\s+you\s+up|taking\s+you)\b",
+    re.IGNORECASE,
+)
+
+
+def _visitor_answer(transcript: str, updates: list[str], caregiver_name: str) -> str | None:
+    """Deterministic answer to "Is anyone coming by today?" (#229): the visits
+    in today's caregiver updates, verbatim, naming who and when. None when the
+    question is not a visitor question or no update is a visit, so THINK
+    answers as before. The model never gets the chance to invent a visitor or
+    drop the time."""
+    if not is_visitor_question(transcript):
+        return None
+    parts = []
+    for u in updates:
+        u = u.strip()
+        if not u or not _VISIT_UPDATE_RE.search(u):
+            continue
+        if caregiver_name.lower() not in u.lower():
+            u = f"{caregiver_name} mentioned: {u[0].lower() + u[1:]}" if u[0].isupper() and not u[:2].isupper() else f"{caregiver_name} mentioned: {u}"
+        parts.append(u if u[-1] in ".!?" else u + ".")
+    return " ".join(parts) or None
 
 
 MATCH_IGNORE_WORDS = {
@@ -890,17 +916,21 @@ def run_turn(
         think_unavailable = True
     else:
         try:
-            token_stream = think.stream_reply(
-                think_input,
-                filtered_profile,
-                guardrails=guardrails,
-                history=history,
-                caregiver_updates=filtered_schedule,
-                intent=intent.value,
-                current_hour=simulated_hour,
-                is_proactive=is_proactive,
-                pending_conflicts=pending_conflicts,
-            )
+            visitor_answer = _visitor_answer(transcript, caregiver_updates, caregiver_name)
+            if visitor_answer is not None and not fast.triggered:
+                token_stream = iter([visitor_answer])
+            else:
+                token_stream = think.stream_reply(
+                    think_input,
+                    filtered_profile,
+                    guardrails=guardrails,
+                    history=history,
+                    caregiver_updates=filtered_schedule,
+                    intent=intent.value,
+                    current_hour=simulated_hour,
+                    is_proactive=is_proactive,
+                    pending_conflicts=pending_conflicts,
+                )
             sentences = think.sentence_chunks(token_stream)
         
             physical_claim_pattern = re.compile(
