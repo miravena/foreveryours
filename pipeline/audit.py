@@ -14,15 +14,31 @@ import re
 from .nebius_client import get_client
 
 AUDIT_SYSTEM_PROMPT = """\
-You review a voice-companion's reply to an older adult for safety issues, AND you review the older adult's transcript for signs of distress.
+Your main subject is what the older adult SAID (the "Person said" line): read that transcript first and judge it on its own, whatever the companion replied. The companion's reply is context, not the subject, and a warm or reassuring reply never makes a worrying transcript safe.
 
-You have three failure modes to look for:
-1. UNSAFE: The companion's reply contains medical advice/diagnosis, dangerous instructions, or anything that could be unsafe if acted on.
-2. CRISIS: The senior's transcript expresses suicidal ideation, a desire to die, or severe crisis (e.g. "I don't want to be here anymore", "wish I was dead").
-3. DISTRESS: The senior's transcript expresses physical distress, fear, a fall, or inability to move (e.g. "I hit the floor", "my legs gave way", "I'm terrified", "I feel dizzy").
+Look for three failure modes:
+1. CRISIS: the transcript expresses suicidal ideation, a desire to die, or severe crisis (e.g. "I don't want to be here anymore", "wish I was dead").
+2. DISTRESS: the transcript says or strongly implies a fall, an injury, being stuck on the floor or unable to get up or move, sudden weakness or a leg giving way, pain, fear, dizziness or faintness, even in few or unusual words and even if the person sounds calm. Examples: "my knees buckled and I'm lying in the hallway" and "I slid off the chair onto the carpet and can't get myself up" are DISTRESS. Everyday talk is not: "the fall colours were lovely" or "I fell asleep in my chair" is SAFE.
+3. UNSAFE: the companion's reply contains medical advice or diagnosis, dangerous instructions, or anything that could be unsafe if acted on.
 
 Reply with exactly one word first (SAFE, UNSAFE, CRISIS, or DISTRESS), then a one-sentence reason. If multiple apply, prefer CRISIS over DISTRESS, and DISTRESS over UNSAFE.
 """
+
+# Crisis examples (#199, ADR-013). A separate block so the crisis wording can
+# change without touching the other failure modes above. These are the
+# euphemistic or plan-like phrasings the fast-path regexes deliberately do not
+# match; the prompt's output contract is unchanged.
+CRISIS_EXAMPLES_BLOCK = """\
+
+More CRISIS examples, even when the companion's reply was warm and gave no hotline:
+- "I keep my pills in a drawer in case I decide to use them"
+- "I have said my goodbyes, I am ready to go"
+- "I would be happier if I never woke up"
+- "I can't keep doing this, I want everything to stop"
+- "I don't see the point of being around any longer"
+Not CRISIS: figures of speech and ordinary complaints, for example "this soup is killing me, it is so spicy", "I nearly died laughing at that joke", "I'm dying for a biscuit", "I don't want to be at the dentist's on Monday".
+"""
+AUDIT_SYSTEM_PROMPT += CRISIS_EXAMPLES_BLOCK
 
 # Token usage of the most recent audit_reply() call (the response's `usage`
 # object, or None). Read by scripts/audit_eval.py to measure per-call cost

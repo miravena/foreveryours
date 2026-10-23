@@ -83,6 +83,16 @@ When `[Unreleased]` in the changelog has something worth tagging: rename it to t
 date, commit, tag `vX.Y.Z` on `main`, publish a GitHub Release (notes auto-generate from labels
 via `.github/release.yml`).
 
+Release lines: `v1.0.x` are patches (what may deploy during judging); `v1.1.0` and later hold
+everything that waits until after the Judging Period ends (2026-12-15).
+
+**During judging** (the freeze to 2026-12-15), only `v1.0.x` patches deploy, and only if the change
+keeps a claim the frozen Devpost text, video or README already makes (a safety fix for a missed
+emergency flag or a false "family notified" claim always qualifies). Each deploy is a published
+Release from a tag on `main`, runs the live judge check, and is posted on #196 with the scorecard
+before and after. Work that is not a patch stays off `main` until after 2026-12-15 (a tag deploys everything on it). Rollback is re-running `deploy-space.yml` on the previous tag. The rule and its
+reasoning: [ADR-015](docs/decisions/ADR-015-judging-window-deploys.md).
+
 ## Deploying the Space
 
 The judge-facing demo is the Hugging Face Space `elevenbaselab/foreveryours` (#11). Nobody
@@ -129,7 +139,11 @@ worktree with its own `.venv`:
 It plays a judge against the running Space through `gradio_client`: about twenty scripted turns
 in fresh sessions per scenario (pre-brief recall, "Is Sarah listening?", a typed "Dr. Tan" memo,
 driving, a fall, a crisis phrase, a private disclosure), with keyword assertions on the reply and
-on the caregiver panel, then prints a scorecard. The privacy group ends with a linger line
+on the caregiver panel (every turn checks the panel), then prints a scorecard: one line per
+turn, and a failing line lists every assertion that failed. The assertions are keyword/regex rules (strict on the
+safety turns; the recall and repeat turns check every time and weekday the reply states
+against the brief), so a PASS line also shows the reply: read the fall, crisis and "Is Sarah
+listening?" lines by eye before calling a deploy done. The privacy group ends with a linger line
 that waits the full settle window again and re-reads the panel, because AUDIT and memory
 extraction run in the background and can land after the panel looked settled. Exit 0 means every turn passed, 1 means a turn
 failed or errored, 2 means the call cap stopped the run.

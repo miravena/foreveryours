@@ -20,6 +20,7 @@ marked as if it succeeded.
 """
 from __future__ import annotations
 
+import dataclasses
 import re
 import sys
 import threading
@@ -29,19 +30,170 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import notify  # noqa: E402
 from caregiver import CaregiverFlags  # noqa: E402
 from memory.store import STOPWORDS, MemoryStore  # noqa: E402
 from safety import fastpath  # noqa: E402
 
 from . import audit, speak, think  # noqa: E402
-from .intent import Intent, detect_intent  # noqa: E402
+from .intent import Intent, detect_intent, is_topic_invitation  # noqa: E402
 from .nebius_client import NebiusNotConfigured  # noqa: E402
 
 DISCLOSURE_LINE = "I want to let {caregiver} know about something I just said."
 CRISIS_DISCLOSURE_LINE = (
     "I am also letting {caregiver} know that you may need support. "
-    "If you might hurt yourself or are in immediate danger, please call or text 988 now."
+    "If you might hurt yourself, please call or text 988 now. "
+    "If you are in physical danger, call 911."
 )
+
+# Same line without the hotline, for a reply that already gave 988 (#191).
+CRISIS_DISCLOSURE_LINE_NO_988 = "I am also letting {caregiver} know that you may need support."
+
+# One-turn carry of a backstop CRISIS verdict (#199, ADR-013). The AUDIT pass
+# runs after the reply, so the turn it flags has already been answered; the
+# next turn's THINK context learns about it here. Process-local and keyed by
+# the session's flags file, so it dies with the process and is consumed by the
+# first turn that reads it. The value says whether the 988 line was actually
+# heard (attested) or already in the reply, so it is given once, never twice.
+_CRISIS_CARRY: dict[str, bool] = {}
+_CRISIS_CARRY_LOCK = threading.Lock()
+
+CRISIS_CARRY_NOTE_GIVEN = (
+    "The conversation audit flagged signs of crisis in the person's last turn. "
+    "The 988 line and the news that their family is being told were already given: "
+    "do NOT mention 988 or any hotline again. Keep this reply short, warm and steady, "
+    "and gently ask how they are feeling right now."
+)
+# The fast-path crisis note says 988 was already given; when the canned line's
+# audio failed that is not true out loud, so THINK is told to say it once.
+CRISIS_FASTPATH_AUDIO_FAILED_NOTE = (
+    "Correction: your spoken safety line did not play aloud. In this reply say once, plainly, "
+    "that they can call or text 988 right now. Still do not apologize again."
+)
+CRISIS_CARRY_NOTE_NOT_GIVEN = (
+    "The conversation audit flagged signs of crisis in the person's last turn. "
+    "Their family is being told. In this reply offer the 988 call-or-text line exactly once "
+    "and say plainly that you are letting their family know. Keep it short and warm."
+)
+
+# The 988 hotline: ANY 988 token (also "9-8-8", "9 8 8", "nine eight eight")
+# counts unless the surrounding text rules it out: a currency or percent sign,
+# a longer number, a year, a count of things, or a room/page/number label.
+# Under-detecting costs a second 988 line; over-dropping could cost the only one,
+# so doubtful text counts as the hotline.
+_HOTLINE_TOKEN_RE = re.compile(
+    r"(?<![\w$\u00a3\u20ac#.,/-])(?:988|9[\s-]+8[\s-]+8|nine[\s-]+eight[\s-]+eight)\b(?![.,/-]?\d)",
+    re.IGNORECASE,
+)
+_NOT_HOTLINE_AFTER_RE = re.compile(
+    r"\s*(?:%|dollars?|pounds?|bucks|euros?|years?|ad\b|bc\b|ce\b|people|steps|miles|times|items|words|pages|calories|books|days|hours|minutes|dollar|kg|km)",
+    re.IGNORECASE,
+)
+_NOT_HOTLINE_BEFORE_RE = re.compile(
+    r"\b(room|suite|apartment|apt|flat|unit|page|number\s+of|box|floor|in\s+the\s+year|year|since|circa)\s+$",
+    re.IGNORECASE,
+)
+_OTHER_EMERGENCY_RE = re.compile(r"\b(911|999|112|emergency|ambulance)\b", re.IGNORECASE)
+_CRISIS_EMPTY_REPLY = "I'm here with you. How are you feeling right now?"
+
+# An apology in THINK's continuation of a fast-path crisis turn: the canned
+# fast-path line already apologised, so a second "sorry" is removed before it
+# is spoken (output-side check; the prompt rule alone was ignored). It fails
+# toward safety: a clause is removed only when it is recognisably apology-only
+# ("I am so sorry you are feeling this way", "Sorry", "You don't need to
+# apologize"); if any apology clause says more than that, the whole sentence is
+# kept, because a second apology costs far less than a lost "don't jump".
+_APOLOGY_RE = re.compile(r"\b(sorry|apologi[sz]e[sd]?|apologies)\b", re.IGNORECASE)
+_CLAUSE_SPLIT_RE = re.compile(
+    r"\s*(?:[,;:]|\s-\s|[—–―])\s*|\s+(?=(?:but|yet)\s)", re.IGNORECASE
+)
+_LEADING_CONJ_RE = re.compile(r"^(?:but|and|yet)\s+", re.IGNORECASE)
+_YOU_ARE = r"(?:that\s+)?you(?:'re|\s+are)\s+"
+_APOLOGY_ONLY_RE = re.compile(
+    r"^(?:(?:oh|dad|dear|well|and|but)\s+)*(?:"
+    r"(?:i'm|im|i\s+am)\s+(?:(?:so|very|really|truly|deeply|just)\s+)*sorry"
+    r"(?:\s+(?:"
+    r"to\s+hear\s+(?:that|this|about\s+that)"
+    r"|" + _YOU_ARE + r"(?:(?:feeling|going\s+through|dealing\s+with)\s+(?:this|that|all\s+this)(?:\s+way)?"
+    r"|(?:so\s+)?(?:hurting|sad|lonely|upset|struggling|scared|in\s+pain))"
+    r"|for\s+(?:what\s+you(?:'re|\s+are)\s+going\s+through|your\s+pain)"
+    r"))?(?:\s+right\s+now|\s+today)?"
+    r"|sorry"
+    r"|(?:my\s+)?(?:sincere\s+)?apologies"
+    r"|(?:you\s+)?(?:don't|do\s+not)\s+(?:need|have)\s+to\s+apologi[sz]e"
+    r"|no\s+need\s+to\s+apologi[sz]e"
+    r")(?:\s+(?:dad|dear))?$",
+    re.IGNORECASE,
+)
+_FILLER_WORDS = {
+    "dad", "dear", "darling", "love", "honey", "sweetheart", "friend",
+    "okay", "ok", "oh", "well", "truly", "really", "now", "there",
+}
+
+
+def _is_filler(clause: str) -> bool:
+    words = re.findall(r"[a-z']+", clause.lower())
+    return len(words) <= 1 and (not words or words[0] in _FILLER_WORDS)
+
+
+def _strip_apology(sentence: str) -> str:
+    """`sentence` without its apology-only clauses; "" when nothing but an
+    apology (and a vocative such as "Dad") was there. A sentence whose apology
+    clause carries anything else comes back unchanged."""
+    if not _APOLOGY_RE.search(sentence):
+        return sentence
+    end = sentence.rstrip()[-1:] if sentence.rstrip()[-1:] in ".!?" else "."
+    body = sentence.rstrip().rstrip(".!?")
+    kept = []
+    for clause in _CLAUSE_SPLIT_RE.split(body):
+        clause = (clause or "").strip()
+        if not clause:
+            continue
+        if _APOLOGY_RE.search(clause):
+            if not _APOLOGY_ONLY_RE.match(clause.replace("’", "'")):
+                return sentence
+            continue
+        clause = _LEADING_CONJ_RE.sub("", clause, count=1).strip()
+        if clause and not _is_filler(clause):
+            kept.append(clause)
+    if not kept:
+        return ""
+    out = ", ".join(kept) + end
+    return out[0].upper() + out[1:]
+
+
+def _hotline_matches(sentence: str) -> list:
+    out = []
+    for m in _HOTLINE_TOKEN_RE.finditer(sentence):
+        if _NOT_HOTLINE_BEFORE_RE.search(sentence[: m.start()]):
+            continue
+        if _NOT_HOTLINE_AFTER_RE.match(sentence[m.end():]):
+            continue
+        out.append(m)
+    return out
+
+
+def _hotline_match(sentence: str):
+    """The first 988-hotline mention in `sentence`, or None."""
+    found = _hotline_matches(sentence)
+    return found[0] if found else None
+
+
+def _sub_hotline(text: str, replacement: str) -> str:
+    """Replace every hotline mention (not room/price/year numbers)."""
+    for m in reversed(_hotline_matches(text)):
+        text = text[: m.start()] + replacement + text[m.end():]
+    return text
+
+
+def _strip_hotline(sentence: str) -> str:
+    """Remove the hotline from a sentence that must keep its other safety
+    content (for example "call 911 or 988")."""
+    out = re.sub(
+        r"\s*(?:,\s*)?(?:or|and)\s+(?:(?:call|text|dial)\s+(?:or\s+(?:call|text)\s+)?)?(?:" + _HOTLINE_TOKEN_RE.pattern + r")",
+        "", sentence, flags=re.IGNORECASE,
+    )
+    return _sub_hotline(out, "the crisis line")
 
 FALLBACK_REPLY_1 = "I'm right here with you, dear. My thoughts drifted for a second—could you say that one more time?"
 FALLBACK_REPLY_2 = "I'm having a little trouble with my connection right now, dear, but I'm still right here beside you. Take your time."
@@ -188,6 +340,9 @@ class TurnResult:
     time_to_first_sound_s: float | None = None  # time to first SOUND played (issue #17)
     audit_verdict: str | None = None  # filled in async, may arrive after return
     background_thread: threading.Thread | None = None  # join() this before reading audit_verdict/memory_saved
+    # Outbound-notification senders (#201): never joined by the app (a slow mail
+    # server must not stall the next turn); tests join them.
+    notify_threads: list = field(default_factory=list)
     is_fallback: bool = False
     consecutive_errors: int = 0
 
@@ -255,6 +410,116 @@ def _speak_disclosure(
         iter([text]), audio_out_dir, on_chunk=_tracking if on_chunk is not None else None
     )
     return paths, bool(paths) and on_chunk is not None and not refused
+
+
+# Overall deadline for one outbound send (#201). The notifiers carry their own
+# socket timeouts; this bounds everything else (DNS, a stuck relay) so a flag
+# never reads "pending" forever. Patched down in tests.
+NOTIFY_DEADLINE_S = 30.0
+
+
+class _AckTracker:
+    """Wraps a streaming `on_chunk` so the notification thread can later learn
+    whether the senior's disclosure was DELIVERED, not merely synthesized
+    (same acceptance rule as `_speak_disclosure`). It never blocks the turn:
+    acknowledgements are collected as returned and resolved off-thread, each
+    bounded by the consumer. Without an `on_chunk` nothing is attestable."""
+
+    def __init__(self, on_chunk):
+        self._on_chunk = on_chunk
+        self._acks: list = []
+        self._chunks: list = []
+
+    def __call__(self, sentence, audio_path):
+        ack = self._on_chunk(sentence, audio_path)
+        self._acks.append(ack)
+        self._chunks.append((sentence, ack))
+        return ack
+
+    def accepted_any(self, predicate) -> bool:
+        """True when at least one chunk whose text matches `predicate` was
+        accepted by the consumer (same acceptance rule as `attested`)."""
+        if self._on_chunk is None:
+            return False
+        for sentence, ack in list(self._chunks):
+            if not predicate(sentence):
+                continue
+            wait_accepted = getattr(ack, "wait_accepted", None)
+            if callable(wait_accepted):
+                ack = wait_accepted()
+            if ack is not False:
+                return True
+        return False
+
+    def attested(self, paths) -> bool:
+        if self._on_chunk is None or not paths or not self._acks:
+            return False
+        for ack in list(self._acks):
+            wait_accepted = getattr(ack, "wait_accepted", None)
+            if callable(wait_accepted):
+                ack = wait_accepted()
+            if ack is False:
+                return False
+        return True
+
+
+def _notify_flag(flags: CaregiverFlags, flag, notifier=None, told=None) -> None:
+    """Send the one outbound notification for a flag that is already
+    persisted (#201, ADR-014) and record the result on it. NEVER raises into
+    the turn path: any failure, including `NOTIFY_DEADLINE_S` elapsing, becomes
+    `notified=False` with the exception type name. With the channel off
+    (NullNotifier) it returns at once and the flag record is untouched.
+
+    `told` (optional callable -> bool) supplies the ATTESTED "senior was told"
+    value for the message; without it the flag's stored value is used. The
+    stored flag and the panel are not changed by it."""
+    try:
+        notifier = notifier if notifier is not None else notify.get_notifier()
+        if isinstance(notifier, notify.NullNotifier):
+            return
+        outcome: list = []
+
+        def _send() -> None:
+            try:
+                sent = flag
+                if told is not None:
+                    try:
+                        attested = bool(told())
+                    except Exception:
+                        attested = False
+                    sent = dataclasses.replace(flag, disclosed_to_senior=attested and flag.disclosed_to_senior)
+                notifier.send(sent, str(getattr(flags, "path", "household")))
+                outcome.append(None)
+            except Exception as exc:
+                outcome.append(type(exc).__name__)
+
+        worker = threading.Thread(target=_send, name="fy-notify-send", daemon=True)
+        worker.start()
+        worker.join(timeout=NOTIFY_DEADLINE_S)
+        error = outcome[0] if outcome else "TimeoutError"
+        if error is None and outcome:
+            flags.mark_notified(flag, True)
+        else:
+            flags.mark_notified(flag, False, error)
+    except Exception as exc:  # the flag store itself failed; nothing left to record on
+        print(f"[orchestrator] notification bookkeeping failed: {type(exc).__name__}", file=sys.stderr)
+
+
+def _notify_in_background(flags: CaregiverFlags, flag, threads: list, told=None) -> None:
+    """Send from a daemon thread so no turn, stream or audit step ever waits
+    on a mail server. The thread is listed in `threads` (TurnResult.
+    notify_threads) for tests and shutdown only; it is deliberately NOT part
+    of `background_thread`, which the next turn joins."""
+    try:
+        notifier = notify.get_notifier()
+        if isinstance(notifier, notify.NullNotifier):
+            return
+        t = threading.Thread(target=_notify_flag, args=(flags, flag, notifier, told),
+                             name="fy-notify", daemon=True)
+        t.start()
+        threads.append(t)
+    except Exception as exc:  # pragma: no cover - never into the turn path
+        print(f"[orchestrator] notification not scheduled: {type(exc).__name__}", file=sys.stderr)
 
 
 def run_turn(
@@ -359,6 +624,7 @@ def run_turn(
         quiet_breakthrough = True
 
     fast = fastpath.check(transcript)
+    notify_threads: list[threading.Thread] = []  # outbound notifications sent from the turn thread (#201)
     immediate_audio_paths: list[Path] = []
     continuation_note = None
     if fast.triggered:
@@ -369,9 +635,11 @@ def run_turn(
         # disk before THINK starts. disclosed_to_senior states the truth: True
         # only when the spoken disclosure produced audio; otherwise the
         # immediate reply still reaches the senior as text (reply_text below).
+        fast_tracker = _AckTracker(on_chunk)
         try:
             _, immediate_audio_paths, first_audio_time = _speak_turn(
-                iter([fast.immediate_reply]), audio_out_dir, on_chunk=on_chunk
+                iter([fast.immediate_reply]), audio_out_dir,
+                on_chunk=fast_tracker if on_chunk is not None else None,
             )
         except Exception as exc:
             print(
@@ -382,14 +650,37 @@ def run_turn(
         flag_text = fast.caregiver_flag
         if not immediate_audio_paths:
             flag_text += " (spoken disclosure failed; shown as text only)"
-        flags.add(
+        fast_flag = flags.add(
             flag_text,
             severity=fast.severity,
             disclosed_to_senior=bool(immediate_audio_paths),
         )
+        _notify_in_background(
+            flags, fast_flag, notify_threads,
+            told=lambda paths=list(immediate_audio_paths), t=fast_tracker: t.attested(paths),
+        )
         continuation_note = fast.continuation_note
     else:
         first_audio_time = None
+
+    # #199: consume the one-turn crisis marker a previous turn's AUDIT left.
+    # 988 budget for THINK's reply: 0 when the line was already given (by this
+    # turn's fast-path, or by the carried marker), otherwise 1 (#191).
+    carry_key = str(flags.path)
+    think_tracker = None
+    with _CRISIS_CARRY_LOCK:
+        carried_given = _CRISIS_CARRY.get(carry_key)  # consumed only after a spoken reply
+    hotline_budget = 1
+    if fast.triggered and fast.severity == "crisis" and immediate_audio_paths:
+        # The canned line (with 988) was actually spoken.
+        hotline_budget = 0
+    elif fast.triggered and fast.severity == "crisis":
+        # Its audio failed: THINK's one 988 is the only spoken one.
+        continuation_note = f"{continuation_note} {CRISIS_FASTPATH_AUDIO_FAILED_NOTE}"
+    elif carried_given is not None and not (fast.triggered and fast.severity == "crisis"):
+        hotline_budget = 0 if carried_given else 1
+        carry_note = CRISIS_CARRY_NOTE_GIVEN if carried_given else CRISIS_CARRY_NOTE_NOT_GIVEN
+        continuation_note = f"{continuation_note} {carry_note}" if continuation_note else carry_note
 
     intent = detect_intent(transcript)
     
@@ -422,9 +713,11 @@ def run_turn(
             )
             if is_repeat:
                 persev_reply = "I'm going to make a note for your family that we've talked about this a few times today."
+                persev_tracker = _AckTracker(on_chunk)
                 try:
                     _, persev_paths, persev_first_time = _speak_turn(
-                        iter([persev_reply]), audio_out_dir, on_chunk=on_chunk
+                        iter([persev_reply]), audio_out_dir,
+                        on_chunk=persev_tracker if on_chunk is not None else None,
                     )
                 except Exception as exc:
                     print(
@@ -437,13 +730,17 @@ def run_turn(
                 # disclosed_to_senior stays True whether or not TTS actually
                 # produced audio -- the flag must be recorded either way, not
                 # only when audio exists.
-                flags.add(
+                persev_flag = flags.add(
                     text=(
                         "Perseveration: the senior asked the same question "
                         f"3 times within {PERSEVERATION_WINDOW_S // 60} minutes."
                     ),
                     severity="confusion",
                     disclosed_to_senior=True,
+                )
+                _notify_in_background(
+                    flags, persev_flag, notify_threads,
+                    told=lambda paths=list(persev_paths), t=persev_tracker: t.attested(paths),
                 )
                 immediate_audio_paths.extend(persev_paths)
                 if first_audio_time is None:
@@ -521,7 +818,12 @@ def run_turn(
         # Only inject a profile anchor if the senior's transcript explicitly mentions or relates to that topic.
         matching_facts = _find_matching_facts(transcript, profile_facts)
         filtered_schedule = []
-        if recalled:
+        if is_topic_invitation(transcript):
+            # The senior asked us to pick the subject (SYSTEM_PROMPT rule 21):
+            # hand THINK one rotated anchor plus today's updates to offer from.
+            filtered_schedule = caregiver_updates
+            filtered_profile = profile_facts[:1]
+        elif recalled:
             filtered_profile = recalled[:1]
         elif matching_facts:
             filtered_profile = matching_facts[:1]
@@ -570,13 +872,53 @@ def run_turn(
                 re.IGNORECASE,
             )
         
+            dropped_hotline = []
+            # Fast-path crisis turn: the canned line already apologised, so
+            # THINK's continuation never apologises again (it is shown as
+            # text even when its audio failed); only the apology clause is
+            # removed, so safety advice in the same sentence survives and a
+            # 988 left in it still goes through hotline_budget below, which
+            # is 0 once the canned line was spoken.
+            drop_apology = fast.triggered and fast.severity == "crisis"
+
             def filter_sentences(s_iter):
+                budget = hotline_budget
                 for s in s_iter:
+                    if drop_apology and _APOLOGY_RE.search(s):
+                        stripped = _strip_apology(s)
+                        if not stripped:
+                            dropped_hotline.append(s)
+                            continue
+                        s = stripped
+                    first = _hotline_match(s)
+                    if first is not None:
+                        # The 988 line is given once per episode (#191).
+                        if budget <= 0:
+                            dropped_hotline.append(s)
+                            if _OTHER_EMERGENCY_RE.search(s):
+                                s = _strip_hotline(s)  # keep 911 / emergency advice
+                            else:
+                                continue
+                        else:
+                            budget -= 1
+                            s = s[:first.end()] + _sub_hotline(s[first.end():], "that number")
                     yield physical_claim_pattern.sub(f"{caregiver_name} will \\2", s)
-                
-            reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir, on_chunk=on_chunk)
+
+            # Tracks whether THINK's own sentences (and any 988 in them) were
+            # DELIVERED, so a refused 988 chunk is never carried as heard.
+            think_tracker = _AckTracker(on_chunk) if on_chunk is not None else None
+            reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir, on_chunk=think_tracker)
             if first_audio_time is None:
                 first_audio_time = think_first_audio_time
+            if dropped_hotline and not reply_text.strip():
+                # THINK said only the repeated line: speak a crisis-aware one
+                # instead of the generic "thoughts drifted" fallback.
+                reply_text, empty_paths, empty_first = _speak_turn(
+                    iter([_CRISIS_EMPTY_REPLY]), audio_out_dir, on_chunk=on_chunk
+                )
+                think_audio_paths.extend(empty_paths)
+                if first_audio_time is None:
+                    first_audio_time = empty_first
         except NebiusNotConfigured:
             # Fast-path's immediate reply already completed the turn's safety-
             # critical part (spoken + disclosed + flagged). Without a key we
@@ -610,6 +952,13 @@ def run_turn(
     elif not is_fallback:
         consecutive_errors = 0
 
+    # The carried crisis marker is spent only by a turn that actually spoke:
+    # a fallback or THINK failure leaves it for the next turn.
+    if carried_given is not None and not is_fallback and (reply_text.strip() or immediate_audio_paths):
+        with _CRISIS_CARRY_LOCK:
+            if _CRISIS_CARRY.get(carry_key) == carried_given:
+                _CRISIS_CARRY.pop(carry_key, None)
+
     result = TurnResult(
         transcript=transcript,
         reply_text=(immediate_reply_text + " " + reply_text).strip() if immediate_reply_text else reply_text,
@@ -637,9 +986,22 @@ def run_turn(
                 result.audit_verdict = verdict
                 if status in {"CRISIS", "DISTRESS", "UNSAFE"}:
                     disclosed = False
+                    hotline_already_heard = False
+                    caregiver_template = None
                     try:
+                        reply_gave_988 = any(_hotline_match(x) for x in re.split(r'(?<=[.!?])\s+', reply_text))
+                        # Heard, not merely generated: the reply's 988 counts only
+                        # when its chunks were accepted, and a 988 already given
+                        # this episode (the carried marker) counts too.
+                        reply_988_heard = bool(
+                            reply_gave_988 and think_tracker is not None
+                            and bool(think_audio_paths)
+                            and think_tracker.accepted_any(_hotline_match)
+                        )
+                        hotline_already_heard = reply_988_heard or bool(carried_given)
                         caregiver_template = (
-                            CRISIS_DISCLOSURE_LINE if status == "CRISIS" else DISCLOSURE_LINE
+                            (CRISIS_DISCLOSURE_LINE_NO_988 if hotline_already_heard else CRISIS_DISCLOSURE_LINE)
+                            if status == "CRISIS" else DISCLOSURE_LINE
                         )
                         caregiver_text = caregiver_template.format(caregiver=caregiver_name)
                         extra_paths, disclosed = _speak_disclosure(
@@ -654,12 +1016,25 @@ def run_turn(
                     # reason, which can carry health details, names or a bank
                     # PIN the senior said. The raw verdict still rides on
                     # result.audit_verdict (the dev/biomarker surface).
+                    audit_flag = None
                     if status == "CRISIS":
-                        flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_crisis"], severity="crisis", disclosed_to_senior=disclosed)
+                        audit_flag = flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_crisis"], severity="crisis", disclosed_to_senior=disclosed)
+                        # Carry into the next turn: was the 988 line actually given?
+                        with _CRISIS_CARRY_LOCK:
+                            # Only an attested disclosure counts as heard; a reply
+                            # the consumer may have refused is not evidence.
+                            _CRISIS_CARRY[carry_key] = hotline_already_heard or (
+                                disclosed and caregiver_template is CRISIS_DISCLOSURE_LINE
+                            )
                     elif status == "DISTRESS":
-                        flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_distress"], severity="distress", disclosed_to_senior=disclosed)
+                        audit_flag = flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_distress"], severity="distress", disclosed_to_senior=disclosed)
                     elif status == "UNSAFE":
-                        flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_unsafe"], severity="audit", disclosed_to_senior=disclosed)
+                        audit_flag = flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_unsafe"], severity="audit", disclosed_to_senior=disclosed)
+                    if audit_flag is not None:
+                        # Own daemon thread: a slow send must not delay memory
+                        # extraction or the next turn's join. `disclosed` was
+                        # attested by _speak_disclosure above.
+                        _notify_in_background(flags, audit_flag, result.notify_threads)
             except Exception as exc:  # pragma: no cover - best-effort background task
                 print(
                     f"[orchestrator] audit failed: {type(exc).__name__}",
@@ -764,5 +1139,7 @@ def run_turn(
         thread = threading.Thread(target=background, daemon=True)
         thread.start()
         result.background_thread = thread
+
+    result.notify_threads.extend(notify_threads)
 
     return result

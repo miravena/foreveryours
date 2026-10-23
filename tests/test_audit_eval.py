@@ -62,8 +62,8 @@ class TestScorer(unittest.TestCase):
         rc, out, _ = _run("--auditor", "stub-perfect", "--out-dir", self.out)
         self.assertEqual(rc, 0)
         line = _score_line(out)
-        self.assertTrue(line.startswith("model=stub-perfect n=36 recall=1.00 false_flags=0/"), line)
-        self.assertIn(" unknown=0 calls=36 ", line)
+        self.assertTrue(line.startswith("model=stub-perfect n=43 recall=1.00 false_flags=0/"), line)
+        self.assertIn(" unknown=0 calls=43 ", line)
 
     def test_cap_refuses_without_a_score_line(self):
         rc, out, err = _run("--auditor", "stub-perfect", "--out-dir", self.out, "--max-calls", "5")
@@ -73,14 +73,14 @@ class TestScorer(unittest.TestCase):
         # the five recorded rows are kept, so a resumed run makes only the rest
         rc, out, _ = _run("--auditor", "stub-perfect", "--out-dir", self.out)
         self.assertEqual(rc, 0)
-        self.assertIn(" calls=31 ", _score_line(out))
+        self.assertIn(" calls=38 ", _score_line(out))
 
     def test_second_run_makes_zero_calls_and_same_numbers(self):
         _, first, _ = _run("--auditor", "stub-perfect", "--out-dir", self.out)
         _, second, _ = _run("--auditor", "stub-perfect", "--out-dir", self.out)
-        self.assertIn(" calls=36 ", _score_line(first))
+        self.assertIn(" calls=43 ", _score_line(first))
         self.assertIn(" calls=0 ", _score_line(second))
-        self.assertEqual(_score_line(first).replace("calls=36", "calls=0"), _score_line(second))
+        self.assertEqual(_score_line(first).replace("calls=43", "calls=0"), _score_line(second))
 
     def test_replay_creates_no_client(self):
         _run("--auditor", "stub-none", "--out-dir", self.out)
@@ -89,7 +89,7 @@ class TestScorer(unittest.TestCase):
                 patch("pipeline.nebius_client.get_client", side_effect=AssertionError("client created")):
             rc, out, _ = _run("--replay", str(recorded))
         self.assertEqual(rc, 1)
-        self.assertTrue(_score_line(out).startswith("model=stub-none n=36 recall=0.00 "))
+        self.assertTrue(_score_line(out).startswith("model=stub-none n=43 recall=0.00 "))
         self.assertIn(" calls=0 ", _score_line(out))
 
     def test_live_path_retries_unknown_once_and_sums_usage(self):
@@ -112,10 +112,10 @@ class TestScorer(unittest.TestCase):
                               "--rate-in", "1", "--rate-out", "2")
         line = _score_line(out)
         self.assertEqual(rc, 1)  # all SAFE -> recall 0.00 below the floor
-        self.assertIn(" calls=37 ", line)  # 36 rows + 1 retry
+        self.assertIn(" calls=44 ", line)  # 43 rows + 1 retry
         self.assertIn(" unknown=0 ", line)
-        self.assertIn(" prompt_tokens=3700 completion_tokens=370 ", line)
-        self.assertIn(" est_cost_usd=0.004440", line)
+        self.assertIn(" prompt_tokens=4400 completion_tokens=440 ", line)
+        self.assertIn(" est_cost_usd=0.005280", line)
         rec = json.loads((Path(self.out) / "test_model.jsonl").read_text().splitlines()[0])
         self.assertEqual([a["status"] for a in rec["attempts"]], ["UNKNOWN", "SAFE"])
 

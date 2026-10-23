@@ -187,5 +187,40 @@ class TestLateDisclosure(LateDisclosureHarness):
         self.assertIs(consumer.offer("later", Path("y.wav")), False)
 
 
+
+class TestBackstopFallDisclosure(LateDisclosureHarness):
+    """#198: a fall phrased outside the regex fast-path (fast-path says none)
+    is flagged by the AUDIT backstop, spoken to the senior on the late-
+    disclosure path, and `disclosed_to_senior` follows what was spoken."""
+
+    FALL = "My legs just gave way on the stairs and my hip really hurts"
+
+    def _run(self, release_at_done: bool):
+        history: list[dict] = []
+        gen = webapp.run_demo_turn_streaming(None, self.FALL, history, None)
+        outs = []
+        for out in gen:
+            outs.append(out)
+            if release_at_done and isinstance(out[2], list) and len(out[2]) > len(history):
+                self.release_background.set()
+        sid = outs[-1][5]
+        self.settle(sid)
+        return sid
+
+    def test_backstop_fall_flag_is_spoken_and_attested(self):
+        sid = self._run(release_at_done=True)
+        flags, _ = self.stores(sid)
+        self.assertTrue(flags, "audit DISTRESS on a fall should record a flag")
+        self.assertIs(flags[-1].disclosed_to_senior, True)
+        self.assertTrue(self.disclosure_paths(), "the senior must hear the disclosure")
+
+    def test_backstop_fall_flag_not_attested_when_nothing_was_spoken(self):
+        with patch.object(webapp, "_BG_JOIN_TIMEOUT_S", 0.5):
+            sid = self._run(release_at_done=False)
+        flags, _ = self.stores(sid)
+        self.assertTrue(flags)
+        self.assertIs(flags[-1].disclosed_to_senior, False)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -8,8 +8,9 @@ from __future__ import annotations
 import json
 import re
 import time
+import unicodedata
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 DEFAULT_PROFILE_ID = "dad"
@@ -70,24 +71,42 @@ SAMPLE_FAMILY = {
 # each is refused -- and tested -- separately. Biased to refusing (like
 # safety/fastpath.py): a false refusal costs a reworded seed, a miss ships
 # dosing advice into a public demo.
+# Medication words: a medicine named next to "for <something>" states what it
+# is for, which is a diagnosis however the condition is spelled.
+_MED_WORDS = r"(?:pills?|tablets?|capsules?|medicines?|medications?|meds|drops?|inhalers?|injections?|shots?|patch(?:es)?|creams?|syrups?)"
 _SAMPLE_PROFILE_PROHIBITED = {
     "dosing": re.compile(
-        r"\b\d+(?:\.\d+)?\s*(?:mg|mcg|ml|iu|units?|milligrams?|millilitres?|milliliters?)\b"
-        r"|\bdos(?:e|es|age|ages|ing)\b"
-        r"|\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|half)\s+(?:tablets?|pills?|capsules?|drops?|puffs?)\b",
+        # A unit token anywhere, however it is joined to the number:
+        # "20 mg", "20mg", "20-mg", "mg" alone.
+        r"(?:\b|(?<=\d))(?:mg|mcg|ug|\u03bcg|ml|cc|iu|milligrams?|micrograms?|millilitres?|milliliters?|grams?)\b"
+        r"|\b\d+(?:[.,/]\d+)?\s*[-\u2010-\u2015]?\s*(?:units?|g)\b"
+        r"|\bdos(?:e|es|ed|age|ages|ing)\b"
+        r"|(?:\b\d+(?:[./]\d+)?|[\u00bc-\u00be\u2150-\u215e]|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|half|a\s+half|quarter))"
+        r"\s*[-\u2010-\u2015]?\s*(?:tablets?|pills?|capsules?|drops?|puffs?|sprays?|spoons?|teaspoons?|tablespoons?|tsp|tbsp)\b"
+        r"|\b\d+\s*x\b|\b(?:once|twice|thrice|\d+|one|two|three|four)\s*(?:times?\s+)?(?:a|per)\s+day\b"
+        r"|\bevery\s+\d+\s*(?:hours?|hrs?|h)\b",
         re.IGNORECASE,
     ),
     "diagnosis": re.compile(
         r"\bdiagnos\w*"
         r"|\b(?:hypertension|hypotension|diabet\w*|dementia|alzheimer\w*|parkinson\w*|arthritis|"
         r"copd|asthma|cancer|stroke|depression|anxiety|insomnia|osteoporosis|angina|arrhythmia|"
-        r"glaucoma|cholesterol)\b"
+        r"glaucoma|cholesterol|epilep\w*|seizures?|migraines?|heart\s+(?:failure|disease|attack)|"
+        r"afib|atrial|fibrillation|gout|lupus|tumou?rs?|leukaemia|leukemia|lymphoma|carcinoma|"
+        r"melanoma|pneumonia|bronchitis|emphysema|anaemia|anemia|thyroid\w*|hypothyroid\w*|"
+        r"schizophreni\w*|bipolar|psychosis|ocd|adhd|autism|hiv|hepatitis|cirrhosis|"
+        r"incontinence|infections?|disorders?|diseases?|syndromes?|conditions?|illness(?:es)?|"
+        r"cataracts?|macular|neuropathy|sciatica|vertigo|tinnitus|dysphagia|aphasia|"
+        r"multiple\s+sclerosis|myeloma|sarcoma|uti|ckd|chf)\b"
         r"|\b\w+(?:itis|osis|emia|aemia|pathy|algia)\b"
-        r"|\bfor\s+(?:your|his|her|dad's|the)\s+(?:high\s+|low\s+)?(?:blood\s+pressure|heart|sugar|thyroid|kidneys?|liver|lungs?|memory|nerves|pain)\b",
+        # "for your/his/her <anything>" -- the condition after it may be any word.
+        r"|\bfor\s+(?:your|his|her|my|their|dad'?s|mum'?s|mom'?s)\s+\w+"
+        r"|\b" + _MED_WORDS + r"\b[^,.;]*?\bfor\s+\w+",
         re.IGNORECASE,
     ),
     "clinical claim": re.compile(
-        r"\b(?:treat\w*|symptom\w*|cure\w*|prescri\w*|therap\w*|clinical\w*|heals?|healing|prevents?|relieves?)\b",
+        r"\b(?:treat\w*|symptom\w*|cure\w*|prescri\w*|therap\w*|clinical\w*|heals?|healing|prevents?|"
+        r"relieves?|reliefs?|remed\w*|manages?\s+(?:his|her|your|the)\s+\w+|lowers?|reduces?|controls?\s+(?:his|her|your|the)\s+\w+)\b",
         re.IGNORECASE,
     ),
 }
@@ -98,9 +117,56 @@ def sample_family_texts() -> list[str]:
     return [text for _group, text, _privacy in SAMPLE_FAMILY["items"]]
 
 
+# Guided interview (#206): the SAMPLE_FAMILY groups a good first briefing
+# needs, asked one at a time. `key` is a SAMPLE_FAMILY item group; `scope` is
+# the scope the saved facts get from the ordinary memo path (MemoryStore.add
+# makes a fact with a clock time or "today" TEMPORARY, everything else
+# PERMANENT), so a question's `example` is written to land in that scope. The
+# wording asks for people, routine and preferences, never conditions or
+# medicines; validate_sample_profile still refuses any answer that slips them in.
+INTERVIEW_QUESTIONS = (
+    {
+        "key": "family",
+        "prompt": "Who are the important people in Dad's life, and how are they related to him?",
+        "scope": "permanent",
+        "skippable": False,
+        "example": "Sarah is his daughter. His grandson Leo is nine. Rosa next door is his oldest friend.",
+    },
+    {
+        "key": "likes",
+        "prompt": "What does Dad love: music, food, hobbies, things he likes to talk about?",
+        "scope": "permanent",
+        "skippable": True,
+        "example": "Dad loves jazz and crossword puzzles. He enjoys chicken soup.",
+    },
+    {
+        "key": "routine",
+        "prompt": "What does a usual day look like for Dad, in your own words?",
+        "scope": "permanent",
+        "skippable": True,
+        "example": "He has breakfast early, walks round the park after it, and has coffee with Rosa.",
+    },
+    {
+        "key": "avoid",
+        "prompt": "Is there anything the companion should steer away from talking about?",
+        "scope": "permanent",
+        "skippable": True,
+        "example": "Avoid talking about driving; it is a sore subject.",
+    },
+    {
+        "key": "reminder",
+        "prompt": "Which times today should the companion remember, such as visits, calls or a pill time? Just the times.",
+        "scope": "temporary",
+        "skippable": True,
+        "example": "Blood pressure pill, 8 AM. Sarah's phone call, 8 PM.",
+    },
+)
+
+
 def validate_sample_profile(text_or_items) -> None:
     """Refuse a sample profile that carries dosing (units, "dose", N tablets),
-    diagnosis (diagnos*, a condition name, "for your <condition>") or
+    diagnosis (diagnos*, a condition name, "for your <anything>", a
+    medicine "for <anything>") or
     clinical-claim (treat*, symptom*, cure*, ...) language. Accepts one
     string, an iterable of strings, or an iterable of (group, text, privacy)
     tuples / {"text": ...} dicts; raises ValueError naming the category and
@@ -120,8 +186,11 @@ def validate_sample_profile(text_or_items) -> None:
             else:
                 raise ValueError(f"sample profile item has no text: {entry!r}")
     for text in texts:
+        # NFKC folds look-alikes a typed or pasted line can carry: the micro
+        # sign to mu, full-width digits and letters to ASCII.
+        folded = unicodedata.normalize("NFKC", text)
         for category, pattern in _SAMPLE_PROFILE_PROHIBITED.items():
-            hit = pattern.search(text)
+            hit = pattern.search(folded)
             if hit:
                 raise ValueError(
                     f"sample profile refused: {category} language ({hit.group(0)!r}) in {text!r}; "
@@ -136,14 +205,122 @@ def validate_sample_profile(text_or_items) -> None:
 # transcript with "!"/"?"/no space after "." was stored as one whole-memo
 # item beside its own fragments. A "." followed by a digit is a decimal
 # point ("Give 1.5 mg"), never a boundary (openai_review).
-_MEMO_FACT_BOUNDARY_RE = re.compile(r"(?:[!?\n]|\.(?!\d))+")
+#
+# The "." is also abbreviation-aware: "Dad has a check-up with Dr. Tan on
+# Thursday at 10 AM." used to be stored as "Dad has a check-up with Dr" and
+# "Tan on Thursday at 10 AM", so the companion could not recall the
+# appointment. NLTK's Punkt learns abbreviations from a corpus; this memo
+# domain needs a handful, so a fixed list and a plain loop (no regex with
+# lookarounds on user text -- CodeQL py/polynomial-redos) instead of a new
+# dependency:
+#   - after a title (Dr., Mr., Mrs., Ms., St., Prof.) the "." never ends a
+#     fact -- a name follows;
+#   - inside "a.m."/"p.m." never; after them, and after a unit that follows a
+#     number ("5 mg."), only when the next word starts with a capital letter
+#     ("Dad takes 5 mg. Mom visits." is two facts, "5 mg. of aspirin" one).
+_MEMO_TITLE_ABBREVIATIONS = frozenset({"dr", "mr", "mrs", "ms", "st", "prof"})
+_MEMO_UNIT_ABBREVIATIONS = frozenset({"mg", "mcg", "g", "kg", "ml", "oz", "lb", "lbs", "cm", "mm", "km"})
+_MEMO_HARD_BOUNDARIES = "!?\n"
+
+
+def _letters_before(text: str, end: int) -> int:
+    """Index where the run of letters ending just before `end` starts."""
+    start = end
+    while start > 0 and text[start - 1].isalpha():
+        start -= 1
+    return start
+
+
+def _is_meridiem_at(text: str, start: int) -> bool:
+    """True when "a.m"/"p.m" (any case) is a whole word starting at `start`;
+    a clock digit may touch it ("9a.m.")."""
+    if text[start:start + 3].lower() not in ("a.m", "p.m"):
+        return False
+    before_ok = start == 0 or not text[start - 1].isalpha()
+    after = start + 3
+    after_ok = after == len(text) or not text[after].isalnum()
+    return before_ok and after_ok
+
+
+def _next_word_is_capitalised(text: str, i: int) -> bool:
+    """True when the first non-space, non-"." character after `i` is an
+    upper-case letter. End of text counts as a boundary too."""
+    n = len(text)
+    while i < n and (text[i] == "." or text[i] in " \t"):
+        i += 1
+    return i == n or text[i].isupper()
+
+
+# What the "." at text[i] does: stays inside the fact, ends it (the "." is
+# dropped like any sentence end), or ends it but stays ("at 9 a.m.").
+_PERIOD_INSIDE, _PERIOD_ENDS, _PERIOD_ENDS_KEPT = 0, 1, 2
+
+
+def _period_role(text: str, i: int) -> int:
+    """What the "." at text[i] does in a memo; see the constants above."""
+    nxt = text[i + 1] if i + 1 < len(text) else ""
+    if nxt.isdigit():  # decimal point
+        return _PERIOD_INSIDE
+    word_start = _letters_before(text, i)
+    word = text[word_start:i].lower()
+    word_is_whole = word_start == 0 or not text[word_start - 1].isalnum()
+    # Inner "." of a.m./p.m., then the "." that closes it.
+    if len(word) == 1 and _is_meridiem_at(text, i - 1):
+        return _PERIOD_INSIDE
+    if word == "m" and word_start >= 2 and _is_meridiem_at(text, word_start - 2):
+        return _PERIOD_ENDS_KEPT if _next_word_is_capitalised(text, i + 1) else _PERIOD_INSIDE
+    if not word or not (word_is_whole or word in _MEMO_UNIT_ABBREVIATIONS):
+        return _PERIOD_ENDS
+    if word in _MEMO_TITLE_ABBREVIATIONS and word_is_whole:
+        return _PERIOD_INSIDE
+    if word in _MEMO_UNIT_ABBREVIATIONS:
+        j = word_start
+        while j > 0 and text[j - 1] == " ":
+            j -= 1
+        if j > 0 and text[j - 1].isdigit():  # "5 mg." / "5mg."
+            return _PERIOD_ENDS if _next_word_is_capitalised(text, i + 1) else _PERIOD_INSIDE
+    return _PERIOD_ENDS
+
+
+# Words MemoryStore.caregiver_guardrails() reads as "the companion must avoid this".
+_GUARDRAIL_MARKERS = ("avoid", "don't", "do not", "never")
+
+
+def interview_answer_memo(key: str, answer: str) -> str:
+    """The memo text an interview answer is saved as. Every answer is saved as
+    typed, except the "topics to avoid" answer: a bare topic ("Politics") would
+    otherwise be stored as an ordinary profile fact the companion may bring up,
+    so each fact without a guardrail word becomes "Avoid talking about <topic>."."""
+    if key != "avoid":
+        return answer
+    parts = []
+    for fact in split_memo_facts(answer):
+        if any(marker in fact.lower() for marker in _GUARDRAIL_MARKERS):
+            parts.append(fact.rstrip(".") + ".")
+        else:
+            topic = fact.rstrip(".")
+            parts.append(f"Avoid talking about {topic[:1].lower() + topic[1:]}.")
+    return " ".join(parts) if parts else answer
 
 
 def split_memo_facts(memo: str | None) -> list[str]:
     """Split a caregiver memo (typed, dictated or canned) into one stripped
     fact per sentence, dropping empties. The ONLY splitter any memo path may
-    use, so a memo saved by any route yields identical items."""
-    return [part.strip() for part in _MEMO_FACT_BOUNDARY_RE.split(memo or "") if part.strip()]
+    use, so a memo saved by any route yields identical items. Breaks on "!",
+    "?", newlines and sentence-ending "."; abbreviations and decimals stay
+    inside their fact (see the rules above)."""
+    text = memo or ""
+    parts, start = [], 0
+    for i, ch in enumerate(text):
+        role = _period_role(text, i) if ch == "." else _PERIOD_INSIDE
+        if ch in _MEMO_HARD_BOUNDARIES or role == _PERIOD_ENDS:
+            parts.append(text[start:i])
+            start = i + 1
+        elif role == _PERIOD_ENDS_KEPT:
+            parts.append(text[start:i + 1])
+            start = i + 1
+    parts.append(text[start:])
+    return [part.strip() for part in parts if part.strip()]
 
 
 # A caregiver update ("groceries at 6 PM today") supersedes
@@ -223,6 +400,12 @@ class CaregiverFlag:
     severity: str
     created_at: float = field(default_factory=time.time)
     disclosed_to_senior: bool = False
+    # Outbound notification result (#201, ADR-014). None = no notifier was
+    # configured (the default), so nothing was attempted; True = the channel
+    # accepted the message; False = it failed, and `notify_error` holds the
+    # exception TYPE name only. Both stay out of the flag file while None.
+    notified: bool | None = None
+    notify_error: str | None = None
 
 
 class CaregiverFlags:
@@ -263,12 +446,25 @@ class CaregiverFlags:
         if not self.path.exists():
             return []
         raw = json.loads(self.path.read_text())
-        return [CaregiverFlag(**item) for item in raw]
+        # Tolerate keys this version does not know (a file written by a newer
+        # build), so adding a field never makes an older build crash on load.
+        known = {f.name for f in fields(CaregiverFlag)}
+        return [CaregiverFlag(**{k: v for k, v in item.items() if k in known}) for item in raw]
 
     def _flush(self) -> None:
         from memory.profile_io import atomic_write_json
 
-        atomic_write_json(self.path, [f.__dict__ for f in self._flags])
+        atomic_write_json(self.path, [self._record(f) for f in self._flags])
+
+    @staticmethod
+    def _record(flag: CaregiverFlag) -> dict:
+        record = dict(flag.__dict__)
+        # Unset notification fields are not written, so with no channel
+        # configured the flag file is byte-for-byte what it always was.
+        for key in ("notified", "notify_error"):
+            if record.get(key) is None:
+                record.pop(key, None)
+        return record
 
     def add(self, text: str, severity: str, disclosed_to_senior: bool) -> CaregiverFlag:
         """`disclosed_to_senior` must reflect reality, not a default: only
@@ -281,6 +477,17 @@ class CaregiverFlags:
             self._flags.append(flag)
             self._flush()
             return flag
+
+    def mark_notified(self, flag: CaregiverFlag, notified: bool, error: str | None = None) -> None:
+        """Record the outbound notification result on `flag` (matched by its
+        creation time and text) and persist it. `error` is an exception type
+        name, never a message."""
+        with self._transaction():
+            for stored in self._flags:
+                if stored.created_at == flag.created_at and stored.text == flag.text:
+                    stored.notified, stored.notify_error = notified, error
+            flag.notified, flag.notify_error = notified, error
+            self._flush()
 
     def all(self) -> list[CaregiverFlag]:
         return list(self._flags)

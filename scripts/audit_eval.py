@@ -78,6 +78,8 @@ def load_fixture(path: Path) -> list[dict]:
             if not line.strip():
                 continue
             row = json.loads(line)
+            if "_comment" in row:  # header line of a fixture (crisis_eval_set.jsonl)
+                continue
             for key in ("id", "category", "transcript", "reply", "expect_flag"):
                 if key not in row:
                     raise ValueError(f"{path}:{lineno}: missing {key!r}")

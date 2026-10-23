@@ -92,6 +92,28 @@ senior as a follow-up, not silently dropped.
    Empty, malformed, or failed audit responses are recorded as `unknown`, not
    treated as safe.
 
+Falls the senior words their own way (#198, [ADR-012](decisions/ADR-012-fall-long-tail.md)):
+the fast-path catches only first-person wording that is unambiguous ("I hit the floor", "my legs
+gave way", "I went down in the garden"); thinner phrasings ("I went down", "I'm terrified", "I
+feel dizzy") are left to the audit, whose prompt reads the senior's transcript as its subject. A
+backstop flag reaches the senior on the next turn through the late-disclosure path, and
+`disclosed_to_senior` records what was actually spoken.
+
+Which crisis phrases belong to which layer, and how the 988 line is given
+once, is recorded in [ADR-013](decisions/ADR-013-crisis-tiers.md): explicit
+first-person statements are fast-path, euphemism and context-dependent talk is
+the audit's. A `CRISIS` verdict from the audit is carried into the next turn,
+which offers the 988 line (US only; see #89) once, or not at all if it was
+already given, and a reply never repeats it.
+
+988 is the crisis line for suicidal ideation and severe depression, never for
+a medical emergency (#211). Chest pain, trouble breathing, bleeding or a call
+for 911 gets its own fast-path reply telling the senior to call 911, or to ask
+someone nearby to call, because a caregiver flag is a notification and not a
+911 call. A report that carries both a crisis phrase and one of these stays a
+crisis and its reply names both numbers. THINK's PHYSICAL EMERGENCY rule says
+the same, with no diagnosis or treatment advice.
+
 Neither layer is a substitute for the other. The fast-path is a narrow net
 for the highest-urgency, most time-critical cases; the audit pass is a wider
 net for everything else, accepted at the cost of running after the words are
@@ -154,6 +176,23 @@ visitor opens the demo after a process restart.
   (what the hosted demo runs; Token Factory has no transcription endpoint,
   PR #25), speech recognition is local, so raw audio is never sent to a
   model provider.
+
+## What leaves the system when a flag is raised
+
+Off by default (#201, [ADR-014](decisions/ADR-014-outbound-notification.md)). With
+`FY_NOTIFY_CHANNEL` unset, nothing leaves the machine because of a flag and the caregiver panel
+shows no notification status. With `smtp` or `webhook` set, each safety flag (fast-path, repeated
+question, AUDIT) sends **one** message, after the flag is persisted, from a background thread, to
+the recipient the household's own `.env` names (the caregiver's mailbox, or a webhook the
+caregiver runs). The message holds: the fixed category text from `CAREGIVER_FLAG_TEXT`, the
+severity, whether the senior was told ("yes" or "not yet confirmed"), a household label and a
+UTC time. It never holds the transcript, senior free text, the auditor's reason, a session id or a
+key; a redaction pass removes anything key-shaped, and a test asserts both. A per-household cap
+(default 6 an hour) stops a loop from spamming a phone. The result is recorded on the flag
+(`notified`, and the exception type name only on failure) and the panel shows "notified" or
+"notification failed". The hosted Space never sends: the variable is unset there and the code
+refuses to build a sender when `SPACE_ID` is set. It is a notification, not emergency dispatch,
+and "notified" means the mail server or webhook accepted it, not that a person read it.
 
 ## What this is not
 
