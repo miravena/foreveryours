@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# scripts/smoke.sh runs the suite in a copy without .git; HEAD-sha tests need a checkout.
+IN_GIT_CHECKOUT = (ROOT / ".git").exists()
 
 _spec = importlib.util.spec_from_file_location("deploy_hf_space", ROOT / "scripts" / "deploy_hf_space.py")
 deploy = importlib.util.module_from_spec(_spec)
@@ -42,6 +44,7 @@ class TestStagedSpace(unittest.TestCase):
         deploy.stage(dest, "6.0.0", hardware, build_sha)
         return dest
 
+    @unittest.skipUnless(IN_GIT_CHECKOUT, "needs a git checkout (no .git here, e.g. scripts/smoke.sh's copy)")
     def test_build_info_holds_the_full_head_sha(self):
         # Default (no sha passed) records HEAD of this checkout; webapp shows its first 7.
         dest = self._stage(build_sha=None)

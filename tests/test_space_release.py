@@ -12,6 +12,8 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW = ROOT / ".github" / "workflows" / "deploy-space.yml"
+# scripts/smoke.sh runs the suite in a copy without .git; HEAD-sha tests need a checkout.
+IN_GIT_CHECKOUT = (ROOT / ".git").exists()
 
 _spec = importlib.util.spec_from_file_location("verify_space_sha", ROOT / "scripts" / "verify_space_sha.py")
 vss = importlib.util.module_from_spec(_spec)
@@ -129,6 +131,7 @@ class TestVerify(unittest.TestCase):
             vss.verify("me/demo", SHA, do_smoke=True, downloader=lambda s: SHA,
                        client_factory=lambda s: FakeClient({}), log=lambda l: None)
 
+    @unittest.skipUnless(IN_GIT_CHECKOUT, "needs a git checkout (no .git here, e.g. scripts/smoke.sh's copy)")
     def test_main_defaults_to_local_head_and_never_prints_the_token(self):
         from unittest import mock
         head = vss.local_head_sha()
