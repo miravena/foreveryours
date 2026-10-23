@@ -95,6 +95,7 @@ from caregiver import (
 from memory.store import CAREGIVER_SOURCES, MemoryScope, MemoryStore, PrivacyLevel
 import notify
 from pipeline import hear
+from pipeline.audit import DEFAULT_AUDIT_MODEL
 from pipeline.think import DEFAULT_THINK_MODEL
 from pipeline.orchestrator import run_turn
 from safety import fastpath
@@ -2090,26 +2091,61 @@ def _build_line(path: Path = BUILD_INFO_PATH) -> str:
 
 _FLAG_ORIGINS = {
     "fastpath": "raised by: safety rules, before the model",
-    "audit": "raised by: Nemotron backstop, after the reply",
     "perseveration": "raised by: repeated-question check",
 }
 
+_NEMOTRON_ID = re.compile(r"^NVIDIA-(Nemotron-.+?)(?:-A\d+B)?$")
+
+
+def _model_label(model_id: str) -> str:
+    """Readable name for a Token Factory model id: "NVIDIA Nemotron 3 Nano
+    30B" for the Nemotron ids, the bare id after the vendor prefix otherwise."""
+    name = model_id.rsplit("/", 1)[-1]
+    m = _NEMOTRON_ID.match(name)
+    return f"NVIDIA {m.group(1).replace('-', ' ')}" if m else name
+
+
+def _think_model() -> str:
+    return os.environ.get("THINK_MODEL", DEFAULT_THINK_MODEL)
+
+
+def _audit_model() -> str:
+    return os.environ.get("AUDIT_MODEL", DEFAULT_AUDIT_MODEL)
+
 
 def _flag_origin(flag) -> str:
-    """Which layer raised `flag` (#214); empty when unknown. Display only."""
-    return _FLAG_ORIGINS.get(getattr(flag, "source", None) or "", "")
+    """Which layer raised `flag` (#214); empty when unknown. Display only.
+    The backstop is named from AUDIT_MODEL, the same lookup pipeline/audit.py
+    makes, so an override never shows up as "Nemotron"."""
+    source = getattr(flag, "source", None) or ""
+    if source == "audit":
+        label = _model_label(_audit_model())
+        short = "Nemotron" if label.startswith("NVIDIA Nemotron") else label
+        return f"raised by: {short} backstop, after the reply"
+    return _FLAG_ORIGINS.get(source, "")
 
 
 def _model_footer() -> str:
-    """One always-visible line saying which model does what (#214). The model
-    name is derived from the id pipeline/think.py calls, so it cannot drift."""
-    name = DEFAULT_THINK_MODEL.rsplit("/", 1)[-1]
-    name = re.sub(r"^NVIDIA-", "", name)
-    name = re.sub(r"-A\d+B$", "", name)
-    return (
-        f"Reply and safety backstop: NVIDIA {name.replace('-', ' ')} on Nebius Token Factory · "
-        "Hearing: faster-whisper, on this app's server · Voice: Piper, on this app's server"
-    )
+    """One always-visible line saying which model does what (#214). Every part
+    reads the same setting the pipeline reads at call time (THINK_MODEL,
+    AUDIT_MODEL, ASR_BACKEND, TTS_BACKEND), so the footer names what runs."""
+    from pipeline import speak
+
+    think_label, audit_label = _model_label(_think_model()), _model_label(_audit_model())
+    if think_label == audit_label:
+        models = f"Reply and safety backstop: {think_label} on Nebius Token Factory"
+    else:
+        models = (
+            f"Reply: {think_label} on Nebius Token Factory · "
+            f"Safety backstop: {audit_label} on Nebius Token Factory"
+        )
+    if os.environ.get("ASR_BACKEND", "whisper_local") == "nebius":
+        asr = os.environ.get("ASR_NEBIUS_MODEL", "nvidia/parakeet-tdt-1.1b")
+        hearing = f"{_model_label(asr)} on Nebius Token Factory"
+    else:
+        hearing = "faster-whisper, on this app's server"
+    voice = "Piper" if speak._piper_available() else "eSpeak NG"
+    return f"{models} · Hearing: {hearing} · Voice: {voice}, on this app's server"
 
 
 def build_demo() -> gr.Blocks:

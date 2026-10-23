@@ -951,9 +951,13 @@ class TestBuildDemoCss(unittest.TestCase):
             self.assertEqual(webapp._build_line(info), "")
 
     def test_model_footer_is_always_visible_and_names_the_think_model(self):
-        from pipeline import think
+        from pipeline import speak, think
 
-        demo = webapp.build_demo()
+        defaults_only = {k: v for k, v in os.environ.items()
+                         if k not in ("THINK_MODEL", "AUDIT_MODEL", "ASR_BACKEND", "TTS_BACKEND")}
+        with patch.dict(os.environ, defaults_only, clear=True), \
+                patch.object(speak, "_piper_available", return_value=True):
+            demo = webapp.build_demo()
         footers = [
             b for b in demo.blocks.values()
             if "Reply and safety backstop:" in str(getattr(b, "value", ""))
@@ -965,6 +969,32 @@ class TestBuildDemoCss(unittest.TestCase):
         self.assertIn("Hearing: faster-whisper, on this app's server", text)
         self.assertIn("Voice: Piper, on this app's server", text)
         self.assertEqual(think.DEFAULT_THINK_MODEL, "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+
+    def test_model_footer_follows_configured_models_and_backends(self):
+        # The footer must name what actually runs, not the defaults: a
+        # different reply model, hosted ASR, and the eSpeak fallback.
+        env = {
+            "THINK_MODEL": "meta-llama/Llama-3.3-70B-Instruct",
+            "AUDIT_MODEL": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+            "ASR_BACKEND": "nebius",
+            "ASR_NEBIUS_MODEL": "nvidia/parakeet-tdt-1.1b",
+            "TTS_BACKEND": "espeak",
+        }
+        with patch.dict(os.environ, env):
+            text = webapp._model_footer()
+        self.assertIn("Reply: Llama-3.3-70B-Instruct on Nebius Token Factory", text)
+        self.assertIn("Safety backstop: NVIDIA Nemotron 3 Nano 30B on Nebius Token Factory", text)
+        self.assertIn("Hearing: parakeet-tdt-1.1b on Nebius Token Factory", text)
+        self.assertNotIn("faster-whisper", text)
+        self.assertNotIn("Piper", text)
+
+    def test_audit_flag_names_the_configured_backstop_model(self):
+        from caregiver import CaregiverFlag
+
+        flag = CaregiverFlag(text="x", severity="audit", disclosed_to_senior=True, source="audit")
+        with patch.dict(os.environ, {"AUDIT_MODEL": "meta-llama/Llama-3.3-70B-Instruct"}):
+            origin = webapp._flag_origin(flag)
+        self.assertEqual(origin, "raised by: Llama-3.3-70B-Instruct backstop, after the reply")
 
     def test_css_set_on_blocks_not_only_launch_kwargs(self):
         """#83 PR #85 Codex review: app.py (the hosted/Spaces entrypoint) calls
