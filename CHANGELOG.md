@@ -38,6 +38,15 @@ rename `Unreleased` to the version and date, then tag it.
   against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
 
 ### Fixed
+- Natural voice on the demo (#207): the Piper voice is now `en_US-ljspeech-medium` (LJ Speech,
+  public domain; the Lessac voice's training data is licensed for research only and is never
+  shipped), Piper stays warm in one loopback server process so a sentence no longer pays about
+  1.6 s of start-up, and the Space deploy ships the voice. `README.md` names the GPL voice programs
+  this app runs as separate processes (ADR-011).
+- Smoother reply speech (#194): each sentence's audio has its engine-specific
+  leading/trailing silence trimmed, a short fade on both edges (no click where clips join) and a
+  fixed 0.2 s pause after it, so sentences flow evenly in the CLI, the streamed browser reply and
+  the combined WAV, whichever voice produced them. Unsupported or unreadable WAVs are left as they were.
 - Caregiver fact updates: a caregiver memo that changes a fact ("groceries at
   6 PM" over "groceries at 4 PM") now supersedes the earlier caregiver fact with the same subject,
   so only one reaches the model; and the caregiver panel shows a "Replaced by" text only when the

@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# scripts/smoke.sh runs the suite in a copy without .git; HEAD-sha tests need a checkout.
+IN_GIT_CHECKOUT = (ROOT / ".git").exists()
 
 _spec = importlib.util.spec_from_file_location("deploy_hf_space", ROOT / "scripts" / "deploy_hf_space.py")
 deploy = importlib.util.module_from_spec(_spec)
@@ -34,6 +36,37 @@ def _imported_top_levels(path: Path) -> set[str]:
     return found
 
 
+class TestStagedVoice(unittest.TestCase):
+    """#207: the Piper voice ships with the Space only as the complete default pair."""
+
+    def _stage(self, voice_files):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        voice_dir = Path(tmp.name) / "voice"
+        voice_dir.mkdir()
+        for name in voice_files:
+            (voice_dir / name).write_bytes(b"x")
+        dest = Path(tmp.name) / "dest"
+        dest.mkdir()
+        return dest, deploy.stage(dest, "6.0.0", "cpu-basic", "f" * 40, voice_dir=voice_dir)
+
+    def test_complete_voice_pair_is_staged(self):
+        dest, staged = self._stage(deploy.VOICE_FILES)
+        for name in deploy.VOICE_FILES:
+            self.assertIn(str(Path(deploy.VOICE_DIR) / name), staged)
+            self.assertTrue((dest / deploy.VOICE_DIR / name).is_file())
+
+    def test_half_a_voice_or_another_voice_is_not_staged(self):
+        other = ["en_US-lessac-medium.onnx", "en_US-lessac-medium.onnx.json"]
+        dest, staged = self._stage(deploy.VOICE_FILES[:1] + other)
+        self.assertFalse((dest / "models").exists())
+        self.assertFalse([s for s in staged if s.startswith("models")])
+
+    def test_staged_voice_is_the_one_speak_defaults_to(self):
+        speak_src = (ROOT / "pipeline" / "speak.py").read_text(encoding="utf-8")
+        self.assertIn(f'"{deploy.VOICE_DIR}/{deploy.VOICE_FILES[0]}"', speak_src)
+
+
 class TestStagedSpace(unittest.TestCase):
     def _stage(self, hardware="cpu-basic", build_sha="f" * 40):
         tmp = tempfile.TemporaryDirectory()
@@ -42,6 +75,7 @@ class TestStagedSpace(unittest.TestCase):
         deploy.stage(dest, "6.0.0", hardware, build_sha)
         return dest
 
+    @unittest.skipUnless(IN_GIT_CHECKOUT, "needs a git checkout (no .git here, e.g. scripts/smoke.sh's copy)")
     def test_build_info_holds_the_full_head_sha(self):
         # Default (no sha passed) records HEAD of this checkout; webapp shows its first 7.
         dest = self._stage(build_sha=None)

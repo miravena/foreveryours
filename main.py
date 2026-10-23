@@ -25,6 +25,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import os
+import threading
 import time
 SENIOR_TIMEZONE = os.environ.get('SENIOR_TIMEZONE', 'Asia/Kuala_Lumpur')
 from pathlib import Path
@@ -278,6 +279,8 @@ if __name__ == "__main__":
     print("[PRIVACY NOTICE] By speaking into the microphone, you consent to your voice being recorded and transcribed locally.\n")
     load_repo_env()
     speak.reload_tts_timeout()  # pipeline.speak was imported before .env was loaded
+    # Load the Piper voice while the beat sets up (#207).
+    threading.Thread(target=speak.warm_up, name="piper-warm-up", daemon=True).start()
     args = sys.argv[1:]
     if not args:
         print(__doc__)

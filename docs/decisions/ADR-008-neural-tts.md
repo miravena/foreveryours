@@ -1,6 +1,6 @@
 # ADR-008: Offline neural voice (Piper) preferred, espeak-ng/System.Speech/pyttsx3 as fallbacks
 
-**Status:** Accepted
+**Status:** Accepted; voice and process shape amended by [ADR-011](ADR-011-voice-licence-and-warm-piper.md)
 **Date:** 2026-10-09
 **Decided by:** Team
 **Affects:** `pipeline/speak.py`, voice quality (Design score), optional dependency footprint
@@ -49,12 +49,13 @@ Piper slots into the exact "one clean subprocess per sentence writing a WAV" sha
 branch already uses, so it inherits the #28 isolation for free and stays fully offline (it reads
 a local `.onnx` voice). Making it optional and auto-detected means a clone with no voice download
 still demos on the existing voice — so we get the better voice where present and lose nothing
-where absent. *Content was rephrased for compliance with licensing restrictions.*
+where absent.
 
 ## Consequences
 
-- **Unlocked:** a warm, natural offline neural voice (`en_US-lessac-medium`) when the model is
-  present; the Design-score weakness ADR-001 accepted is addressed.
+- **Unlocked:** a warm, natural offline neural voice (`en_US-ljspeech-medium` since ADR-011;
+  originally `en_US-lessac-medium`, whose training data is licensed for research only) when the
+  model is present; the Design-score weakness ADR-001 accepted is addressed.
 - **Locked in to:** an optional `piper-tts` dependency and a gitignored `models/piper/` voice
   directory fetched once via `scripts/get_piper_voice.sh`; the voice is configurable via env.
 - **Gotchas:** model binaries are large — never commit them (`.gitignore` blocks `models/piper/`

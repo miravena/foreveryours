@@ -748,8 +748,14 @@ class TestAudioInputGuard(unittest.TestCase):
     def test_audio_path_outside_upload_dirs_is_refused_unread(self):
         # The path comes from the browser: one outside the temp/upload and
         # sample dirs gets the retry-or-type reply and is never opened.
+        # The temp dir is pinned to an empty one: when the repo itself sits under
+        # the real temp dir (scripts/smoke.sh's mktemp copy), webapp.py would
+        # otherwise count as an upload and be probed.
         outside = os.path.abspath(webapp.__file__)
-        with patch.object(webapp.hear, "probe_duration") as probe, \
+        env = {k: v for k, v in os.environ.items() if k != "GRADIO_TEMP_DIR"}
+        with patch.object(webapp.tempfile, "gettempdir", return_value=str(self.tmp / "uploads")), \
+                patch.dict(os.environ, env, clear=True), \
+                patch.object(webapp.hear, "probe_duration") as probe, \
                 patch.object(webapp.hear, "transcribe") as transcribe:
             transcript, _bio, refusal = webapp._guarded_transcribe(outside, True)
         self.assertIsNone(transcript)
