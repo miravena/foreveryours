@@ -30,7 +30,8 @@ for up to about 70 minutes ([PRIVACY.md](docs/PRIVACY.md)).
 ## Pipeline
 
 THINK and AUDIT run on Nebius Token Factory with open-weight NVIDIA Nemotron models; speech-to-text
-and text-to-speech are local (`faster-whisper` and `espeak-ng`) and run on neither Nebius service.
+and text-to-speech are local (`faster-whisper`, and Piper with `espeak-ng` as the fallback) and run
+on neither Nebius service.
 
 ```
 HEAR (speech-to-text via local faster-whisper, offline-resilient)
@@ -200,6 +201,23 @@ Token Factory serves ([ADR-010](docs/decisions/ADR-010-audit-model-eval.md),
 
 Nano stays the AUDIT default. Our pre-set rule switches models only on fewer false flags, and
 all three had none. The ADR records the recall gap and how to switch.
+
+## Licences of the voice components
+
+This repo is MIT. Two programs it starts are not:
+
+- **espeak-ng** (GPL-3.0, <https://github.com/espeak-ng/espeak-ng>): the fallback voice, installed
+  from `packages.txt`.
+- **piper-tts** (GPL-3.0-or-later, <https://github.com/OHF-Voice/piper1-gpl>, bundles espeak-ng):
+  the preferred voice, run as a separate program (the `piper` CLI, or `python -m piper.http_server`
+  on the loopback interface). No Piper code is imported into this app.
+
+Both are used at arm's length: this app sends a sentence and reads back a WAV. A Hugging Face Space
+image built from this repo contains both programs; their source is at the links above. The Piper
+voice `en_US-ljspeech-medium` is trained on the public-domain LJ Speech dataset
+(<https://keithito.com/LJ-Speech-Dataset/>); the earlier `en_US-lessac-medium` voice is trained on
+research-only data and is not used. Details and the reasoning:
+[ADR-011](docs/decisions/ADR-011-voice-licence-and-warm-piper.md). Not legal advice.
 
 ## Self-judging
 

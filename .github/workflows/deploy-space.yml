@@ -119,6 +119,10 @@ jobs:
           print(f"{os.environ['SPACE_ID']}: stage {rt.stage}, hardware {rt.hardware}")
           PY
 
+      - name: Fetch the Piper voice (ships with the Space; the demo never downloads at runtime)
+        if: steps.gate.outputs.mode == 'deploy'
+        run: bash scripts/get_piper_voice.sh
+
       - name: Deploy ${{ github.sha }} to the Space
         if: steps.gate.outputs.mode == 'deploy'
         env:

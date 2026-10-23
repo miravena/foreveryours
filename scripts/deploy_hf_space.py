@@ -55,6 +55,10 @@ STAGE_FILES = [
     "requirements.txt", "packages.txt", "LICENSE",
 ]
 STAGE_DIRS = ["memory", "pipeline", "safety"]
+# The Piper voice ships with the Space once scripts/get_piper_voice.sh has fetched it
+# (#207): the default pair or nothing, never another voice, never downloaded at runtime.
+VOICE_DIR = "models/piper"
+VOICE_FILES = ["en_US-ljspeech-medium.onnx", "en_US-ljspeech-medium.onnx.json"]
 SAMPLE_GLOB = "samples/*.wav"
 
 HARDWARE_CHOICES = ["cpu-basic", "zero-a10g", "cpu-upgrade"]
@@ -111,9 +115,11 @@ def git_tree_is_dirty(root: Path = ROOT) -> bool:
 
 
 def stage(dest: Path, gradio_version: str, hardware: str = "cpu-basic",
-          build_sha: str | None = None) -> list[str]:
+          build_sha: str | None = None, voice_dir: Path | None = None) -> list[str]:
     if build_sha is None:
         build_sha = git_head_sha()
+    if voice_dir is None:
+        voice_dir = ROOT / VOICE_DIR
     (dest / BUILD_INFO).write_text(build_sha + "\n", encoding="utf-8")
     for name in STAGE_FILES:
         shutil.copy2(ROOT / name, dest / name)
@@ -128,6 +134,13 @@ def stage(dest: Path, gradio_version: str, hardware: str = "cpu-basic",
     (dest / "samples").mkdir()
     for wav in sorted(ROOT.glob(SAMPLE_GLOB)):
         shutil.copy2(wav, dest / "samples" / wav.name)
+    if all((voice_dir / name).is_file() for name in VOICE_FILES):
+        (dest / VOICE_DIR).mkdir(parents=True)
+        for name in VOICE_FILES:
+            shutil.copy2(voice_dir / name, dest / VOICE_DIR / name)
+    else:
+        print(f"note: no Piper voice in {voice_dir} (run scripts/get_piper_voice.sh); "
+              "the Space will speak with espeak-ng")
     (dest / "README.md").write_text(
         SPACE_README.format(gradio_version=gradio_version), encoding="utf-8"
     )

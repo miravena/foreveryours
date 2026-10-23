@@ -9,6 +9,24 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-23 (Voice: public-domain Piper voice, warm server, shipped to the Space)
+- **What:** the Piper voice `en_US-lessac-medium` is trained on Blizzard 2013 data whose licence is
+  research-only (named licensee, no sub-licence, excludes voice-synthesis products), so the default
+  is now `en_US-ljspeech-medium` (LJ Speech, public domain). Piper is kept warm as one loopback
+  `python -m piper.http_server` process per app (separate program; falls through to the `piper`
+  CLI, then espeak-ng). The deploy stages the voice pair and the workflow fetches it first.
+  README names the GPL voice programs. [ADR-011](decisions/ADR-011-voice-licence-and-warm-piper.md), #207.
+- **Measured (4-core ARM, Piper 1.8.0):** one CLI call 2.0 s for a 1.4 s sentence; three sentences
+  in one process 2.9 s, so about 1.6 s is start-up. Warm server: 0.5 s, 1.05 s, 0.5 s for 1.4 s,
+  3.0 s and 2.1 s of audio; boot warm-up 1.9 s. Sentence-join smoothing (#194) on real espeak-ng
+  output: gap 0.40 s to 0.24 s.
+- **Gotcha:** with a voice fetched into `models/piper/`, the suite took 500 s because unrelated
+  tests reached the real `piper` CLI. `tests/__init__.py` now forces `TTS_BACKEND=espeak` and
+  `TTS_PIPER_SERVER=0`; the Piper tests set them back. Other permissive Piper voices, from their
+  model cards: `kristin`, `bryce` (public domain), `joe` (CC0), `libritts_r` (CC BY 4.0); `ryan`
+  and `hfc_*` are CC BY-NC-SA.
+- **Next:** measure time-to-first-sound on the Space after this deploy and record it in ADR-003.
+
 ### 2026-10-22 (AUDIT model eval across served NVIDIA models)
 - **What:** `scripts/audit_eval.py` lists what Token Factory serves (`--list-models`, through
   `scripts/with_key.sh`) and scores AUDIT over a committed 36-row labelled fixture

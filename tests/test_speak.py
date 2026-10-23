@@ -150,6 +150,160 @@ class TestSmoothWav(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), b"not a wav")
 
 
+class TestPiperServer(unittest.TestCase):
+    """#207: Piper is kept warm in one loopback server process; each sentence is
+    one bounded request; a failure falls through to the per-sentence CLI."""
+
+    def setUp(self):
+        from unittest.mock import patch
+
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.out_dir = Path(self.temp_dir.name)
+        self.model = self.out_dir / "voice.onnx"
+        self.model.write_bytes(b"fake-onnx")
+        self.model.with_suffix(".onnx.json").write_text("{}")
+        env = patch.dict("os.environ", {"TTS_PIPER_MODEL": str(self.model), "TTS_PIPER_SERVER": "1",
+                                        "TTS_BACKEND": "auto"})
+        env.start()
+        self.addCleanup(env.stop)
+        # Cleanups run last-registered first: end any server, then clear the back-off.
+        self.addCleanup(lambda: speak._piper_server.update(retry_at=0.0))
+        self.addCleanup(speak._piper_server_failed)
+
+    @staticmethod
+    def _wav_bytes():
+        import io
+        import wave
+
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(1000)
+            w.writeframes(b"\x10\x27" * 100)
+        return buf.getvalue()
+
+    def test_server_answers_before_the_cli_is_spawned(self):
+        import json
+        from unittest.mock import MagicMock, patch
+
+        resp = MagicMock()
+        resp.read.return_value = self._wav_bytes()
+        resp.__enter__.return_value = resp
+        with patch("pipeline.speak._piper_server_url", return_value="http://127.0.0.1:1/synthesize"), \
+             patch("pipeline.speak._get_piper_cli", return_value="/usr/bin/piper"), \
+             patch("pipeline.speak.urllib.request.urlopen", return_value=resp) as urlopen, \
+             patch("subprocess.run") as run:
+            results = list(speak.speak_sentences(iter(["Hello there."]), self.out_dir))
+        self.assertEqual(run.call_count, 0, "no CLI process while the server answers")
+        req = urlopen.call_args[0][0]
+        self.assertEqual(json.loads(req.data)["text"], "Hello there.")
+        self.assertEqual(urlopen.call_args.kwargs["timeout"], speak.TTS_TIMEOUT_S)
+        self.assertTrue(results[0][1].read_bytes().startswith(b"RIFF"))
+
+    def test_server_failure_falls_through_to_the_cli_and_backs_off(self):
+        import urllib.error
+        from unittest.mock import patch
+
+        with patch("pipeline.speak._piper_server_url", return_value="http://127.0.0.1:1/synthesize"), \
+             patch("pipeline.speak._get_piper_cli", return_value="/usr/bin/piper"), \
+             patch("pipeline.speak.urllib.request.urlopen", side_effect=urllib.error.URLError("down")), \
+             patch("subprocess.run") as run:
+            list(speak.speak_sentences(iter(["Hello there."]), self.out_dir))
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args[0][0][0], "/usr/bin/piper")
+        self.assertGreater(speak._piper_server["retry_at"], 0.0, "a failed server is not retried per sentence")
+
+    def test_truncated_server_reply_falls_through_too(self):
+        # The server dies after the headers: resp.read() raises IncompleteRead, which
+        # is an HTTPException, not an OSError. Still the CLI, still the back-off.
+        from http.client import IncompleteRead
+        from unittest.mock import MagicMock, patch
+
+        resp = MagicMock()
+        resp.read.side_effect = IncompleteRead(b"RIFF", 100)
+        resp.__enter__.return_value = resp
+        with patch("pipeline.speak._piper_server_url", return_value="http://127.0.0.1:1/synthesize"), \
+             patch("pipeline.speak._get_piper_cli", return_value="/usr/bin/piper"), \
+             patch("pipeline.speak.urllib.request.urlopen", return_value=resp), \
+             patch("subprocess.run") as run:
+            list(speak.speak_sentences(iter(["Hello there."]), self.out_dir))
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args[0][0][0], "/usr/bin/piper")
+        self.assertGreater(speak._piper_server["retry_at"], 0.0)
+
+    def test_server_off_and_no_cli_means_piper_unavailable(self):
+        from unittest.mock import patch
+
+        with patch.dict("os.environ", {"TTS_PIPER_SERVER": "0"}), \
+             patch("pipeline.speak._get_piper_cli", return_value=None):
+            self.assertFalse(speak._piper_available())
+            self.assertIsNone(speak._piper_server_url())
+
+    def test_server_without_cli_still_makes_piper_available(self):
+        from unittest.mock import patch
+
+        with patch("pipeline.speak._get_piper_cli", return_value=None), \
+             patch("pipeline.speak._piper_server_importable", return_value=True):
+            self.assertTrue(speak._piper_available())
+
+    def test_start_failure_backs_off_and_is_not_retried_per_sentence(self):
+        # A server that exits at once (bad voice file) is started once, then left alone.
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        proc = MagicMock()
+        proc.poll.return_value = 1
+        with patch("pipeline.speak._piper_server_importable", return_value=True), \
+             patch("pipeline.speak.subprocess.Popen", return_value=proc) as popen:
+            self.assertIsNone(speak._piper_server_url())
+            self.assertIsNone(speak._piper_server_url())
+        self.assertEqual(popen.call_count, 1)
+        argv = popen.call_args[0][0]
+        self.assertEqual(argv[:3], [sys.executable, "-m", "piper.http_server"])
+        self.assertIn("127.0.0.1", argv)
+        self.assertIsNone(speak._piper_server["proc"])
+
+    def test_warm_up_never_raises(self):
+        from unittest.mock import patch
+
+        with patch("pipeline.speak._piper_server_url", side_effect=RuntimeError("boom")), \
+             patch("pipeline.speak._get_piper_cli", return_value="/usr/bin/piper"):
+            self.assertFalse(speak.warm_up())
+
+
+_REAL_VOICE = speak._REPO_ROOT / speak._DEFAULT_PIPER_MODEL
+
+
+@unittest.skipUnless(
+    _REAL_VOICE.is_file() and _REAL_VOICE.with_suffix(".onnx.json").is_file() and speak._piper_server_importable(),
+    "needs the Piper voice (scripts/get_piper_voice.sh) and flask",
+)
+class TestPiperServerLive(unittest.TestCase):
+    """#207, runtime proof: the real server starts, answers with a WAV, and a
+    warm sentence is fast enough to stay ahead of playback."""
+
+    def test_real_server_round_trip(self):
+        import time
+        import wave
+        from unittest.mock import patch
+
+        out_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: speak._piper_server.update(retry_at=0.0))
+        self.addCleanup(speak._piper_server_failed)
+        with patch.dict("os.environ", {"TTS_PIPER_MODEL": str(_REAL_VOICE), "TTS_PIPER_SERVER": "1",
+                                       "TTS_BACKEND": "auto"}):
+            self.assertTrue(speak.warm_up())
+            t0 = time.perf_counter()
+            results = list(speak.speak_sentences(iter(["Good morning, Dad."]), out_dir))
+            warm = time.perf_counter() - t0
+        with wave.open(str(results[0][1])) as w:
+            self.assertEqual(w.getsampwidth(), 2)
+            self.assertGreater(w.getnframes() / w.getframerate(), 0.5)
+        self.assertLess(warm, 1.5, f"warm sentence took {warm:.2f}s")
+
+
 class TestPipelinedPlayer(unittest.TestCase):
     """Issue #17: playback overlaps synthesis, in order, and reports
     time-to-first-SOUND. Playback is always mocked -- no audio hardware."""
@@ -213,12 +367,19 @@ class TestPiperTier(unittest.TestCase):
     prior behavior when it is not (so `main` stays demo-able with no install)."""
 
     def setUp(self):
+        from unittest.mock import patch
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.out_dir = Path(self.temp_dir.name)
         # A fake voice model: <name>.onnx with a sibling <name>.onnx.json.
         self.model = self.out_dir / "voice.onnx"
         self.model.write_bytes(b"fake-onnx")
         self.model.with_suffix(".onnx.json").write_text("{}")
+        # These tests are about the per-sentence CLI tier; the warm server (#207)
+        # has its own tests below and must not be started on a fake voice here.
+        env = patch.dict("os.environ", {"TTS_PIPER_SERVER": "0", "TTS_BACKEND": "auto"})
+        env.start()
+        self.addCleanup(env.stop)
 
     def tearDown(self):
         self.temp_dir.cleanup()

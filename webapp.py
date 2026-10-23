@@ -2030,6 +2030,9 @@ def build_demo() -> gr.Blocks:
 
 if __name__ == "__main__":
     hear.warm_up()  # (#81 B4)
+    from pipeline import speak as _speak
+    # Load the Piper voice while the UI builds, so the first reply does not wait on it (#207).
+    threading.Thread(target=_speak.warm_up, name="piper-warm-up", daemon=True).start()
     build_demo().launch(
         server_name="0.0.0.0",
         server_port=int(os.environ.get("PORT", "7860")),
