@@ -21,6 +21,11 @@ rename `Unreleased` to the version and date, then tag it.
   fills the type box, one-line AI notice with the privacy link, plain sample clip names, and the
   "household was reset" note only after a real expiry, not on the first turn of a fresh page (#215).
 
+### Fixed
+- "Do I have any appointments this week?" recalls the caregiver's memo (Dr. Tan, Thursday 10 AM)
+  instead of "no appointments listed": the plural "appointments" (and "doctors", "visits") now
+  counts as a schedule question, so the caregiver updates reach the reply (#189).
+
 ### Docs
 - Submission review against the judges' advice (`docs/plans/SUBMISSION-REVIEW-2026-10-23.md`) and
   the changes it asked for (#216, #217): README opens with the scenario and the one-sentence
