@@ -1,4 +1,4 @@
-"""Office #23233: a fast-path emergency always leaves a caregiver flag, even
+"""A fast-path emergency always leaves a caregiver flag, even
 when speech synthesis returns nothing, raises, or hangs.
 
 PreChangeRegressionTests are the negative control: each one fails (as an

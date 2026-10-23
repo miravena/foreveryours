@@ -270,7 +270,7 @@ class TestThink(unittest.TestCase):
         self.assertIn("Never diagnose medical symptoms, recommend pill dosages", prompt)
         self.assertIn("ForeverYours must complement human relationships, never replace them", prompt)
 
-    # Office #23219 (judge-sim finding 1): live, the companion twice told Dad
+    # judge-sim finding 1: live, the companion twice told Dad
     # "Sarah is listening to our conversation". She is not -- a caregiver only
     # ever receives a safety flag, and the orchestrator discloses each one.
     LISTENING_PHRASINGS = (
@@ -282,12 +282,13 @@ class TestThink(unittest.TestCase):
         prompt = think.SYSTEM_PROMPT
         self.assertIn("19. NO-LISTENING HONESTY", prompt)
         self.assertIn("cannot hear", prompt)
-        # Exact about what is shared: flags AND disclosed wellbeing notes
-        # (orchestrator LIFESTYLE: path), never a false "flags only" assurance.
-        self.assertIn("only things a caregiver ever receives are a safety flag", prompt)
-        self.assertIn("wellbeing note about sleep, appetite, mobility, or hygiene", prompt)
-        self.assertIn("nothing is shared behind his back", prompt)
-        self.assertIn("you will always tell Dad when one is sent", prompt)
+        # Sarah only sees safety flags, Dad is always told -- and the flag
+        # definition names the disclosed wellbeing check (orchestrator
+        # LIFESTYLE: path), so "only safety flags" is never a false assurance.
+        self.assertIn("She only sees safety flags, and you will always tell Dad when one is sent", prompt)
+        self.assertIn("never a transcript", prompt)
+        self.assertIn("wellbeing check about sleep, appetite, mobility, or hygiene", prompt)
+        self.assertIn("Nothing is shared behind his back", prompt)
         self.assertIn('Never say or imply "Sarah is listening to our conversation"', prompt)
 
     def test_no_listening_rule_reaches_the_model_for_both_phrasings(self):
@@ -312,7 +313,7 @@ class TestThink(unittest.TestCase):
                 self.assertIn("NO-LISTENING HONESTY", messages[0]["content"])
                 self.assertEqual(messages[-1]["content"], phrasing)
 
-    # Office #23219 (judge-sim finding 9): "You've always told me you love
+    # judge-sim finding 9: "You've always told me you love
     # jazz--especially the classic big-band sound" -- the memo came from Sarah
     # and "big-band" was invented. Rule 10 alone did not stop it.
     def test_system_prompt_rule_remembered_facts_attribution(self):

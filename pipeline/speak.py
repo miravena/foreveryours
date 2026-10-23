@@ -16,7 +16,7 @@ stays demo-able with no extra install.
 
 Every tier is bounded by ``TTS_TIMEOUT_S`` (env, default 10 s) per sentence:
 a hung Piper falls through to the next tier; a hung espeak, PowerShell or
-pyttsx3 raises ``subprocess.TimeoutExpired`` to the caller (Office #23233).
+pyttsx3 raises ``subprocess.TimeoutExpired`` to the caller.
 
 Needs the `espeak-ng` system package on Linux (`apt install espeak-ng`) when
 Piper is not used -- pyttsx3.init() raises OSError without it.
@@ -37,6 +37,15 @@ from collections.abc import Iterator
 from pathlib import Path
 
 _turn_counter = itertools.count()
+# Guards only the pyttsx3 last-resort tier (shared cached engine); the
+# subprocess tiers need no lock. Held by the thread that actually runs
+# the engine, not by the waiting caller: a call abandoned at TTS_TIMEOUT_S keeps
+# it until the engine really returns, so no second call ever enters the engine
+# while a hung one is still inside it.
+_pyttsx3_lock = threading.Lock()
+# Serializes the stdout redirect around a pyttsx3 call. Always released by
+# the caller that took it, unlike _pyttsx3_lock (Codex finding).
+_pyttsx3_stdout_lock = threading.Lock()
 
 # Repo root (two levels up from this file: pipeline/speak.py -> repo root).
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -59,8 +68,8 @@ def _parse_tts_timeout(raw: str | None) -> float:
     return value
 
 
-# Upper bound, in seconds, on each synthesis tier for one sentence (Office
-# #23233). A hung Piper/espeak/PowerShell child is killed by subprocess.run and
+# Upper bound, in seconds, on each synthesis tier for one sentence.
+# A hung Piper/espeak/PowerShell child is killed by subprocess.run and
 # raises TimeoutExpired; the in-process pyttsx3 tier is abandoned in a daemon
 # thread. Process creation time is not covered (Python's subprocess docs).
 TTS_TIMEOUT_S = _parse_tts_timeout(os.environ.get("TTS_TIMEOUT_S"))
@@ -75,24 +84,39 @@ def reload_tts_timeout() -> float:
     return TTS_TIMEOUT_S
 
 
-def _run_bounded(fn, label: str):
-    """Run in-process ``fn()`` in a daemon thread, wait at most TTS_TIMEOUT_S.
+def _run_bounded(fn, label: str, *, wait_s: float | None = None, on_done=None):
+    """Run in-process ``fn()`` in a daemon thread, wait at most TTS_TIMEOUT_S
+    (or ``wait_s`` when given).
 
     Returns fn's result; re-raises fn's own exception in the caller (a thread's
     exception would otherwise only reach threading.excepthook and be lost); if
     the thread is still running at the deadline, raises TimeoutExpired and
-    abandons it -- it is a daemon, so it never blocks interpreter exit."""
+    abandons it -- it is a daemon, so it never blocks interpreter exit.
+
+    ``on_done`` (if given) is called exactly once, by the worker thread when
+    ``fn`` really finishes -- even after the caller has given up on it -- or by
+    the caller if the thread never starts. It is how a lock the caller took is
+    handed to the call that needs it."""
     outcome: dict = {}
+    timeout = TTS_TIMEOUT_S if wait_s is None else wait_s
 
     def target():
         try:
             outcome["value"] = fn()
         except BaseException as exc:  # noqa: BLE001 - re-raised in the caller
             outcome["error"] = exc
+        finally:
+            if on_done is not None:
+                on_done()
 
     worker = threading.Thread(target=target, name=f"tts-{label}", daemon=True)
-    worker.start()
-    worker.join(TTS_TIMEOUT_S)
+    try:
+        worker.start()
+    except BaseException:
+        if on_done is not None:
+            on_done()
+        raise
+    worker.join(max(0.0, timeout))
     if worker.is_alive():
         raise subprocess.TimeoutExpired(cmd=label, timeout=TTS_TIMEOUT_S)
     if "error" in outcome:
@@ -228,10 +252,43 @@ def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
             engine.save_to_file(sentence, str(out_path))
             engine.runAndWait()
 
-        # The redirect wraps the bounded call (not the thread body) so stdout
-        # is restored even when a hung engine is abandoned at the deadline.
-        with contextlib.redirect_stdout(io.StringIO()):
-            _run_bounded(_pyttsx3_synthesize, "pyttsx3")
+        # pyttsx3.init() hands every caller the same cached engine, whose run
+        # loop is not reentrant, so concurrent turns take turns here.
+        # One deadline, TTS_TIMEOUT_S, covers waiting for the lock plus the
+        # synthesis. The lock is handed to the engine thread, which
+        # releases it only when the engine returns: after a timeout the
+        # abandoned call still owns it, so the next caller times out here
+        # instead of entering the engine concurrently with the hung one.
+        deadline = time.monotonic() + TTS_TIMEOUT_S
+        # redirect_stdout swaps the process-wide sys.stdout, so the whole
+        # swap-run-restore section is serialized by _pyttsx3_stdout_lock, which
+        # the caller always releases itself (the engine lock is released by the
+        # engine thread and can outlive the caller, so it cannot do this job).
+        if not _pyttsx3_stdout_lock.acquire(timeout=TTS_TIMEOUT_S):
+            raise subprocess.TimeoutExpired(cmd="pyttsx3 (engine busy)", timeout=TTS_TIMEOUT_S)
+        try:
+            remaining = max(0.0, deadline - time.monotonic())
+            if not _pyttsx3_lock.acquire(timeout=remaining):
+                raise subprocess.TimeoutExpired(cmd="pyttsx3 (engine busy)", timeout=TTS_TIMEOUT_S)
+            # The redirect wraps the bounded call, not the thread body, so
+            # stdout is restored even when a hung engine is abandoned.
+            try:
+                redirect = contextlib.redirect_stdout(io.StringIO())
+                redirect.__enter__()
+            except BaseException:
+                _pyttsx3_lock.release()
+                raise
+            try:
+                _run_bounded(
+                    _pyttsx3_synthesize,
+                    "pyttsx3",
+                    wait_s=deadline - time.monotonic(),
+                    on_done=_pyttsx3_lock.release,
+                )
+            finally:
+                redirect.__exit__(None, None, None)
+        finally:
+            _pyttsx3_stdout_lock.release()
         return
 
     raise RuntimeError("Speech synthesis unavailable: install espeak-ng or pyttsx3")

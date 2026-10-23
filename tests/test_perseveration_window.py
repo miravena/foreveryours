@@ -255,7 +255,7 @@ class TestPerseverationWindow(unittest.TestCase):
         self.assertNotIn("make a note for your family", res.reply_text)
 
     def test_verbatim_repeat_flags_even_with_no_tts_audio(self, mock_stream_reply, mock_speak_turn, mock_fastpath_check):
-        # #159 (ticket #16084 RULE 4): the flag must be recorded whether or
+        # #159 (RULE 4): the flag must be recorded whether or
         # not TTS produced audio -- the disclosure line is already in the
         # text reply either way. A later unrelated PR (#88) regressed this
         # to require delivered audio for disclosure; RULE 4 is authoritative

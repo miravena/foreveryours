@@ -217,7 +217,7 @@ class TestPiperTier(unittest.TestCase):
 
 
 class TestTtsTimeoutBound(unittest.TestCase):
-    """Office #23233: every synthesis tier is bounded by TTS_TIMEOUT_S."""
+    """Every synthesis tier is bounded by TTS_TIMEOUT_S."""
 
     def test_timeout_env_parsing_rejects_non_finite_and_non_positive(self):
         for raw in (None, "", "abc", "0", "-3", "inf", "-inf", "nan"):
@@ -266,6 +266,169 @@ class TestTtsTimeoutBound(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 list(speak.speak_sentences(iter(["Hello."]), Path(tmp)))
             self.assertIs(_sys.stdout, stdout_before)
+
+
+class TestPyttsx3LockAfterTimeout(unittest.TestCase):
+    """A pyttsx3 call abandoned at TTS_TIMEOUT_S
+    must keep the engine lock until the engine really returns, so a later
+    turn times out instead of entering the shared engine concurrently."""
+
+    def _fake_engine(self, block: "threading.Event | None"):
+        import threading
+        from unittest.mock import MagicMock
+
+        stats = {"calls": 0, "active": 0, "max_active": 0}
+        guard = threading.Lock()
+
+        def run_and_wait():
+            with guard:
+                stats["calls"] += 1
+                stats["active"] += 1
+                stats["max_active"] = max(stats["max_active"], stats["active"])
+            try:
+                if block is not None:
+                    block.wait(5)
+                else:
+                    import time as _t
+                    _t.sleep(0.02)
+            finally:
+                with guard:
+                    stats["active"] -= 1
+
+        engine = MagicMock()
+        engine.runAndWait.side_effect = run_and_wait
+        return engine, stats
+
+    def _patches(self, timeout_s: float):
+        from contextlib import ExitStack
+        from unittest.mock import patch
+
+        stack = ExitStack()
+        stack.enter_context(patch("sys.platform", "linux"))
+        stack.enter_context(patch("pipeline.speak._get_piper_cli", return_value=None))
+        stack.enter_context(patch("pipeline.speak._get_espeak_cli", return_value=None))
+        stack.enter_context(patch("pipeline.speak.TTS_TIMEOUT_S", timeout_s))
+        return stack
+
+    def _wait_unlocked(self, seconds: float = 3.0) -> bool:
+        import time as _t
+
+        end = _t.monotonic() + seconds
+        while _t.monotonic() < end:
+            if not speak._pyttsx3_lock.locked():
+                return True
+            _t.sleep(0.01)
+        return False
+
+    def test_abandoned_call_keeps_lock_and_next_call_never_enters_engine(self):
+        import subprocess as _sp
+        import threading
+
+        release = threading.Event()
+        self.addCleanup(lambda: (release.set(), self._wait_unlocked()))
+        engine, stats = self._fake_engine(release)
+        with tempfile.TemporaryDirectory() as tmp, self._patches(0.1):
+            out = Path(tmp) / "a.wav"
+            with self.assertRaises(_sp.TimeoutExpired):
+                speak._synthesize_file("First.", out, engine)
+            # The engine is still inside runAndWait, so the lock stays held.
+            self.assertTrue(speak._pyttsx3_lock.locked())
+            with self.assertRaises(_sp.TimeoutExpired):
+                speak._synthesize_file("Second.", out, engine)
+            self.assertEqual(stats["calls"], 1, "second call entered the hung engine")
+            self.assertEqual(stats["max_active"], 1)
+
+            # Once the hung engine returns, its thread frees the lock and the
+            # tier works again.
+            release.set()
+            self.assertTrue(self._wait_unlocked(), "lock not released after engine returned")
+            speak._synthesize_file("Third.", out, engine)
+            self.assertEqual(stats["calls"], 2)
+            self.assertEqual(stats["max_active"], 1)
+            self.assertFalse(speak._pyttsx3_lock.locked())
+
+    def test_concurrent_turns_take_turns_in_the_engine(self):
+        import threading
+
+        engine, stats = self._fake_engine(None)
+        errors: list = []
+        with tempfile.TemporaryDirectory() as tmp, self._patches(5.0):
+            def turn(i):
+                try:
+                    speak._synthesize_file(f"Hi {i}.", Path(tmp) / f"{i}.wav", engine)
+                except BaseException as exc:  # noqa: BLE001 - surfaced below
+                    errors.append(exc)
+
+            threads = [threading.Thread(target=turn, args=(i,)) for i in range(4)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(10)
+            self.assertFalse(any(t.is_alive() for t in threads))
+        self.assertEqual(errors, [])
+        self.assertEqual(stats["calls"], 4)
+        self.assertEqual(stats["max_active"], 1)
+        self.assertTrue(self._wait_unlocked())
+
+    def test_stdout_restored_after_racing_turns(self):
+        """Codex finding: the engine thread frees the engine lock before its
+        caller restores stdout; a second turn in that gap must not capture the
+        first turn's buffer as the stdout it later restores."""
+        import sys as _sys
+        import threading
+        import time as _t
+        from unittest.mock import MagicMock
+
+        engine = MagicMock()
+        # The engine returns at once; the caller is then slowed down between the
+        # engine thread's lock release and its own redirect exit.
+        engine.runAndWait.side_effect = lambda: None
+        real_run_bounded = speak._run_bounded
+
+        def slow_after_return(*args, **kwargs):
+            result = real_run_bounded(*args, **kwargs)
+            _t.sleep(0.05)
+            return result
+
+        stdout_before = _sys.stdout
+        errors: list = []
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmp, self._patches(5.0), \
+             patch("pipeline.speak._run_bounded", side_effect=slow_after_return):
+            def turn(i):
+                try:
+                    for j in range(3):
+                        speak._synthesize_file(f"Hi {i}.", Path(tmp) / f"{i}-{j}.wav", engine)
+                except BaseException as exc:  # noqa: BLE001 - surfaced below
+                    errors.append(exc)
+
+            threads = [threading.Thread(target=turn, args=(i,)) for i in range(4)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(20)
+        self.assertEqual(errors, [])
+        self.assertIs(_sys.stdout, stdout_before, "stdout left redirected after racing turns")
+
+    def test_engine_error_still_releases_lock(self):
+        from unittest.mock import MagicMock
+
+        engine = MagicMock()
+        engine.runAndWait.side_effect = RuntimeError("engine died")
+        with tempfile.TemporaryDirectory() as tmp, self._patches(2.0):
+            with self.assertRaises(RuntimeError):
+                speak._synthesize_file("Hi.", Path(tmp) / "x.wav", engine)
+        self.assertTrue(self._wait_unlocked())
+
+    def test_on_done_runs_once_when_thread_cannot_start(self):
+        from unittest.mock import patch
+
+        calls = []
+        with patch("threading.Thread.start", side_effect=RuntimeError("can't start new thread")):
+            with self.assertRaises(RuntimeError):
+                speak._run_bounded(lambda: 1, "fake", on_done=lambda: calls.append(1))
+        self.assertEqual(calls, [1])
 
 
 if __name__ == "__main__":

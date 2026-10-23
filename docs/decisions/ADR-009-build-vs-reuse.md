@@ -55,7 +55,7 @@ to the senior before alerting family, but public pages do not show enforcement, 
   whether the senior was told. It does not enforce *ordering*.
 - The fast-path records its flag on every trigger, before THINK runs, whether or not the
   disclosure was synthesised: `disclosed_to_senior` is True only when it produced audio,
-  otherwise False with the reply shown as text (Office #23233). The audit path raises the family flag even if disclosure
+  otherwise False with the reply shown as text. The audit path raises the family flag even if disclosure
   failed, recording `False` (`orchestrator.py:392`). Memory-conflict escalation records
   `False` (`memory/store.py:222`). Even when disclosure succeeds, "disclosed" means audio was
   synthesised, not that the senior heard it (#11; #88; #104).

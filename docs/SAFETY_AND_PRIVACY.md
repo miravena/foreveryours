@@ -15,15 +15,15 @@ from true to false:
   *is* the disclosure, spoken before anything else happens. If speech
   synthesis fails or times out (`TTS_TIMEOUT_S`), the flag is still recorded
   with `disclosed_to_senior: False` and "spoken disclosure failed; shown as
-  text only", and the same sentence reaches the senior as text (Office #23233).
+  text only", and the same sentence reaches the senior as text.
 - **Audit flags** (`pipeline/audit.py`, see below) try to disclose via a
   spoken follow-up line after the fact. If that follow-up fails for some
   reason, the flag is recorded as `disclosed_to_senior=False` — honestly,
   not papered over — rather than assumed to have succeeded. "Told" means the
   browser actually received the line's audio: the streaming turn keeps
   listening after its reply until the audit finishes (bounded), and a line
-  that arrives after the browser stopped listening is recorded undisclosed
-  (Office #23231). The same rule gates lifestyle notes.
+  that arrives after the browser stopped listening is recorded undisclosed.
+  The same rule gates lifestyle notes.
 
 The senior is never meant to be monitored silently behind their back; the
 code's job is to make that true in both cases above, not just the easy one.
@@ -37,12 +37,26 @@ only caregiver-authored memos/notes and non-EMOTIONAL conversation facts
 and disclosed flags, never from model-written free text about the
 conversation.
 
+Facts are replaced, never stacked. A caregiver update
+supersedes the earlier caregiver fact with the same subject — the same
+words once clock times and standalone numbers are blanked out
+(`caregiver.fact_subject_key`), same source and privacy level — so saving
+"I'm dropping off groceries at 6 PM today" over the 4 PM line leaves one
+active grocery fact for the model, with the old one struck through as
+*Superseded*. Facts saved in the same memo never supersede each other, a
+re-run seed never brings back a line the caregiver replaced, and when two
+live facts share the subject (two pill times) nothing is superseded,
+because dropping the wrong reminder is worse than listing one extra. A senior's correction of a caregiver fact is shown to the
+caregiver only when the replacement itself has disclosure attestation:
+otherwise the panel shows the struck-through original and the Superseded
+badge, never the senior's replacement words.
+
 Flag *text* is minimised on the same principle: it is a fixed description
 of the trigger category — `safety/fastpath.py`'s `CAREGIVER_FLAG_TEXT` —
 and never contains the senior's utterance or the auditor's one-sentence
 reason. A flag says *what kind* of event happened (crisis, distress,
 confusion, unsafe advice), not what the senior said or what the model wrote
-about it, so the caregiver panel can never become a transcript leak (#23232).
+about it, so the caregiver panel can never become a transcript leak.
 
 **Refinement (implemented 2026-10-03):** the fast-path reply today discloses this *one* instance ("I'm letting your family know right now so someone can check on you.") but also states the standing rule — i.e. when disclosure happens and when it doesn't. Spelling that rule out loud, e.g. *"I'll only tell them if I'm worried about your safety,"* answers the "elder surveillance" objection more directly than a single-instance disclosure can: it tells the senior the boundary up front, not just that this one thing got reported.
 
@@ -68,7 +82,7 @@ senior as a follow-up, not silently dropped.
    here (an unnecessary caregiver note) is far cheaper than a false negative.
    The public demo's daily request cap never blocks it: at the cap the
    fast-path still speaks and flags, and only the paid THINK continuation is
-   withheld (`webapp._cap_decision`, Office #23228).
+   withheld (`webapp._cap_decision`).
 2. **Audit** (`pipeline/audit.py`) — asynchronous, a second small-model pass
    over every *other* reply and the senior's transcript. It checks for
    medical-hallucination or unsafe-advice risk and provides a wider,
@@ -126,6 +140,11 @@ visitor opens the demo after a process restart.
   live up to roughly `SESSION_TTL_S + 600` seconds (~70 minutes by default).
   This cache cleanup is separate from removal of the household session
   directory; closing a tab does not itself delete cached input or reply audio.
+  A deleted household stays deleted: a caregiver memo saved after its
+  session was removed is refused, written nowhere, and answered by a fresh
+  household with the "reset after a period of inactivity" notice (the typed
+  text stays in the box to resubmit). A memo save in progress counts as
+  activity, so the household is not deleted under it.
   No other visitor can see another tab's household.
 - **Local CLI (`main.py`).** Reply audio stays in `out/audio/` and memory in
   `data/` until you delete them. That's your own machine, and keeping them is

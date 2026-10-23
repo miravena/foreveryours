@@ -15,12 +15,52 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 from pathlib import Path
 
 _whisper_model = None
+# Turns from different visitors now run concurrently: without this,
+# two first calls could each load a WhisperModel. Only the lazy load is
+# guarded; transcribe() itself stays unlocked so one visitor's ASR never
+# queues another's (CTranslate2 models accept concurrent calls).
+_whisper_model_lock = threading.Lock()
+
+
+class AudioInputError(ValueError):
+    """The audio file could not be decoded (corrupt or unsupported)."""
+
+
+def probe_duration(audio_path: Path) -> float:
+    """Decoded length of `audio_path` in seconds, read from the container
+    header with PyAV (installed with gradio) -- no ASR, no full decode. Returns
+    0.0 when the file carries no duration information rather than guessing;
+    raises AudioInputError for anything PyAV cannot open."""
+    try:
+        import av
+
+        container = av.open(str(audio_path))
+        try:
+            if container.duration is not None:
+                return container.duration / av.time_base
+            for stream in container.streams.audio:
+                if stream.duration is not None and stream.time_base is not None:
+                    return float(stream.duration * stream.time_base)
+            return 0.0
+        finally:
+            container.close()
+    except Exception as exc:
+        raise AudioInputError("could not decode audio") from exc
 
 
 def _get_whisper_model():
+    global _whisper_model
+    if _whisper_model is not None:
+        return _whisper_model
+    with _whisper_model_lock:
+        return _load_whisper_model_locked()
+
+
+def _load_whisper_model_locked():
     global _whisper_model
     if _whisper_model is None:
         try:

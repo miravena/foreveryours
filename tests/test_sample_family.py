@@ -1,4 +1,4 @@
-"""Office #23218: one-click "Load sample family".
+"""one-click "Load sample family".
 
 A judge clicks one button before saying anything and the caregiver panel
 shows a labelled-fictional senior with family, likes, a daily routine and
@@ -25,6 +25,9 @@ from caregiver import (
     validate_sample_profile,
 )
 from memory.store import MemoryStore, PrivacyLevel
+
+# Gradio hands over uploads under the temp dir; webapp refuses audio paths outside it.
+FAKE_UPLOAD = os.path.join(tempfile.gettempdir(), "fake.wav")
 
 REMINDER_LINE = "Blood pressure pill, 8 AM"
 
@@ -59,7 +62,7 @@ class TestSampleSeedAndValidator(unittest.TestCase):
         self.assertIn("visit", routine)
 
     def test_identity_facts_carry_no_schedule_words(self):
-        """openai_review on #23218: a family/persona/likes line that also
+        """openai_review: a family/persona/likes line that also
         says "every evening" or "visits on Saturday afternoons" is claimed by
         MemoryStore.caregiver_schedule_updates() and dropped from
         senior_profile_facts(), so "Who is my daughter?" would get nothing.
@@ -240,7 +243,7 @@ class TestSeniorSideRecall(_SessionCase):
         with patch("pipeline.orchestrator.think.stream_reply", side_effect=fake_stream), \
              patch("pipeline.orchestrator._speak_turn", return_value=("", [], 0.0)), \
              patch.object(webapp.hear, "transcribe", return_value=("What time is my pill today?", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            webapp.run_demo_turn("fake.wav", [], session_id)
+            webapp.run_demo_turn(FAKE_UPLOAD, [], session_id)
         self.assertEqual(captured.get("transcript"), "What time is my pill today?")
         self.assertIn(REMINDER_LINE, captured.get("caregiver_updates") or [])
         # The caregiver-only health note never reaches the senior's prompt.

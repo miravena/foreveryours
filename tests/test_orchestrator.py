@@ -248,7 +248,7 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(len(delivered), 2)
 
     def test_run_turn_allow_hosted_call_false_skips_think(self):
-        """#23228: at the daily request cap webapp passes allow_hosted_call=False.
+        """At the daily request cap webapp passes allow_hosted_call=False.
         The offline fast-path still speaks and flags; THINK and the background
         AUDIT/extraction thread never run."""
         with patch("pipeline.think.stream_reply", side_effect=AssertionError("THINK must not be called at the cap")) as stream_mock, \
@@ -272,7 +272,7 @@ class TestOrchestrator(unittest.TestCase):
 
     def test_run_turn_allow_hosted_call_false_keeps_conflicts_pending(self):
         """A capped turn never reaches THINK, so a pending memory clarification
-        must not be marked asked (Codex review of #23228)."""
+        must not be marked asked (Codex review)."""
         self.store.add_conflict("Leo is a grandson", "Leo is a nephew", "relationship unclear")
         with patch("pipeline.think.stream_reply", side_effect=AssertionError("THINK must not be called at the cap")):
             run_turn("I fell down earlier and I'm scared", self.store, self.flags, self.audio_dir, allow_hosted_call=False)
@@ -289,7 +289,7 @@ class TestOrchestrator(unittest.TestCase):
 
     @patch("pipeline.orchestrator._speak_turn", return_value=("Reply", [], 0.5))
     def test_fastpath_flag_is_recorded_undisclosed_when_no_audio_is_synthesized(self, mock_speak):
-        # Office #23233: an emergency is flagged whether or not TTS produced
+        # An emergency is flagged whether or not TTS produced
         # audio; disclosed_to_senior is False because nothing was spoken.
         result = run_turn(
             "I fell down earlier and I'm scared",
@@ -305,7 +305,7 @@ class TestOrchestrator(unittest.TestCase):
         self.assertFalse(items[0].disclosed_to_senior)
 
     def test_fastpath_flag_is_on_disk_before_think_when_tts_hangs(self):
-        # Office #23233: a hung in-process TTS engine is abandoned after
+        # A hung in-process TTS engine is abandoned after
         # TTS_TIMEOUT_S and the undisclosed flag is already on disk when THINK
         # is entered; the immediate reply still comes back as text.
         import threading
@@ -385,7 +385,7 @@ class TestOrchestrator(unittest.TestCase):
         self.assertFalse(self.flags.all()[0].disclosed_to_senior)
 
     def test_audit_flag_does_not_copy_verdict(self):
-        # #23232: the AUDIT model's one-sentence reason must never reach the
+        # The AUDIT model's one-sentence reason must never reach the
         # caregiver panel. The flag says WHAT KIND of event happened, never
         # what the senior said or what the auditor wrote about it -- a reason
         # can carry health details, names or a bank PIN.

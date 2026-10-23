@@ -11,19 +11,26 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Added
-- Live judge-behaviour check (Office #23223): `scripts/live_judge_check.py` plays a judge against
+- AUDIT model eval ([ADR-010](docs/decisions/ADR-010-audit-model-eval.md)):
+  `scripts/audit_eval.py` lists the models Token Factory serves (`--list-models`) and scores AUDIT
+  over a committed 36-row labelled fixture (`tests/fixtures/audit_eval_set.jsonl`). It keeps one
+  recorded response per row id, caps a run at 200 calls (exit 3), and fails below a 0.90 recall
+  floor. Stubs and `--replay` run offline. Measured 2026-10-22 recall on true events: Nano 0.63,
+  Super 120B 1.00, Ultra 550B 0.95, all with 0/17 false flags. AUDIT stays on Nano under the fixed
+  switch rule.
+- Live judge-behaviour check: `scripts/live_judge_check.py` plays a judge against
   the running HF Space through `gradio_client` -- about twenty scripted turns (pre-brief recall,
   "Is Sarah listening?", a typed "Dr. Tan" memo, driving, a fall, a crisis phrase, a private
   disclosure) with keyword assertions on the reply and the caregiver panel, a scorecard, and a
   hard cap on submitted reply turns (default 25). `--fake good|bad` runs the same turns against
   an offline stub. `HOW_TO_WORK_HERE.md` names it as the required check after every Space deploy.
-- One-click **Load sample family** button on the caregiver side (Office #23218): seeds this
+- One-click **Load sample family** button on the caregiver side: seeds this
   session's household with a labelled-fictional senior (Walter), family, likes, a daily routine
   and caregiver-entered medication reminder times as plain schedule items, shown as a
   "Fictional sample household" card and recalled in the senior's replies; `validate_sample_profile`
   refuses dosing, diagnosis and clinical-claim language, and the session-end sweep removes the seed
   with everything else.
-- The Space deploys from GitHub Actions (`.github/workflows/deploy-space.yml`, Office #23226,
+- The Space deploys from GitHub Actions (`.github/workflows/deploy-space.yml`,
   #11): before the freeze every push to `main` deploys and runs the live judge check suite; after
   it, only a published Release or a manual *Run workflow* deploys. Each deploy records the commit
   it was built from (`BUILD_INFO` file + `BUILD_SHA` Space variable), the app shows it as
@@ -31,29 +38,44 @@ rename `Unreleased` to the version and date, then tag it.
   against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
 
 ### Fixed
+- Caregiver fact updates: a caregiver memo that changes a fact ("groceries at
+  6 PM" over "groceries at 4 PM") now supersedes the earlier caregiver fact with the same subject,
+  so only one reaches the model; and the caregiver panel shows a "Replaced by" text only when the
+  replacement itself may be shown, so a senior's private correction of a caregiver fact no longer
+  leaks into Briefed memory.
+- One visitor's slow ASR/Nebius/TTS turn no longer queues every other visitor's Send, Enter or
+  proactive turn (Codex robustness review #6): the senior-turn listeners share a
+  bounded limit (`FY_TURN_CONCURRENCY`, default 4) instead of Gradio's default of 1, and turns
+  within one session still run one at a time. ADR-003 "Concurrency" records the limit. The
+  last-resort pyttsx3 voice is shared by all turns: a call that times out keeps its lock until
+  the engine really returns, so another turn never enters a hung engine.
+- A corrupt, unsupported, oversized or over-long audio input (senior turn or caregiver voice
+  memo) now gets a short "record again, or type instead" reply that keeps the session, instead of
+  a Gradio error; size (`MAX_AUDIO_UPLOAD_BYTES`, 25 MB) and decoded length (`MAX_AUDIO_SECONDS`,
+  120 s) are checked before any speech recognition runs.
 - Fixed ungrammatical wording in the browser retention notice and clarified that both recorded input audio and Gradio's cached reply audio copies remain until the separate cache sweep runs (`webapp.py`, `docs/PRIVACY.md`, `docs/SAFETY_AND_PRIVACY.md`, fixes #176, fixes #177).
 - The daily-cap footnote on a capped emergency turn says the safety message "still played" only
   when reply audio was produced, and "the family has been notified" only when a caregiver flag was
-  recorded; a TTS failure now reads "shown as text because speech was unavailable" (Codex review
-  of the #23228/#23233 publish).
+  recorded; a TTS failure now reads "shown as text because speech was unavailable" (Codex review of the
+  publish).
 - A late audit or lifestyle disclosure is recorded as told only when the browser actually got
-  its audio (Office #23231): the streaming turn keeps playing the follow-up line after the reply
+  its audio: the streaming turn keeps playing the follow-up line after the reply
   (bounded by `_BG_JOIN_TIMEOUT_S`), and a line spoken after the browser stopped listening is
   recorded `disclosed_to_senior=False` and its lifestyle note is suppressed, instead of the
   panel saying "Dad was told".
-- The daily request cap no longer blocks the offline safety fast-path (Office #23228): once a
+- The daily request cap no longer blocks the offline safety fast-path: once a
   session hits `MAX_DAILY_REQUESTS`, "I fell down" / "I can't breathe" / "I want to die" /
   "Where am I?" still get the spoken fast-path reply and the caregiver flag, with a one-line cap
   notice; only the paid THINK continuation is withheld. Other utterances still get the daily-cap
   message, and a capped emergency turn never moves the counter.
 - A safety fast-path emergency ("I fell down earlier and I'm scared") now always records its
-  caregiver flag, even when speech synthesis returns nothing, raises or hangs (Office #23233).
+  caregiver flag, even when speech synthesis returns nothing, raises or hangs.
   The flag says `disclosed_to_senior: False` (plus "spoken disclosure failed; shown as text
   only") when no audio was produced, and the immediate reply still comes back as text. Every
   TTS tier (Piper, espeak, PowerShell, pyttsx3) is now bounded by `TTS_TIMEOUT_S` (default
   10 s); a hung Piper falls through to espeak. Previously the flag was saved only after audio
   existed, and a hung synthesizer could stall the turn indefinitely.
-- Caregiver safety flags no longer carry the senior's own words (#23232): the flag text is a
+- Caregiver safety flags no longer carry the senior's own words: the flag text is a
   fixed, content-minimized description of the trigger category (`safety/fastpath.py`'s
   `CAREGIVER_FLAG_TEXT`), for both the fast-path flags and the AUDIT flags. Previously a
   fast-path flag quoted the utterance verbatim and an AUDIT flag copied the auditor's
@@ -66,7 +88,7 @@ rename `Unreleased` to the version and date, then tag it.
 ### Fixed
 - The companion no longer tells Dad that Sarah is listening to the conversation (judge-sim
   findings 1 and 9): THINK's system prompt now carries a no-listening honesty rule (a
-  caregiver only ever receives a safety flag or a disclosed wellbeing note, and Dad is always told when one is sent) and a
+  Sarah only sees safety flags -- short alerts, never a transcript, including the disclosed wellbeing check -- and Dad is always told when one is sent) and a
   remembered-facts attribution rule (state only facts in the provided memories, never add detail,
   and say "Sarah mentioned..." for caregiver-sourced facts rather than "you've always told me").
 - The caregiver panel's "Briefed memory" lists each memo fact once: every memo

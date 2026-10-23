@@ -56,7 +56,7 @@ CONFUSION_PATTERNS = [
     r"\bi don'?t know (where|what day)\b",
 ]
 
-# The caregiver-facing flag text (#23232). FIXED, content-minimized
+# The caregiver-facing flag text. FIXED, content-minimized
 # descriptions of the trigger category -- the caregiver panel must never
 # carry the senior's own words, nor a model's free-text reason about the
 # conversation: both can hold health details, names or a bank PIN, and the

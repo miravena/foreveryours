@@ -12,7 +12,13 @@ phrase goes through the offline fast-path.
 
 """
 
+import contextlib
+
+import io
+
 import os
+
+import sys
 
 import tempfile
 
@@ -22,6 +28,8 @@ import time
 
 import unittest
 
+import wave
+
 from pathlib import Path
 
 from unittest.mock import patch
@@ -29,6 +37,16 @@ from unittest.mock import patch
 
 
 import webapp
+from memory.store import MemoryStore
+
+# Gradio hands over uploads under the temp dir; webapp refuses audio paths outside it.
+FAKE_UPLOAD = os.path.join(tempfile.gettempdir(), "fake.wav")
+
+# Test prints (benchmarks, TTS fallbacks) go to a block-buffered stdout that is
+# flushed only at exit, AFTER unittest's stderr summary, so
+# `unittest discover tests 2>&1 | tail -1` never showed OK. Line-buffering keeps
+# the two streams in order. Discovery imports this module before any test runs.
+sys.stdout.reconfigure(line_buffering=True)
 
 
 
@@ -76,7 +94,7 @@ class TestWebappSessions(unittest.TestCase):
 
         with patch.object(webapp.hear, "transcribe", return_value=(said, {"wpm": 0.0, "avg_pause_s": 0.0})):
 
-            return webapp.run_demo_turn("fake.wav", [], session_id)
+            return webapp.run_demo_turn(FAKE_UPLOAD, [], session_id)
 
 
 
@@ -103,7 +121,7 @@ class TestWebappSessions(unittest.TestCase):
         gets a fresh household and says so, instead of silently looking like
         a reset conversation."""
         with patch.object(webapp.hear, "transcribe", return_value=("Hello", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp.run_demo_turn("fake.wav", [], None)
+            result = webapp.run_demo_turn(FAKE_UPLOAD, [], None)
         self.assertIn("reset after a period of inactivity", result[0])
         self.assertIsNotNone(result[5])  # a new session_id was minted
 
@@ -196,7 +214,7 @@ class TestWebappSessions(unittest.TestCase):
         self.assertTrue((self.sessions_dir / fresh).exists())
 
     def test_session_sweeper_expires_orphan_without_new_visitor(self):
-        # Must be a valid 32-hex session id: ticket #16085 (#150/#151) makes
+        # Must be a valid 32-hex session id: #150/#151 makes
         # the sweeper skip any entry whose name isn't one, so a non-hex name
         # here would no longer be swept and this test would be checking the
         # wrong thing.
@@ -367,7 +385,7 @@ class TestWebappSessions(unittest.TestCase):
 
             transcript_out, audio_out, history_state, panel, biomarkers, out_sess_id, out_text_in, out_audio_in = webapp.run_demo_turn(
 
-                audio_in="fake.wav",
+                audio_in=FAKE_UPLOAD,
 
                 text_in_or_history="Text transcript",
 
@@ -456,7 +474,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         """Requirement 2.1/2.3: empty transcript -> consistent 5-tuple + message."""
         session_id, _ = webapp.init_session()
         with patch.object(webapp.hear, "transcribe", return_value=("", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+            result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
         self.assertEqual(len(result), 5)
         self.assertIn("try again", result[0])
         self.assertIn("Acoustic Biomarkers", result[4])
@@ -465,7 +483,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         """Requirement 2.1: whitespace-only transcript -> consistent 5-tuple."""
         session_id, _ = webapp.init_session()
         with patch.object(webapp.hear, "transcribe", return_value=("   ", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+            result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
         self.assertEqual(len(result), 5)
         self.assertIn("try again", result[0])
         self.assertIn("Acoustic Biomarkers", result[4])
@@ -475,7 +493,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         the 8th clearing audio_in so a stale sample clip isn't re-sent (#83, #80 2.B3)."""
         session_id, _ = webapp.init_session()
         with patch.object(webapp.hear, "transcribe", return_value=("", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp.run_demo_turn("fake.wav", [], session_id)
+            result = webapp.run_demo_turn(FAKE_UPLOAD, [], session_id)
         self.assertEqual(len(result), 8)
         self.assertIn("try again", result[0])
         self.assertIsNone(result[7])
@@ -499,12 +517,12 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         with patch.dict(os.environ, {"NEBIUS_API_KEY": "dummy-key-for-cap-test"}), \
              patch.object(webapp.hear, "transcribe", return_value=("Hello there", {"wpm": 0.0, "avg_pause_s": 0.0})), \
              patch.object(webapp, "_rate_limit_ok", return_value=False):
-            result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+            result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
         self.assertEqual(len(result), 5)
         self.assertIn("daily request cap", result[0])
         self.assertIn("_Rate limited_", result[4])
 
-    # --- #23228: the daily cap withholds only the paid THINK continuation ---
+    # --- The daily cap withholds only the paid THINK continuation ---
     #
     # At the cap, a fast-path utterance must still get the offline spoken
     # reply and the caregiver flag through BOTH handlers. stream_reply and
@@ -572,7 +590,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
             with self.subTest(utterance=utterance):
                 session_id, _ = webapp.init_session()
                 with self._cap_patches(utterance):
-                    result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                    result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
                     self._assert_no_hosted_work()
                     # The non-streaming handler registers only run_turn's own
                     # background thread, which must be None here.
@@ -585,24 +603,32 @@ class TestEmptyTranscriptArity(unittest.TestCase):
             with self.subTest(utterance=utterance):
                 session_id, _ = webapp.init_session()
                 with self._cap_patches(utterance):
-                    outputs = list(webapp.run_demo_turn_streaming("fake.wav", [], session_id))
+                    outputs = list(webapp.run_demo_turn_streaming(FAKE_UPLOAD, [], session_id))
                     self._assert_no_hosted_work()
                 last = outputs[-1]
-                self._assert_capped_fast_path_reply(last[:5], session_id, reply_text, flag_text)
+                # The reply audio rides its own CHUNK yield(s), once;
+                # the final yield carries none, so check the delivered chunk.
+                self.assertIsNone(last[1], "the final yield must not re-send the reply audio")
+                delivered = [o[1] for o in outputs if isinstance(o[1], str)]
+                spoken = (last[0], delivered[0] if delivered else None, *last[2:5])
+                self._assert_capped_fast_path_reply(spoken, session_id, reply_text, flag_text)
 
     def test_cap_notice_does_not_claim_audio_when_speech_failed(self):
-        """Codex P2 on the #23228/#23233 publish: a capped emergency whose TTS
+        """Codex P2 on the publish: a capped emergency whose TTS
         failed must not say the safety message "still played"."""
         utterance, reply_text, flag_text = self.CAP_FAST_PATH_CASES[0]
         for streaming in (False, True):
             with self.subTest(streaming=streaming):
                 session_id, _ = webapp.init_session()
+                # Non-streaming: no combined clip. Streaming: no
+                # chunk is deliverable, so none reaches the browser.
                 with self._cap_patches(utterance), \
-                        patch.object(webapp, "_combine_audio_chunks", return_value=None):
+                        patch.object(webapp, "_combine_audio_chunks", return_value=None), \
+                        patch.object(webapp, "_chunk_readable", return_value=False):
                     if streaming:
-                        result = list(webapp.run_demo_turn_streaming("fake.wav", [], session_id))[-1][:5]
+                        result = list(webapp.run_demo_turn_streaming(FAKE_UPLOAD, [], session_id))[-1][:5]
                     else:
-                        result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                        result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
                 self.assertIsNone(result[1])
                 self.assertIn("daily request cap", result[0])
                 self.assertNotIn("still played", result[0])
@@ -618,12 +644,12 @@ class TestEmptyTranscriptArity(unittest.TestCase):
 
     def test_cap_does_not_block_crisis_fast_path(self):
         """'I can't breathe' matches safety/fastpath.py's distress patterns on
-        current main, so it is used as written (#23228 step 1)."""
+        current main, so it is used as written (step 1)."""
         for utterance in ("I can't breathe", "I want to die"):
             with self.subTest(utterance=utterance):
                 session_id, _ = webapp.init_session()
                 with self._cap_patches(utterance):
-                    result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                    result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
                     self._assert_no_hosted_work()
                 self.assertIsNotNone(result[1])
                 self.assertIn("URGENT", webapp._format_caregiver_panel(session_id))
@@ -644,7 +670,7 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         utterance = "I fell down earlier and I'm scared"
         for _ in range(2):
             with self._cap_patches(utterance, rate_limit_ok=None):
-                result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+                result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
                 self._assert_no_hosted_work()
             self.assertIsNotNone(result[1])
             self.assertIn("_Rate limited_", result[4])
@@ -659,12 +685,161 @@ class TestEmptyTranscriptArity(unittest.TestCase):
         """Requirement 3.1/3.4: a valid transcript still returns its 5-tuple with reply + audio."""
         session_id, _ = webapp.init_session()
         with patch.object(webapp.hear, "transcribe", return_value=("I fell down earlier and I'm scared", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp._run_demo_turn("fake.wav", None, [], session_id)
+            result = webapp._run_demo_turn(FAKE_UPLOAD, None, [], session_id)
         self.assertEqual(len(result), 5)
         self.assertIn("Dad said:", result[0])
         self.assertIsNotNone(result[1])
         self.assertIn("Acoustic Biomarkers", result[4])
 
+
+
+def _make_wav(path: Path, seconds: float) -> Path:
+    """A real 16 kHz mono 16-bit WAV of silence, `seconds` long."""
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(b"\0\0" * int(16000 * seconds))
+    return path
+
+
+class TestAudioInputGuard(unittest.TestCase):
+    """A failed transcription, an oversized upload or an over-long
+    recording gets a short retry-or-type-instead reply that keeps the session,
+    and size/duration are refused BEFORE hear.transcribe runs. Every test
+    submits a REAL file: a missing path deliberately skips the guard."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.tmp = Path(self.temp_dir.name)
+        self.sessions_dir = self.tmp / "sessions"
+        self.patches = [
+            patch.object(webapp, "SESSIONS_DIR", self.sessions_dir),
+            patch.object(webapp, "SHARED_PROFILE", False),
+            patch.object(webapp, "DATA_DIR", self.tmp / "data"),
+            patch.dict(os.environ, {"NEBIUS_API_KEY": ""}),
+        ]
+        for p in self.patches:
+            p.start()
+        webapp._request_log.clear()
+        self.sid, _ = webapp.init_session()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.temp_dir.cleanup()
+
+    def _store_count(self) -> int:
+        data_dir, _ = webapp._session_dirs(self.sid)
+        return len(MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir, timezone_str=webapp.SENIOR_TIMEZONE).all())
+
+    @contextlib.contextmanager
+    def _asr_failure(self):
+        """transcribe raises; the handler's stderr log is captured and must name
+        the exception type only, never its message (which can carry a path)."""
+        err = io.StringIO()
+        with patch.object(webapp.hear, "transcribe", side_effect=RuntimeError("/secret/path/one.wav: hosted ASR failed")) as m, \
+                contextlib.redirect_stderr(err):
+            yield m
+        self.assertIn("[hear] transcription failed: RuntimeError", err.getvalue())
+        self.assertNotIn("/secret/path", err.getvalue())
+
+
+    def test_audio_path_outside_upload_dirs_is_refused_unread(self):
+        # The path comes from the browser: one outside the temp/upload and
+        # sample dirs gets the retry-or-type reply and is never opened.
+        outside = os.path.abspath(webapp.__file__)
+        with patch.object(webapp.hear, "probe_duration") as probe, \
+                patch.object(webapp.hear, "transcribe") as transcribe:
+            transcript, _bio, refusal = webapp._guarded_transcribe(outside, True)
+        self.assertIsNone(transcript)
+        self.assertIn("type what Dad says", refusal)
+        probe.assert_not_called()
+        transcribe.assert_not_called()
+    def test_transcription_failure_nonstreaming_returns_type_instead(self):
+        wav = _make_wav(self.tmp / "one.wav", 1.0)
+        with self._asr_failure() as m:
+            result = webapp._run_demo_turn(str(wav), None, [], self.sid)
+        m.assert_called_once()
+        self.assertEqual(len(result), 5)
+        self.assertIn("type", result[0].lower())
+        self.assertIsNone(result[1])
+        self.assertEqual(result[2], [])
+        self.assertTrue((self.sessions_dir / self.sid).is_dir())
+
+    def test_transcription_failure_streaming_returns_type_instead(self):
+        wav = _make_wav(self.tmp / "one.wav", 1.0)
+        with self._asr_failure() as m:
+            outs = list(webapp.run_demo_turn_streaming(str(wav), [], self.sid))
+        m.assert_called_once()
+        last = outs[-1]
+        self.assertEqual(len(last), 8)
+        self.assertIn("type", last[0].lower())
+        self.assertIsNone(last[1])
+        self.assertEqual(last[5], self.sid)
+        self.assertTrue((self.sessions_dir / self.sid).is_dir())
+
+    def test_transcription_failure_caregiver_memo_keeps_panel_and_writes_nothing(self):
+        wav = _make_wav(self.tmp / "memo.wav", 1.0)
+        before = self._store_count()
+        with self._asr_failure() as m:
+            panel, sid2 = webapp.save_caregiver_voice_memo(str(wav), self.sid)
+        m.assert_called_once()
+        self.assertEqual(sid2, self.sid)
+        self.assertIn("type", panel.lower())
+        self.assertEqual(self._store_count(), before)
+
+    def _run_all(self, path: Path) -> list[str]:
+        nonstream = webapp._run_demo_turn(str(path), None, [], self.sid)
+        self.assertEqual(len(nonstream), 5)
+        self.assertIsNone(nonstream[1])
+        last = list(webapp.run_demo_turn_streaming(str(path), [], self.sid))[-1]
+        self.assertEqual(len(last), 8)
+        self.assertEqual(last[5], self.sid)
+        panel, sid2 = webapp.save_caregiver_voice_memo(str(path), self.sid)
+        self.assertEqual(sid2, self.sid)
+        return [nonstream[0], last[0], panel]
+
+    def _assert_no_state(self, before: int):
+        data_dir, _ = webapp._session_dirs(self.sid)
+        self.assertEqual(self._store_count(), before)
+        self.assertFalse((data_dir / "rate_limit.json").exists())
+
+    def test_oversized_upload_refused_before_asr(self):
+        big = self.tmp / "big.wav"
+        big.write_bytes(b"\0" * 2048)
+        before = self._store_count()
+        with patch.object(webapp, "MAX_AUDIO_UPLOAD_BYTES", 1024), \
+                patch.object(webapp.hear, "transcribe") as m:
+            replies = self._run_all(big) + self._run_all(big)
+        m.assert_not_called()
+        for reply in replies:
+            self.assertIn("too large", reply.lower())
+        self._assert_no_state(before)
+
+    def test_overlong_recording_refused_before_asr(self):
+        long_wav = _make_wav(self.tmp / "long.wav", 3.0)
+        before = self._store_count()
+        with patch.object(webapp, "MAX_AUDIO_SECONDS", 2), \
+                patch.object(webapp, "MAX_AUDIO_UPLOAD_BYTES", 10**8), \
+                patch.object(webapp.hear, "transcribe") as m:
+            replies = self._run_all(long_wav) + self._run_all(long_wav)
+        m.assert_not_called()
+        for reply in replies:
+            self.assertIn("seconds", reply.lower())
+        self._assert_no_state(before)
+
+    def test_missing_or_empty_file_skips_guard_and_reaches_empty_transcript_branch(self):
+        empty = self.tmp / "empty.wav"
+        empty.write_bytes(b"")
+        with patch.object(webapp, "MAX_AUDIO_UPLOAD_BYTES", 1), \
+                patch.object(webapp, "MAX_AUDIO_SECONDS", 0), \
+                patch.object(webapp.hear, "transcribe", return_value=("", {"wpm": 0.0, "avg_pause_s": 0.0})) as m:
+            for path in (FAKE_UPLOAD, str(empty)):
+                result = webapp._run_demo_turn(path, None, [], self.sid)
+                self.assertEqual(len(result), 5)
+                self.assertIn("Couldn't make out any speech or text", result[0])
+        self.assertEqual(m.call_count, 2)
 
 
 class TestProactiveButtons(unittest.TestCase):
@@ -758,6 +933,142 @@ class TestBuildDemoCss(unittest.TestCase):
         demo = webapp.build_demo()
         self.assertIn(".mobile-alert-strip", demo._deprecated_css or "")
         self.assertIn("footer", demo._deprecated_css or "")
+
+
+class _TurnHarness:
+    """Shared setUp/tearDown and a blocking fake turn body for the
+    concurrency tests. Same isolation as TestWebappSessions:
+    SHARED_PROFILE=False and a temp SESSIONS root, so the per-session
+    bookkeeping in run_demo_turn_streaming actually runs."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.patches = [
+            patch.object(webapp, "SESSIONS_DIR", Path(self.temp_dir.name) / "sessions"),
+            patch.object(webapp, "SHARED_PROFILE", False),
+            patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"),
+            patch.dict(os.environ, {"NEBIUS_API_KEY": ""}),
+        ]
+        for p in self.patches:
+            p.start()
+        self.entered = threading.Semaphore(0)
+        self.release = threading.Event()
+        self.threads: list[threading.Thread] = []
+        self.errors: list[BaseException] = []
+
+    def tearDown(self):
+        # Never leave a worker parked on the event, whatever the test did.
+        self.release.set()
+        for t in self.threads:
+            t.join(timeout=5)
+        for p in self.patches:
+            p.stop()
+        self.temp_dir.cleanup()
+        self.assertFalse([t for t in self.threads if t.is_alive()], "a turn thread never finished")
+
+    def _blocking_impl(self, *args, **kwargs):
+        self.entered.release()
+        if not self.release.wait(timeout=10):
+            raise AssertionError("fake turn was never released")
+        yield ("done",) + (None,) * 7
+
+    def _start_turn(self, sid: str) -> threading.Thread:
+        def run():
+            try:
+                list(webapp.run_demo_turn_streaming(None, "hi", [], sid, "Morning (Default)"))
+            except BaseException as exc:  # noqa: BLE001 - re-raised in the test thread
+                self.errors.append(exc)
+
+        t = threading.Thread(target=run, daemon=True)
+        self.threads.append(t)
+        t.start()
+        return t
+
+    def _join_all(self):
+        for t in self.threads:
+            t.join(timeout=5)
+            self.assertFalse(t.is_alive(), "turn thread did not finish")
+        if self.errors:
+            raise self.errors[0]
+
+
+class TestTurnConcurrency(_TurnHarness, unittest.TestCase):
+    """Gradio's default concurrency_limit of 1 queued every visitor's
+    Send/Enter behind one slow ASR/Nebius/TTS turn. Turn listeners now share a
+    bounded limit on concurrency_id "senior_turn", and a per-session lock keeps
+    turns ordered within one session."""
+
+    def test_turn_listeners_share_bounded_concurrency(self):
+        demo = webapp.build_demo()
+        # Every senior-turn producer has the same 8-output turn tuple:
+        # run_btn.click, text_in.submit and the four proactive buttons.
+        turn_fns = [f for f in demo.fns.values() if len(f.outputs) == 8]
+        self.assertEqual(len(turn_fns), 6, [getattr(f.fn, "__name__", f.fn) for f in turn_fns])
+        for f in turn_fns:
+            with self.subTest(fn=getattr(f.fn, "__name__", f.fn)):
+                self.assertIsInstance(f.concurrency_limit, int)
+                self.assertGreaterEqual(f.concurrency_limit, 2)
+                self.assertEqual(f.concurrency_limit, webapp.TURN_CONCURRENCY)
+                self.assertEqual(f.concurrency_id, "senior_turn")
+
+    def test_same_session_turns_serialize(self):
+        sid = webapp._new_session()
+        with patch.object(webapp, "_run_demo_turn_streaming_impl", self._blocking_impl):
+            self._start_turn(sid)
+            self.assertTrue(self.entered.acquire(timeout=2), "first turn never started")
+            self._start_turn(sid)
+            # The second turn for the SAME session must wait while the first holds it.
+            self.assertFalse(self.entered.acquire(timeout=0.5), "same-session turns overlapped")
+            self.release.set()
+            self.assertTrue(self.entered.acquire(timeout=2), "second turn never ran after the first finished")
+            self._join_all()
+        self.assertNotIn(sid, webapp._session_turn_locks)
+        self.assertNotIn(sid, webapp._active_turns)
+
+    def test_different_sessions_overlap(self):
+        sid_a, sid_b = webapp._new_session(), webapp._new_session()
+        with patch.object(webapp, "_run_demo_turn_streaming_impl", self._blocking_impl):
+            self._start_turn(sid_a)
+            self._start_turn(sid_b)
+            # Both must be inside the turn body before either is released:
+            # serialization is per session, never global.
+            self.assertTrue(self.entered.acquire(timeout=2), "first session's turn never started")
+            self.assertTrue(self.entered.acquire(timeout=2), "different sessions did not overlap")
+            self.release.set()
+            self._join_all()
+
+
+class TestTurnLockHygiene(_TurnHarness, unittest.TestCase):
+    """A browser disconnect frees the session
+    lock, and FY_TURN_CONCURRENCY is validated."""
+
+    def test_closing_suspended_turn_releases_session_lock(self):
+        sid = webapp._new_session()
+
+        def two_chunk_impl(*args, **kwargs):
+            yield ("thinking",) + (None,) * 7
+            yield ("done",) + (None,) * 7
+
+        with patch.object(webapp, "_run_demo_turn_streaming_impl", two_chunk_impl):
+            gen = webapp.run_demo_turn_streaming(None, "hi", [], sid, "Morning (Default)")
+            next(gen)  # suspended mid-turn, holding the session lock
+            self.assertTrue(webapp._session_turn_locks[sid].locked())
+            gen.close()  # what Gradio does when the browser disconnects
+            self.assertNotIn(sid, webapp._session_turn_locks)
+            self.assertNotIn(sid, webapp._active_turns)
+            # The next same-session turn proceeds instead of deadlocking.
+            t = self._start_turn(sid)
+            t.join(timeout=2)
+            self.assertFalse(t.is_alive(), "next same-session turn blocked on a leaked lock")
+            self._join_all()
+
+    def test_turn_concurrency_setting_is_validated(self):
+        self.assertEqual(webapp._parse_turn_concurrency(None), 4)
+        self.assertEqual(webapp._parse_turn_concurrency("6"), 6)
+        for bad in ("1", "0", "-3", "four", ""):
+            with self.subTest(raw=bad):
+                with self.assertRaisesRegex(ValueError, "FY_TURN_CONCURRENCY"):
+                    webapp._parse_turn_concurrency(bad)
 
 
 if __name__ == "__main__":

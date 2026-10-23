@@ -52,6 +52,35 @@ class TestAuditReply(unittest.TestCase):
             {"chat_template_kwargs": {"enable_thinking": False}},
         )
 
+    def test_last_usage_records_response_usage(self):
+        import pipeline.audit as audit_mod
+
+        client = _Client("SAFE: no issue")
+        usage = SimpleNamespace(prompt_tokens=7, completion_tokens=3)
+        original = client._create
+
+        def with_usage(**kwargs):
+            resp = original(**kwargs)
+            resp.usage = usage
+            return resp
+
+        client.chat.completions.create = with_usage
+        with patch("pipeline.audit.get_client", return_value=client):
+            self.assertEqual(audit_reply("Hello", "Hello there.")[0], "SAFE")
+        self.assertIs(audit_mod.LAST_USAGE, usage)
+        # a response without usage resets it rather than leaving a stale value
+        with patch("pipeline.audit.get_client", return_value=_Client("SAFE: ok")):
+            audit_reply("Hello", "Hello there.")
+        self.assertIsNone(audit_mod.LAST_USAGE)
+
+    def test_default_audit_model_is_still_nano(self):
+        client = _Client("SAFE: no issue")
+        with patch("pipeline.audit.get_client", return_value=client), \
+                patch.dict("os.environ", {}, clear=False) as env:
+            env.pop("AUDIT_MODEL", None)
+            audit_reply("Hello", "Hello there.")
+        self.assertEqual(client.calls[0]["model"], "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+
 
 if __name__ == "__main__":
     unittest.main()

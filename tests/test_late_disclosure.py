@@ -1,4 +1,4 @@
-"""Office #23231: a disclosure spoken by the background AUDIT / lifestyle-
+"""A disclosure spoken by the background AUDIT / lifestyle-
 extraction thread after the streaming turn's DONE is recorded as told only
 when the browser's generator actually dequeued and yielded its audio chunk.
 
@@ -59,9 +59,9 @@ class LateDisclosureHarness(unittest.TestCase):
             patch("pipeline.orchestrator.speak.speak_sentences", side_effect=fake_speak_sentences),
             patch("pipeline.orchestrator.think.extract_new_memory", return_value=self.extract_result),
             patch("pipeline.orchestrator.audit.audit_reply", side_effect=held_audit),
-            # Make the audio value of each yield identify its newest chunk.
-            patch.object(webapp, "_combine_audio_chunks",
-                         side_effect=lambda paths, _d: paths[-1] if paths else None),
+            # No `_combine_audio_chunks` patch -- the streaming
+            # generator yields each chunk's own path, so the real audio value
+            # of every yield already identifies its chunk.
         ]
         for p in self.patches:
             p.start()
@@ -138,7 +138,7 @@ class TestLateDisclosure(LateDisclosureHarness):
         # Exactly one DONE-final yield, then one yield per late chunk, then
         # one panel-only refresh once the background thread has finished.
         self.assertEqual(len(late), 3, [o[1] for o in late])
-        self.assertEqual(late[2][1], late[1][1])  # refresh carries the same audio
+        self.assertIsNone(late[2][1])  # The refresh re-sends no audio
         late_audio = [o[1] for o in late if o[1] is not None]
         self.assertIn(disclosures[0], late_audio)
         self.assertIn(disclosures[1], late_audio)

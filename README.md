@@ -173,7 +173,11 @@ safety fast-path never count against it. The fast-path still answers at the cap:
 continuation after it is withheld (with a one-line cap notice); any other utterance at the cap
 gets the daily-cap message. The deploy script and `docs/decisions/ADR-003-hosting.md`
 use this same number. Bump it locally with `MAX_DAILY_REQUESTS=1000 .venv/bin/python webapp.py`
-if you're iterating and hitting it.
+if you're iterating and hitting it. Audio is bounded before any speech recognition runs:
+an upload over `MAX_AUDIO_UPLOAD_BYTES` (default 25 MB, also passed to Gradio as
+`max_file_size`) or a recording longer than `MAX_AUDIO_SECONDS` (default 120) is refused, and a
+recording that can't be decoded or transcribed gets a short "record again, or type instead"
+reply that keeps the session; none of these count against the daily cap.
 
 ### Nebius access
 
@@ -181,6 +185,21 @@ Get a free key at [Nebius AI Studio](https://studio.nebius.ai/) (Token Factory).
 offers $25 in sponsor credits via activation code `NEBIUS-DEVPOST-GLOBAL26`, plus another $25
 through the free [Nebius Builders Program](https://dev.nebius.com/builders) (which also unlocks
 Tavily credits).
+
+**Which NVIDIA models run where.** THINK and AUDIT both use
+`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` on Token Factory. Each is overridable with `THINK_MODEL`
+or `AUDIT_MODEL`. We chose AUDIT's model with a 36-row labelled eval across the NVIDIA models
+Token Factory serves ([ADR-010](docs/decisions/ADR-010-audit-model-eval.md),
+`scripts/audit_eval.py`):
+
+| AUDIT model | Recall on true events | False flags | Cost per AUDIT call |
+|---|---|---|---|
+| Nemotron 3 Nano 30B | 0.63 | 0/17 | 0.000023 USD |
+| Nemotron 3 Super 120B | 1.00 | 0/17 | 0.00011 USD |
+| Nemotron 3 Ultra 550B | 0.95 | 0/17 | 0.00037 USD |
+
+Nano stays the AUDIT default. Our pre-set rule switches models only on fewer false flags, and
+all three had none. The ADR records the recall gap and how to switch.
 
 ## Self-judging
 

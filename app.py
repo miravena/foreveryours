@@ -20,7 +20,7 @@ load_repo_env()
 
 try:
     from pipeline import hear
-    from webapp import build_demo
+    from webapp import build_demo, MAX_AUDIO_UPLOAD_BYTES
     hear.warm_up()  # (#81 B4)
     app = build_demo()
 except ModuleNotFoundError as exc:
@@ -31,4 +31,5 @@ if __name__ == "__main__" and app:
     app.launch(
         server_name="0.0.0.0",
         server_port=int(os.environ.get("PORT", "7860")),
+        max_file_size=f"{MAX_AUDIO_UPLOAD_BYTES}b",  # Gradio refuses oversize uploads too
     )

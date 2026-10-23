@@ -75,8 +75,16 @@ def beat1_caregiver_memo(audio_in: Path | None = None) -> None:
 
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR, timezone_str=SENIOR_TIMEZONE)
     saved = 0
-    for line in split_memo_facts(memo):  # one shared splitter (#23215)
-        if store.add(line, source="caregiver_memo"):
+    facts = split_memo_facts(memo)  # one shared splitter
+    # The canned fallback is a seed, like the webapp pre-brief: it never
+    # re-adds a line already in the store (superseded included), so a re-run
+    # cannot revert a caregiver's update. A real memo (--audio) is a
+    # caregiver submission and may supersede.
+    seen = {i.text for i in store.all() if i.source == "caregiver_memo"} if audio_in is None else set()
+    for line in facts:  # facts of one memo never supersede each other
+        if line in seen:
+            continue
+        if store.add(line, source="caregiver_memo", keep_texts=facts, supersede=audio_in is not None):
             saved += 1
     print(f"Caregiver memo saved ({saved} new facts; re-running this beat won't duplicate them).")
     _print_memory_panel(store, CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR))
