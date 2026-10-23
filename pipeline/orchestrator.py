@@ -94,6 +94,34 @@ _NOT_HOTLINE_BEFORE_RE = re.compile(
     re.IGNORECASE,
 )
 _OTHER_EMERGENCY_RE = re.compile(r"\b(911|999|112|emergency|ambulance)\b", re.IGNORECASE)
+# Driving-intent guarantee (#192): when the senior says they will drive
+# themselves, the reply must offer a way to get there without driving. THINK
+# sometimes only declines ("I can't drive for you, but Sarah mentioned...");
+# the output-side check below appends a warm offer when no alternative is present.
+_DRIVING_INTENT_RE = re.compile(
+    r"\b(?:i|i'll|i will|i'm going to|i am going to|i'd like to|i think i'll|i'm gonna|gonna|let me)\b[^.!?]{0,40}\bdriv(?:e|ing)\b",
+    re.IGNORECASE,
+)
+_DRIVING_ALTERNATIVE_RE = re.compile(
+    r"(lift|ride|drive you|take you|pick you up|instead of driving|rather than driving|"
+    r"not (to )?drive|avoid(ing)? driving|best not to drive|without driving|"
+    r"someone (can|could|to) (take|drive|bring)|call (sarah|your family)|ask (sarah|your family))",
+    re.IGNORECASE,
+)
+
+
+def _driving_alternative_sentence(caregiver_name: str) -> str:
+    return f"Would you like me to ask {caregiver_name} for a lift to the shop instead?"
+
+
+def _needs_driving_alternative(transcript: str, reply: str) -> bool:
+    return bool(
+        _DRIVING_INTENT_RE.search(transcript)
+        and reply.strip()
+        and not _DRIVING_ALTERNATIVE_RE.search(reply)
+    )
+
+
 _CRISIS_EMPTY_REPLY = "I'm here with you. How are you feeling right now?"
 
 # An apology in THINK's continuation of a fast-path crisis turn: the canned
@@ -941,6 +969,15 @@ def run_turn(
                 think_audio_paths.extend(fallback_paths)
                 if first_audio_time is None:
                     first_audio_time = fallback_first_time
+
+    if not fast.triggered and not think_unavailable and not is_fallback and _needs_driving_alternative(transcript, reply_text):
+        extra_text, extra_paths, extra_first = _speak_turn(
+            iter([_driving_alternative_sentence(caregiver_name)]), audio_out_dir, on_chunk=on_chunk
+        )
+        reply_text = f"{reply_text} {extra_text}".strip()
+        think_audio_paths.extend(extra_paths)
+        if first_audio_time is None:
+            first_audio_time = extra_first
 
     # Zero-Silence Guarantee: If model returned an empty string or whitespace (token exhaustion)
     if not fast.triggered and not think_unavailable and not reply_text.strip() and not is_fallback:
