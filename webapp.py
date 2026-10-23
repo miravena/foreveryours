@@ -2125,7 +2125,7 @@ def _flag_origin(flag) -> str:
     return _FLAG_ORIGINS.get(source, "")
 
 
-def _model_footer() -> str:
+def _model_footer(platform: str | None = None) -> str:
     """One always-visible line saying which model does what (#214). Every part
     reads the same setting the pipeline reads at call time (THINK_MODEL,
     AUDIT_MODEL, ASR_BACKEND, TTS_BACKEND), so the footer names what runs."""
@@ -2147,7 +2147,7 @@ def _model_footer() -> str:
     # Same order as pipeline/speak.py: Piper, Windows System.Speech, espeak, pyttsx3.
     if speak._piper_available():
         voice = "Piper"
-    elif sys.platform == "win32":
+    elif (platform or sys.platform) == "win32":
         voice = "Windows System.Speech"
     elif speak._get_espeak_cli() is not None:
         voice = "eSpeak NG"

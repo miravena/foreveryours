@@ -999,13 +999,13 @@ class TestBuildDemoCss(unittest.TestCase):
     def test_model_footer_voice_follows_the_speak_fallback_order(self):
         from pipeline import speak
 
+        # Platform is passed in, not patched on the shared sys module: other
+        # threads (Gradio, the session sweeper) read sys.platform too.
+        with patch.object(speak, "_piper_available", return_value=False):
+            self.assertIn("Voice: Windows System.Speech,", webapp._model_footer(platform="win32"))
         with patch.object(speak, "_piper_available", return_value=False), \
-                patch.object(webapp.sys, "platform", "win32"):
-            self.assertIn("Voice: Windows System.Speech,", webapp._model_footer())
-        with patch.object(speak, "_piper_available", return_value=False), \
-                patch.object(webapp.sys, "platform", "linux"), \
                 patch.object(speak, "_get_espeak_cli", return_value="/usr/bin/espeak-ng"):
-            self.assertIn("Voice: eSpeak NG,", webapp._model_footer())
+            self.assertIn("Voice: eSpeak NG,", webapp._model_footer(platform="linux"))
 
     def test_css_set_on_blocks_not_only_launch_kwargs(self):
         """#83 PR #85 Codex review: app.py (the hosted/Spaces entrypoint) calls
