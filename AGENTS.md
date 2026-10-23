@@ -63,6 +63,9 @@ missing or logged out, stop and tell the founder.
   repo's own `.env` (`envload.load_repo_env()`, never a parent directory's), so a worktree
   without its own `.env` runs offline.
 - Never commit `.env`, `data/`, `out/`, or anything secret. The repo is public.
+- **No internal tracker ids anywhere public** — commits, code, tests, docs, PRs, issues and
+  comments cite GitHub issues (`#N`) only. A tool's own task ids stay in that tool.
+  `tests/test_no_internal_refs.py` checks tracked files and the pre-push hook checks commit messages.
   A pre-commit hook blocks staged secrets; a commit-msg hook warns when the author
   email isn't GitHub-linked (both in `.githooks/`), and CI re-checks on every push.
 

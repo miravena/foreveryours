@@ -133,7 +133,7 @@ jobs:
         if: steps.gate.outputs.mode == 'deploy'
         run: |
           if [ ! -f scripts/live_judge_check.py ]; then
-            echo "::notice::scripts/live_judge_check.py is not in this ref yet (#23223); skipping the live suite."
+            echo "::notice::scripts/live_judge_check.py is not in this ref yet; skipping the live suite."
             exit 0
           fi
           python scripts/live_judge_check.py --space "$SPACE_ID" --max-calls "$LIVE_CHECK_MAX_CALLS"

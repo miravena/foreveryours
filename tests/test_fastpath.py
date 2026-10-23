@@ -202,7 +202,7 @@ class TestFastPath(unittest.TestCase):
         self.assertEqual(res.severity, "crisis")
 
     def test_caregiver_flag_is_content_minimized(self):
-        # #23232: the caregiver flag is a FIXED description of the trigger
+        # The caregiver flag is a FIXED description of the trigger
         # category, never a copy of what the senior said. The panel is a
         # caregiver-visible surface, so a flag that quotes the utterance turns
         # it into a transcript leak ("I fell. Also please keep my bank PIN

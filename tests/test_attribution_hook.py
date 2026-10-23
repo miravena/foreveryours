@@ -8,7 +8,7 @@ drives the hook, which is what actually fires at commit time.
 TestChecker's first test asserts the checker *is a file* before anything else,
 so a missing checker (e.g. run against a pre-change revision) is an assertion
 FAILURE, not a FileNotFoundError ERROR -- see the negative control in
-AC2 of Office ticket #14357, run against commit 9f5a311.
+AC2, run against commit 9f5a311.
 """
 import os
 import subprocess
@@ -56,8 +56,7 @@ Assisted-meta: provider=Anthropic effort=medium
 Cost-estimate: unknown
 """
 
-# a trailing colon with nothing after it -- review-arm bounce #14357 round 2:
-# the first draft of the checker treated "harness:" as a valid "harness:model".
+# a trailing colon with nothing after it -- a review bounce: the first draft of the checker treated "harness:" as a valid "harness:model".
 EMPTY_MODEL = """\
 fix: thing
 

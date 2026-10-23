@@ -2,11 +2,11 @@
 
 This page is **reasoning plus a dated snapshot**, not a tracker. Per `HOW_TO_WORK_HERE.md`, work
 state (open/closed, owner, due date, blocked-by) lives only on GitHub Issues and milestones, and the
-Office queue holds the fleet's tickets; the verdict labels (`must-before-freeze`, `should-if-time`,
+fleet keeps its own task list; the verdict labels (`must-before-freeze`, `should-if-time`,
 `after-submission`), milestones and priorities set from this plan are the live state. If a row here
 and GitHub disagree, GitHub is right. Snapshot taken 2026-10-23 from `gh issue list --state open`
-(30 issues), the fleet's Office queue (23 open ForeverYours tickets plus the planning ticket
-itself; `office#` rows below, the same ids `CHANGELOG.md` already cites), and judge-check run
+(30 issues), the fleet's task list (23 open ForeverYours tasks plus this planning task;
+`fleet:` rows below), and judge-check run
 [39802780048](https://github.com/miravena/foreveryours/actions/runs/39802780048) (deploy of
 `7fe1ad2`, 2026-10-22 15:17Z): **12 of 21 live judge turns passed**.
 
@@ -19,7 +19,7 @@ the Idea**.
 **Verdict scale** (MoSCoW, for a fixed timebox): **MUST** = without it the submission is weaker on a
 criterion a judge will actually exercise, or it is a submission artefact; **SHOULD** = lands before
 the freeze only if the MUST list is done; **AFTER** = deferred past 2026-10-30; **CLOSE** = done,
-duplicate or obsolete. Owner is who does the work: `fleet` (the Office tickets),
+duplicate or obsolete. Owner is who does the work: `fleet` (the fleet's tasks),
 `teammate` (@SirTehTarik, human co-author and Devpost Representative), `founder` (elevenbaselab,
 human). Protected issues (authored by or assigned to the teammate) carry owner `teammate` and are
 never closed, relabelled or re-milestoned by this plan: section 4 proposes, he decides.
@@ -35,9 +35,9 @@ v1.0.0 tag are the three artefacts a judge opens; everything else is SHOULD or A
 | Ref | Verdict | Owner | Reason |
 |---|---|---|---|
 | gh#5 | MUST | founder | Design + Impact: the <=3 min video is a submission requirement (rules item 7); founder records the narration ~2026-10-24 per the #5 phone-first checklist |
-| gh#11 | MUST | fleet | All four criteria score zero without the live Space through 2026-12-15; keep-awake is in ADR-003, but the cap decision and browser time-to-first-audio on the Space are still unrecorded (Office #17637) |
+| gh#11 | MUST | fleet | All four criteria score zero without the live Space through 2026-12-15; keep-awake is in ADR-003, but the cap decision and browser time-to-first-audio on the Space are still unrecorded |
 | gh#14 | CLOSE | fleet | Decided 2026-10-07: the canonical ChatGPT sentence is recorded on #81/#14; the remaining work is #20's text, which must carry it |
-| gh#20 | MUST | fleet | Design + Idea: Devpost text due 2026-10-24 (M12); Office #23217 drafts it, both review it on the issue, the teammate pastes it |
+| gh#20 | MUST | fleet | Design + Idea: Devpost text due 2026-10-24 (M12); the fleet drafts it, both review it on the issue, the teammate pastes it |
 | gh#21 | CLOSE | fleet | Done: the split-screen disclosure scene is built, hosted and confirmed as the defining moment (2026-10-07); the remaining deliverable is #5's video |
 | gh#37 | MUST | teammate | Submission: freeze 2026-10-29, final live judge check on the frozen Space, Devpost form submitted by the Representative before 2026-10-30 17:00Z |
 | gh#42 | AFTER | fleet | Process: attribution guardrails are warn-only by ADR-007 and not scored |
@@ -65,60 +65,60 @@ v1.0.0 tag are the three artefacts a judge opens; everything else is SHOULD or A
 | gh#174 | SHOULD | fleet | Tech Impl: `docs/SAFETY_AND_PRIVACY.md` disagrees with the fail-closed panel; doc fix |
 | gh#175 | SHOULD | fleet | Impact: `supersede()` can surface model-written text as attested; privacy fix if time, else an AFTER issue |
 | gh#183 | MUST | fleet | Coordination: the single thread that tells the teammate what only he can do and by when (M13); opened by this plan |
-| office#16086 | AFTER | fleet | Privacy firewall already fails closed on origin/main (#174); the explicit-permission flow is feature work past the timebox |
-| office#17637 | MUST | fleet | Criteria 1-4 all need a reachable demo through 2026-12-15 (#11): keep-awake is in ADR-003 already; record the cap decision and the browser time-to-first-audio measured on the Space |
-| office#21085 | AFTER | fleet | Winner study informs the next entry, not this submission |
-| office#23216 | MUST | fleet | Design + Impact: the video (#5) is recorded from this script ~2026-10-24 |
-| office#23217 | MUST | fleet | Design + Idea: Devpost text (#20) due 2026-10-24, carries the #14 answer; the teammate pastes it |
-| office#23218 | CLOSE | fleet | Done: Load sample family shipped in PR #182 (origin/main 7fe1ad2); only AC mechanics block the ticket |
-| office#23219 | MUST | fleet | Tech Impl + Idea: T05/T06 listening honesty FAIL in run 39802780048 (12/21); rule 19 is in local main 89c1ecb and needs the publish batch |
-| office#23220 | MUST | fleet | Impact: T14 fall (no "are you hurt") and T16 crisis (988 twice) FAIL in run 39802780048 |
-| office#23221 | AFTER | fleet | T12/T13 driving already PASS in run 39802780048; the low-severity note adds nothing a judge sees |
-| office#23222 | MUST | fleet | Design: a judge must find caregiver mode and the fictional-household label on first open |
-| office#23223 | CLOSE | fleet | Done: `scripts/live_judge_check.py` shipped in PR #182 and runs on every deploy; blocked only on AC date mechanics |
-| office#23224 | CLOSE | fleet | Done: v0.2.0 tag adc877a and the GitHub Release were published 2026-10-22; accept so #23227's dependency clears |
-| office#23225 | MUST | fleet | Tech Impl: T09-T11 Dr. Tan memo recall FAIL in run 39802780048 (memo stored as one blob) |
-| office#23227 | MUST | fleet | Submission: v1.0.0 tag at the 2026-10-29 freeze is the commit the Devpost form and Release link |
-| office#23229 | SHOULD | fleet | Tech Impl: memo-as-data prompt hardening is not on a judge-visible path; land if time |
-| office#23230 | MUST | fleet | Impact: a chest-pain turn told to call 988 contradicts the safety pitch in one typed line |
-| office#23233 | MUST | fleet | Impact: fast-path flag survives TTS failure; landed in local main 1ba4d84, ships with the publish batch |
-| office#23234 | MUST | fleet | Idea: honest disclosure on every confusion reply; small fast-path wording change |
-| office#23235 | MUST | fleet | Tech Impl: concurrent profile writers never lose a flag; landed in local main a4d038d, ships with the publish batch |
-| office#23236 | SHOULD | fleet | Design honesty: "dispatched" overclaims; land if time, and #23216's script avoids the wording regardless |
-| office#23238 | MUST | fleet | Design: two judges typing at once no longer queue; landed in local main 78602cf, ships with the publish batch |
-| office#23240 | MUST | fleet | Tech Impl: caregiver fact updates supersede; landed in local main 72c9ad4, ships with the publish batch |
-| office#23242 | MUST | fleet | Design: a reply that restarts or repeats its audio is the most audible defect a judge meets; landed in local main 475abd2, ships with the publish batch |
-| office#23245 | MUST | fleet | This plan: the ranking, its application to Office and GitHub, and the coordination issue |
-| office#23246 | MUST | fleet | Critical path step 1: publish-20261023 PR carries local main's 32 commits, the Space redeploys, scorecard on an Issue; filed by this plan |
-| office#23247 | MUST | fleet | Impact: T15 fall-honesty FAIL in run 39802780048 ("I haven't told Sarah" after the flag was sent); filed by this plan |
-| office#23248 | MUST | fleet | Design: T04 personalize FAIL in run 39802780048 (reply ignores the pre-brief); filed by this plan |
-| office#23249 | MUST | fleet | Submission: the final live judge check on the frozen v1.0.0 Space posted on #37 with every failing turn on an Issue; filed by this plan |
+| fleet: privacy permission flow | AFTER | fleet | Privacy firewall already fails closed on origin/main (#174); the explicit-permission flow is feature work past the timebox |
+| fleet: hosting record | MUST | fleet | Criteria 1-4 all need a reachable demo through 2026-12-15 (#11): keep-awake is in ADR-003 already; record the cap decision and the browser time-to-first-audio measured on the Space |
+| fleet: winner study | AFTER | fleet | Winner study informs the next entry, not this submission |
+| fleet: video script | MUST | fleet | Design + Impact: the video (#5) is recorded from this script ~2026-10-24 |
+| fleet: Devpost text | MUST | fleet | Design + Idea: Devpost text (#20) due 2026-10-24, carries the #14 answer; the teammate pastes it |
+| fleet: sample family | CLOSE | fleet | Done: Load sample family shipped in PR #182 (origin/main 7fe1ad2); only AC mechanics block the ticket |
+| fleet: listening honesty | MUST | fleet | Tech Impl + Idea: T05/T06 listening honesty FAIL in run 39802780048 (12/21); rule 19 is in local main 89c1ecb and needs the publish batch |
+| fleet: fall and crisis wording | MUST | fleet | Impact: T14 fall (no "are you hurt") and T16 crisis (988 twice) FAIL in run 39802780048 |
+| fleet: driving note | AFTER | fleet | T12/T13 driving already PASS in run 39802780048; the low-severity note adds nothing a judge sees |
+| fleet: caregiver-mode discoverability | MUST | fleet | Design: a judge must find caregiver mode and the fictional-household label on first open |
+| fleet: live judge check | CLOSE | fleet | Done: `scripts/live_judge_check.py` shipped in PR #182 and runs on every deploy; blocked only on AC date mechanics |
+| fleet: v0.2.0 release | CLOSE | fleet | Done: v0.2.0 tag adc877a and the GitHub Release were published 2026-10-22; accept so the v1.0.0 release task's dependency clears |
+| fleet: Dr. Tan memo recall | MUST | fleet | Tech Impl: T09-T11 Dr. Tan memo recall FAIL in run 39802780048 (memo stored as one blob) |
+| fleet: v1.0.0 release | MUST | fleet | Submission: v1.0.0 tag at the 2026-10-29 freeze is the commit the Devpost form and Release link |
+| fleet: memo prompt hardening | SHOULD | fleet | Tech Impl: memo-as-data prompt hardening is not on a judge-visible path; land if time |
+| fleet: chest-pain reply | MUST | fleet | Impact: a chest-pain turn told to call 988 contradicts the safety pitch in one typed line |
+| fleet: fast-path flag on TTS failure | MUST | fleet | Impact: fast-path flag survives TTS failure; landed in local main 1ba4d84, ships with the publish batch |
+| fleet: confusion-reply disclosure | MUST | fleet | Idea: honest disclosure on every confusion reply; small fast-path wording change |
+| fleet: profile write locks | MUST | fleet | Tech Impl: concurrent profile writers never lose a flag; landed in local main a4d038d, ships with the publish batch |
+| fleet: "dispatched" wording | SHOULD | fleet | Design honesty: "dispatched" overclaims; land if time, and the video script avoids the wording regardless |
+| fleet: turn concurrency | MUST | fleet | Design: two judges typing at once no longer queue; landed in local main 78602cf, ships with the publish batch |
+| fleet: fact supersede | MUST | fleet | Tech Impl: caregiver fact updates supersede; landed in local main 72c9ad4, ships with the publish batch |
+| fleet: audio once | MUST | fleet | Design: a reply that restarts or repeats its audio is the most audible defect a judge meets; landed in local main 475abd2, ships with the publish batch |
+| fleet: this plan | MUST | fleet | This plan: the ranking, its application to the fleet task list and GitHub, and the coordination issue |
+| fleet: publish batch | MUST | fleet | Critical path step 1: publish-20261023 PR carries local main's 32 commits, the Space redeploys, scorecard on an Issue; filed by this plan |
+| fleet: fall honesty (T15) | MUST | fleet | Impact: T15 fall-honesty FAIL in run 39802780048 ("I haven't told Sarah" after the flag was sent); filed by this plan |
+| fleet: personalize (T04) | MUST | fleet | Design: T04 personalize FAIL in run 39802780048 (reply ignores the pre-brief); filed by this plan |
+| fleet: final scorecard | MUST | fleet | Submission: the final live judge check on the frozen v1.0.0 Space posted on #37 with every failing turn on an Issue; filed by this plan |
 
-The coordination issue (gh#183) and the four Office drafts filed for MUST gaps (#23246-#23249)
+The coordination issue (gh#183) and the four fleet tasks added for MUST gaps (publish batch, fall honesty, personalize, final scorecard)
 were created while this plan was executed and are in the table above, so it matches GitHub and
-Office at merge time; four of the five allowed gap drafts were used.
+the fleet's task list at merge time; four of the five allowed gap drafts were used.
 
 ## Critical path
 
-Dates are the plan; the enforced version is each Issue's milestone and the Office priority.
+Dates are the plan; the enforced version is each Issue's milestone and the fleet's task priority.
 
 1. **2026-10-23 - publish the 32 local commits.** Local `main` is 32 commits ahead of
-   `origin/main` 7fe1ad2 and carries the fixes for #23219 (listening honesty, T05/T06), #23233,
-   #23235, #23238, #23240, #23242 and #23237. Nothing a judge sees changes until a `publish-20261023` PR
+   `origin/main` 7fe1ad2 and carries the fixes for listening honesty (T05/T06), the fast-path flag on TTS failure,
+   profile write locks, turn concurrency, fact supersede, audio-once and audio input bounds. Nothing a judge sees changes until a `publish-20261023` PR
    merges, the Actions deploy runs and the live judge check scorecard is posted on an Issue. This
-   had no ticket; it is Office #23246. Fleet.
-2. **2026-10-23/24 - video script, then the video.** Office #23216 rewrites `docs/VIDEO_SCRIPT.md`
+   had no ticket; it is the fleet's publish task. Fleet.
+2. **2026-10-23/24 - video script, then the video.** The fleet rewrites `docs/VIDEO_SCRIPT.md`
    to the #5 rules (fall moment inside 10 s, one human narrator, no architecture slide, no latency
    claim); the founder records narration and the screen capture ~2026-10-24 on the live Space, and
    the public YouTube link goes on #5. Fleet writes, founder records.
-3. **2026-10-24 - Devpost text (M12, #20).** Office #23217 posts the draft as a comment on #20 with
+3. **2026-10-24 - Devpost text (M12, #20).** The fleet posts the draft as a comment on #20 with
    the #14 sentence, the stack wording from `README.md`, the live URL and testing instructions, and
    adds a scored row to `docs/SELF_JUDGING.md`. Both members review on #20; the teammate pastes the
    final text into the form. Fleet drafts, teammate pastes.
 4. **By 2026-10-27 - the judge-turn fixes land and publish.** On the path to a green final check:
-   T05/T06 (#23219, publish), T09-T11 (#23225), T14/T16 (#23220), T15 (#23247) and T04 (#23248). Each
+   T05/T06 (publish), T09-T11, T14/T16, T15 and T04. Each
    publish redeploys the Space and re-runs the check. Fleet.
-5. **2026-10-29 - freeze and v1.0.0.** Office #23227 renames `[Unreleased]`, tags `v1.0.0` on the
+5. **2026-10-29 - freeze and v1.0.0.** The fleet renames `[Unreleased]`, tags `v1.0.0` on the
    frozen commit and publishes the Release; the Release deploy runs the live judge check
    (`deploy-space.yml` runs the suite on every deploy). Fleet, then the teammate's sanity pass.
 6. **2026-10-29 - final live judge check and submit.** The scorecard from the Release deploy is
@@ -128,7 +128,7 @@ Dates are the plan; the enforced version is each Issue's milestone and the Offic
    the confirmation on #37.
 
 **Which of the 9 failing turns are on the path, and which are accepted.** On the path: T05, T06
-(#23219, landed locally), T09, T10, T11 (#23225), T14, T16 (#23220), T15 (#23247) and T04 (#23248).
+(landed locally), T09, T10, T11, T14, T16, T15 and T04.
 Accepted as known failures if still red at the 2026-10-29 check: T04 (an open-ended invitation
 that does not mention the pre-brief is a softer reply, not a wrong one) and T15 (the fast-path
 already told Dad the family is being notified; the contradiction is in the follow-up sentence).
@@ -142,22 +142,23 @@ the video's defining moment).
 
 Humans own what only humans can do; every item has exactly one owner.
 
-**Fleet** (Office tickets, in priority order)
-- Publish batch `publish-20261023` + Actions deploy + scorecard on an Issue (#23246) - 2026-10-23.
-- `docs/VIDEO_SCRIPT.md` rewrite (#23216) - 2026-10-23, so recording can happen 2026-10-24.
-- Devpost text draft on #20 + self-judging row (#23217) - 2026-10-24.
-- Judge-turn fixes: #23220, #23225, #23230, #23234, #23222, #23242, #23247, #23248 - landed and
+**Fleet** (in priority order)
+- Publish batch `publish-20261023` + Actions deploy + scorecard on an Issue - 2026-10-23.
+- `docs/VIDEO_SCRIPT.md` rewrite - 2026-10-23, so recording can happen 2026-10-24.
+- Devpost text draft on #20 + self-judging row - 2026-10-24.
+- Judge-turn fixes (Dr. Tan recall, fall and crisis wording, chest-pain reply, confusion disclosure,
+  caregiver-mode discoverability, audio once, fall honesty, personalize) - landed and
   published by 2026-10-27.
-- Hosting record for #11 (#17637): cap decision and browser time-to-first-audio measured on the
+- Hosting record for #11: cap decision and browser time-to-first-audio measured on the
   Space, added to ADR-003 next to the keep-awake it already records - 2026-10-27.
-- v1.0.0 tag + Release + Release deploy (#23227) - 2026-10-29 after the freeze commit is named.
-- Final scorecard and known-failure list on #37 (#23249) - 2026-10-29.
+- v1.0.0 tag + Release + Release deploy - 2026-10-29 after the freeze commit is named.
+- Final scorecard and known-failure list on #37 - 2026-10-29.
 - Fleet-owned GitHub state: labels, milestones and the two CLOSE issues (#14, #21) - 2026-10-23.
 
 **Founder** (elevenbaselab, human)
 - Record the narration and the 1080p screen capture of the live Space from the rewritten script;
   upload public, unlisted-is-not-enough, to YouTube; link on #5 - 2026-10-24/25, latest 2026-10-27.
-- Name the freeze commit on #37 (or on Office #23227) on 2026-10-29 so the tag is not guessed.
+- Name the freeze commit on #37 on 2026-10-29 so the tag is not guessed.
 - Hold the Hugging Face account/token and the Nebius key through 2026-12-15 (keep-awake plan in
   ADR-003 is the fleet's; the accounts are his).
 

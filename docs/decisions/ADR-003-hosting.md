@@ -59,6 +59,27 @@ auto-deletion (PR #26) keep visitors isolated and honor the no-retention privacy
 - The Nebius key must keep enough credit through 2026-12-15; without it the Space falls
   back to the offline fast-path only.
 
+## Concurrency (2026-10-22)
+
+Gradio's default `concurrency_limit` of 1 meant one visitor's slow ASR/Nebius/TTS turn queued
+every other visitor's Send and Enter, including an emergency phrase (Codex review 2026-10-22,
+robustness finding #6). The six senior-turn listeners (Send, Enter and the four
+proactive buttons) now share `concurrency_id="senior_turn"` with
+`concurrency_limit=FY_TURN_CONCURRENCY`, **default 4**, validated as an integer >= 2 at startup.
+One shared id means the bound counts all turn producers together. Why 4: THINK (Nebius) is
+network-bound and overlaps freely, but local faster-whisper ASR and Piper TTS are CPU-bound on a
+small Space (`cpu-basic` is 2 vCPU, and our ZeroGPU Space never calls the GPU), so four
+simultaneous CPU turns is the most we allow before they starve the typed offline safety
+fast-path; a hackathon judging panel is a handful of simultaneous visitors anyway. Unbounded is
+refused because the daily cap and audio limits assume a bounded number of in-flight turns.
+Within one session, turns stay strictly ordered: `run_demo_turn_streaming` holds a per-session
+lock (`_session_turn_locks`, created and deleted with the session's `_active_turns` count) for
+the whole turn, so a second Send from the same tab waits for the first and is never dropped or
+run twice; a browser disconnect releases it. Caregiver memo handlers keep Gradio's default.
+
+**Revisit when** the Space moves off a 2 vCPU tier, or the judging panel regularly exceeds about
+four simultaneous visitors.
+
 ## When to revisit
 
 Spaces cold-starts or resource limits break the demo, or we get a better free host.

@@ -50,7 +50,9 @@ recording a video alongside `main.py` beats, never for a public deployment.
 """
 from __future__ import annotations
 
+import contextlib
 import datetime
+import functools
 import os
 
 if __name__ == "__main__":
@@ -65,6 +67,7 @@ if __name__ == "__main__":
 
 import re
 import shutil
+import sys
 import tempfile
 import threading
 import time
@@ -100,6 +103,11 @@ SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
 BUILD_INFO_PATH = Path(__file__).resolve().parent / "BUILD_INFO"
 SAMPLE_CLIPS = ("senior_schedule.wav", "senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav")
 MAX_DAILY_REQUESTS = int(os.environ.get("MAX_DAILY_REQUESTS", "50"))
+# Audio input bounds, checked before any ASR runs. 25 MB is the ceiling
+# OpenAI-compatible transcription endpoints enforce; 120 s is far above any demo
+# utterance. MAX_AUDIO_UPLOAD_BYTES is also Gradio's launch(max_file_size=...).
+MAX_AUDIO_UPLOAD_BYTES = int(os.environ.get("MAX_AUDIO_UPLOAD_BYTES", str(25 * 1024 * 1024)))
+MAX_AUDIO_SECONDS = int(os.environ.get("MAX_AUDIO_SECONDS", "120"))
 MAX_HISTORY_TURNS = 4  # (user, assistant) pairs kept -- bounds prompt growth, not a product limit
 REMINDER_EVERY_N_TURNS = 6  # session-length-based "this is an AI" reminder (#83 AC)
 # Developer-only surface (telemetry, clinical sim, proactive triggers, biomarkers,
@@ -109,6 +117,27 @@ PRIVACY_NOTICE_URL = "https://github.com/miravena/foreveryours/blob/main/docs/SA
 SESSIONS_DIR = Path(os.environ.get("FY_SESSIONS_DIR", Path(tempfile.gettempdir()) / "foreveryours-sessions"))
 SHARED_PROFILE = os.environ.get("FY_SHARED_PROFILE") == "1"
 SESSION_TTL_S = int(os.environ.get("SESSION_TTL_S", "3600"))
+
+
+def _parse_turn_concurrency(raw: str | None) -> int:
+    """FY_TURN_CONCURRENCY: how many senior turns (any visitor) may run at
+    once across the shared "senior_turn" listeners (ADR-003
+    "Concurrency"). Unset means 4. Must be an integer >= 2: 1 is Gradio's
+    default, which queued every visitor behind one slow turn, and unbounded
+    is refused because the daily cap and audio limits assume a bounded
+    number of in-flight turns."""
+    if raw is None:
+        return 4
+    try:
+        value = int(raw.strip())
+    except ValueError:
+        value = 0
+    if value < 2:
+        raise ValueError(f"FY_TURN_CONCURRENCY must be an integer >= 2 (got {raw!r})")
+    return value
+
+
+TURN_CONCURRENCY = _parse_turn_concurrency(os.environ.get("FY_TURN_CONCURRENCY"))
 # Sweeper/_end_session assume CPython's symlink-safe, fd-based rmtree (true on
 # Linux); only this process writes SESSIONS_DIR, so another local writer
 # swapping an entry mid-delete is out of scope (#150, #151 ASSUMPTIONS).
@@ -194,7 +223,20 @@ def _caregiver_panel_may_show(item) -> bool:
         and item.scope in _CAREGIVER_PANEL_NON_EMOTIONAL_SCOPES
     )
 
-# Fixes #23215: Briefed memory must list each caregiver-memo fact once. The
+def _replacement_may_show(all_items: list, replacement_text: str) -> bool:
+    """A superseded fact's "Replaced by" text is the
+    REPLACEMENT item's words, so it may render only when that item would
+    itself pass _caregiver_panel_may_show(). A caregiver update ("groceries
+    at 6 PM") does; a senior's private correction of a caregiver fact
+    (conversation_extract, no disclosure attestation) does not, so the
+    caregiver sees the struck-through original and the Superseded badge but
+    never the senior's words. Fail-closed: no item with that text, or any
+    item with that text that may not be shown, hides it."""
+    matches = [i for i in all_items if i.text == replacement_text]
+    return bool(matches) and all(_caregiver_panel_may_show(i) for i in matches)
+
+
+# Briefed memory must list each caregiver-memo fact once. The
 # splitters are now shared (caregiver.split_memo_facts), but a store written
 # before that, or by any future path that stores a whole memo beside its
 # fragments, would still render the fragments AND the whole memo. Facts are
@@ -210,7 +252,7 @@ def _caregiver_panel_may_show(item) -> bool:
 # ever dropped; what _caregiver_panel_may_show hides is unchanged.
 # A word may carry apostrophes/hyphens ("o'clock", "well-known") and a number
 # may carry .,:/ followed by MORE DIGITS ("1.5", "3:30", "1/2"); "jazz.His"
-# (legacy no-space period) is two words, not one (openai_review on #23215).
+# (legacy no-space period) is two words, not one (openai_review).
 # Comparison operators are tokens of their own: "temperature < 38" and
 # "temperature > 38" are opposite instructions, not one fact.
 _FACT_TOKEN_RE = re.compile(r"[-+]?\w+(?:['\u2019-]\w+)*(?:[.,:/]\d+)*|[<>=\u2260\u2264\u2265]+")
@@ -256,7 +298,7 @@ def _longer_lived(a, b):
 
 
 def _dedupe_briefed_memory(items: list, now: float) -> list:
-    """Render-time dedupe for the Briefed memory list (#23215): returns
+    """Render-time dedupe for the Briefed memory list: returns
     `items` in order minus caregiver items that repeat a fact already listed
     -- same key as an active caregiver item, or a key that is the
     concatenation of other active caregiver items' keys. Non-caregiver items
@@ -304,14 +346,37 @@ _session_sweeper_lock = threading.Lock()
 
 # Guards session filesystem state: _active_turns, and every stat/delete the
 # sweeper and _end_session perform. Lock order is always _session_fs_lock
-# FIRST, then _bg_threads_lock -- never the reverse (#148).
+# FIRST, then _bg_threads_lock -- never the reverse (#148). The per-profile
+# file locks (memory/profile_io.py) come after both:
+#   _session_fs_lock -> _bg_threads_lock -> profile lock (store) -> profile lock (flags)
+# A profile lock is a LEAF: never take _session_fs_lock or _bg_threads_lock
+# while holding one. _touch_session (takes _session_fs_lock) is only ever
+# called from webapp handlers, never from inside a store method; keep it so.
 _session_fs_lock = threading.RLock()
-_active_turns: dict[str, int] = {}  # session_id -> number of turns currently in progress (#148)
+# session_id -> number of turns AND caregiver memo saves currently in
+# progress (#148); see _session_active.
+_active_turns: dict[str, int] = {}
+# session_id -> lock held for the whole of one streaming turn, so turns for
+# ONE session run one after the other while different sessions overlap.
+# Created and deleted under _session_fs_lock alongside the
+# _active_turns count, so it lives exactly as long as the session's in-flight
+# turns. Never block on one of these while holding _session_fs_lock.
+_session_turn_locks: dict[str, threading.Lock] = {}
 _BG_JOIN_TIMEOUT_S = 10
+
+# The one notice shown when a browser's household is gone and a fresh one
+# answers instead (#83). Prefixed to the first output with "\n\n".
+_RESET_NOTICE = "_Your demo household was reset after a period of inactivity._"
+
+
+class SessionGone(Exception):
+    """A session operation that refuses to recreate a deleted household
+    (`_session_active(..., refuse_if_deleted=True)`) found its directory
+    already gone."""
 
 
 class _ChunkAck:
-    """One chunk's acknowledgement (Office #23231): settled exactly once --
+    """One chunk's acknowledgement: settled exactly once --
     accepted by the generator right after it yielded the chunk, or refused
     by `_ChunkConsumer.close` / the wait timeout. `wait_accepted()` is what
     `orchestrator._speak_disclosure` resolves an `on_chunk` return value
@@ -341,8 +406,7 @@ class _ChunkAck:
 
 class _ChunkConsumer:
     """The producer/consumer handshake between `run_turn`'s `on_chunk`
-    callback (worker + background threads) and the streaming generator
-    (Office #23231).
+    callback (worker + background threads) and the streaming generator.
 
     A chunk counts as delivered only once the generator has DEQUEUED and
     YIELDED it to the browser and acknowledged it -- the `queue.task_done()`
@@ -398,7 +462,7 @@ class _ChunkConsumer:
     def accept(self, ack: _ChunkAck, accepted: bool = True) -> None:
         """Called by the generator right after the chunk's yield returned;
         `accepted=False` when that yield did not actually carry the chunk's
-        audio (see `_audio_carries_last`)."""
+        audio (an unreadable chunk yields `None`, see `_chunk_readable`)."""
         with self._lock:
             ack._settle(accepted)
             if self._in_flight is ack:
@@ -435,7 +499,12 @@ def _join_previous_turn(session_id: str) -> None:
     Takes a snapshot of every writer currently tracked for this session,
     joins each live one with a bounded timeout, then removes only the ones
     that finished (by identity) -- a writer still alive after the timeout
-    stays tracked, so later sweeps/deletes still see it as busy (#148)."""
+    stays tracked, so later sweeps/deletes still see it as busy (#148).
+
+    The per-profile lock in `memory/profile_io.py` (every store
+    write reloads from disk inside it) closes the "writer still alive after
+    the timeout" gap for DATA: a late flush no longer drops anyone's items.
+    This join only remains for write ordering and UX."""
     with _bg_threads_lock:
         snapshot = list(_bg_threads.get(session_id, []))
     for t in snapshot:
@@ -523,9 +592,9 @@ def _will_call_nebius() -> bool:
 def _cap_notice(spoke: bool, flagged: bool) -> str:
     """The daily-cap footnote on a capped fast-path turn. It claims only what
     happened: "still played" only when reply audio was produced (a TTS failure
-    or timeout leaves the reply as text, #23233), and "the family has been
+    or timeout leaves the reply as text), and "the family has been
     notified" only when this turn recorded a caregiver flag (Codex review of
-    the #23228/#23233 publish, P2)."""
+    the publish, P2)."""
     said = ("the safety message above still played" if spoke
             else "the safety message above is shown as text because speech was unavailable")
     family = " and the family has been notified" if flagged else ""
@@ -537,8 +606,50 @@ CAP_NOTICE = _cap_notice(spoke=True, flagged=True)
 CAP_BIOMARKERS = "### 📊 Acoustic Biomarkers\n_Rate limited_"
 
 
+def _guarded_transcribe(audio_in: str, return_metrics: bool) -> tuple[str | None, dict, str | None]:
+    """Transcribe `audio_in`, or refuse it with a short retry-or-type-instead
+    reply. Returns (transcript, biomarkers, refusal); exactly one of
+    transcript/refusal is None. Checks run size -> duration -> transcribe, so
+    no ASR CPU is spent on a refused file, and nothing here writes state.
+    A missing or zero-byte path skips the probes: transcribe() already returns
+    "" for it, which reaches the caller's "Couldn't make out any speech" branch."""
+    biomarkers = {"wpm": 0.0, "avg_pause_s": 0.0}
+    path = Path(audio_in)
+    if path.exists() and path.stat().st_size > 0:
+        size = path.stat().st_size
+        if size > MAX_AUDIO_UPLOAD_BYTES:
+            return None, biomarkers, (
+                f"That recording is too large ({size / (1024 * 1024):.1f} MB; the limit is "
+                f"{MAX_AUDIO_UPLOAD_BYTES / (1024 * 1024):g} MB). Please record a shorter clip, "
+                "or type what Dad says instead."
+            )
+        try:
+            seconds = hear.probe_duration(path)
+        except hear.AudioInputError as exc:
+            return None, biomarkers, _transcription_failed(exc)
+        if seconds > MAX_AUDIO_SECONDS:
+            return None, biomarkers, (
+                f"That recording is {seconds:.0f} seconds long; the limit is {MAX_AUDIO_SECONDS} "
+                "seconds. Please record a shorter clip, or type what Dad says instead."
+            )
+    try:
+        if return_metrics:
+            transcript, biomarkers = hear.transcribe(path, return_metrics=True)
+        else:
+            transcript = hear.transcribe(path)
+    except Exception as exc:
+        return None, biomarkers, _transcription_failed(exc)
+    return transcript, biomarkers, None
+
+
+def _transcription_failed(exc: Exception) -> str:
+    # Type name only, never the message: it can carry a file path.
+    print(f"[hear] transcription failed: {type(exc).__name__}", file=sys.stderr)
+    return "I couldn't make out that recording -- please try recording again, or type what Dad says instead."
+
+
 def _cap_decision(data_dir: Path, transcript: str) -> tuple[bool, bool]:
-    """Returns `(block_turn, allow_hosted_call)` for this turn (#23228).
+    """Returns `(block_turn, allow_hosted_call)` for this turn.
 
     Invariant: the offline safety fast-path runs before every hosted-call cap;
     a cap only withholds the paid continuation; call `_rate_limit_ok` here and
@@ -548,7 +659,7 @@ def _cap_decision(data_dir: Path, transcript: str) -> tuple[bool, bool]:
     daily-cap message (`block_turn` True). `_rate_limit_ok` only counts a turn
     when it is under the cap, so a capped emergency turn never moves the
     counter, and the fast-path check is pure. Any later cap (the process-wide
-    one, #17637) folds into `capped` here -- never a new early return in a
+    one) folds into `capped` here -- never a new early return in a
     handler."""
     fast_triggered = fastpath.check(transcript).triggered
     capped = _will_call_nebius() and not _rate_limit_ok(data_dir)
@@ -646,6 +757,45 @@ def _log_rmtree_error(func, path, exc_info) -> None:
     print(f"Session sweeper: failed to remove {path!r} via {func}: {exc_info}")
 
 
+@contextlib.contextmanager
+def _session_active(session_id: str, *, refuse_if_deleted: bool):
+    """Registers one in-flight operation on `session_id` (a turn, or a
+    caregiver memo save) for the whole `with` body: `_active_turns` is
+    incremented and the session touched under `_session_fs_lock`, so
+    `_end_session` and the sweeper see it as BUSY and leave its directory
+    alone until the body exits (#148). Yields the session root, or
+    None under SHARED_PROFILE (no per-session directory, nothing to
+    register). `session_id` must already be a valid id.
+
+    `refuse_if_deleted=True` (memo saves): if the literal directory entry
+    `SESSIONS_DIR/<id>` is no longer a directory -- the tab closed or the
+    sweeper removed it after the id was handed to the browser -- raise
+    `SessionGone` BEFORE registering, instead of letting a store recreate
+    the household with only the caregiver's private memo in it. Turns pass
+    False and keep today's behaviour on a swept session."""
+    if SHARED_PROFILE:
+        yield None
+        return
+    root = _session_root(session_id)
+    entry = SESSIONS_DIR / session_id  # the literal, unresolved entry, as _end_session checks it
+    with _session_fs_lock:
+        if refuse_if_deleted and not os.path.isdir(entry):
+            raise SessionGone(session_id)
+        _active_turns[session_id] = _active_turns.get(session_id, 0) + 1
+        _touch_session(root)
+    try:
+        yield root
+    finally:
+        with _session_fs_lock:
+            n = _active_turns.get(session_id, 0) - 1
+            if n <= 0:
+                _active_turns.pop(session_id, None)
+                # No operation is in flight, so no turn holds this lock.
+                _session_turn_locks.pop(session_id, None)
+            else:
+                _active_turns[session_id] = n
+
+
 def _sweep_stale_sessions() -> None:
     """Backstop for sessions whose delete_callback never ran (process
     restart, crashed tab): anything untouched for SESSION_TTL_S goes.
@@ -717,8 +867,15 @@ def _new_session() -> str:
     session_id = DEFAULT_PROFILE_ID if SHARED_PROFILE else uuid.uuid4().hex
     data_dir, _ = _session_dirs(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
-    for line in split_memo_facts(DEMO_MEMO):  # one shared splitter (#23215)
-        store.add(line, source="caregiver_memo")  # no-op on duplicates
+    facts = split_memo_facts(DEMO_MEMO)  # one shared splitter
+    # A seed never re-adds a line already in the store, superseded included:
+    # with FY_SHARED_PROFILE=1 a new tab re-runs this over a household whose
+    # caregiver already changed 4 PM to 6 PM, and re-adding 4 PM would
+    # supersede the update (Codex review).
+    seen = {i.text for i in store.all() if i.source == "caregiver_memo"}
+    for line in facts:
+        if line not in seen:
+            store.add(line, source="caregiver_memo", supersede=False)  # a seed never replaces a caregiver fact
     return session_id
 
 
@@ -786,7 +943,7 @@ def _sample_family_loaded(store: MemoryStore, now: float) -> bool:
     """True once the one-click seed (caregiver.SAMPLE_FAMILY) is in this
     session's store: its persona line is an active caregiver_memo item.
     Checked against the store, never a flag file, so the sweep/_end_session
-    delete path needs nothing extra (#23218)."""
+    delete path needs nothing extra."""
     anchor = sample_family_texts()[0]
     return any(
         item.text == anchor and item.source == "caregiver_memo" and item.is_active(now)
@@ -885,12 +1042,13 @@ def _format_caregiver_panel(session_id: str | None) -> str:
         lines.extend(_format_sample_family_card(store, now))
 
     lines.append("\n### Briefed memory")
+    all_items = store.all()
     items = _dedupe_briefed_memory(
-        [item for item in store.all() if _caregiver_panel_may_show(item)], now
+        [item for item in all_items if _caregiver_panel_may_show(item)], now
     )
     if sample_loaded:
         # The seed is listed once, on the card above, grouped and labelled
-        # fictional (#23218, same one-listing rule as #23215).
+        # fictional (same one-listing rule).
         seed_texts = set(sample_family_texts())
         items = [item for item in items if not (item.source == "caregiver_memo" and item.text in seed_texts)]
         lines.append(f"_(plus the {SAMPLE_FAMILY_LABEL.lower()} above)_")
@@ -905,7 +1063,7 @@ def _format_caregiver_panel(session_id: str | None) -> str:
         if item.status == "superseded":
             badge = "🔄 _[Superseded]_ "
             desc = f"~~{item.text}~~"
-            if item.superseded_by:
+            if item.superseded_by and _replacement_may_show(all_items, item.superseded_by):
                 desc += f" → *Replaced by: {item.superseded_by}*"
         elif item.expires_at is not None:
             remaining = item.expires_at - now
@@ -973,17 +1131,19 @@ def _combine_audio_chunks(audio_paths: list[Path], out_dir: Path) -> Path | None
         return audio_paths[0]
 
 
-def _audio_carries_last(combined: Path | None, audio_paths: list[Path]) -> bool:
-    """Whether `combined` (from `_combine_audio_chunks(audio_paths, ...)`)
-    actually contains the newest chunk. On a concatenation failure the
-    combiner falls back to the FIRST chunk, which for a multi-chunk list
-    drops the newest one -- a late disclosure in that case never reached the
-    browser and must not be attested (#23231, Codex review)."""
-    if combined is None or not audio_paths:
+def _chunk_readable(path: Path) -> bool:
+    """Whether a TTS chunk can actually be opened and is non-empty -- a guarded
+    read, not an existence check: a missing file, an empty one, a directory or
+    anything else that raises `OSError` on open/read returns False.
+    The streaming generator yields a chunk's path to the browser only when
+    this holds, so Gradio's `stream_output` is never handed a path it cannot
+    open, and a disclosure whose chunk could not be delivered is refused
+    (recorded undisclosed) instead of attested."""
+    try:
+        with open(path, "rb") as f:
+            return len(f.read(12)) > 0
+    except OSError:
         return False
-    if len(audio_paths) == 1:
-        return combined == audio_paths[0]
-    return combined != audio_paths[0]
 
 
 def run_demo_turn(
@@ -1023,7 +1183,7 @@ def run_demo_turn(
     out = _run_demo_turn(audio_in, actual_text, history, session_id_val, simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type)
     if session_expired:
         out = (
-            "_Your demo household was reset after a period of inactivity._\n\n" + out[0],
+            _RESET_NOTICE + "\n\n" + out[0],
             *out[1:],
         )
     # Clear audio_in on every turn: otherwise a loaded sample clip stays in the
@@ -1076,29 +1236,34 @@ def run_demo_turn_streaming(
     elif "Night" in simulated_time_str:
         simulated_hour = 23
 
-    root = None if SHARED_PROFILE else _session_root(session_id_val)
-    if root is not None:
-        with _session_fs_lock:
-            _active_turns[session_id_val] = _active_turns.get(session_id_val, 0) + 1
-            _touch_session(root)
-    # #23231: one consumer per call. Closing it in this `finally` (which a
-    # browser disconnect's GeneratorExit also unwinds through) refuses every
-    # chunk still pending, so nothing is attested to a closed stream.
-    consumer = _ChunkConsumer()
-    try:
-        yield from _run_demo_turn_streaming_impl(
-            audio_in, actual_text, history, session_id_val, simulated_hour,
-            session_expired, is_proactive, trigger_type, consumer=consumer,
-        )
-    finally:
-        consumer.close()
+    # SHARED_PROFILE=True keeps the old behaviour: root is None, so there is
+    # no per-session lock -- there is only one shared profile to begin with.
+    with _session_active(session_id_val, refuse_if_deleted=False) as root:
+        turn_lock = None
         if root is not None:
             with _session_fs_lock:
-                n = _active_turns.get(session_id_val, 0) - 1
-                if n <= 0:
-                    _active_turns.pop(session_id_val, None)
-                else:
-                    _active_turns[session_id_val] = n
+                # Registered above, so the count is > 0 and nobody pops it.
+                turn_lock = _session_turn_locks.setdefault(session_id_val, threading.Lock())
+        # One consumer per call. Closing it in this `finally` (which a
+        # browser disconnect's GeneratorExit also unwinds through) refuses every
+        # chunk still pending, so nothing is attested to a closed stream.
+        consumer = _ChunkConsumer()
+        acquired = False
+        try:
+            # Different sessions overlap (Gradio's "senior_turn" limit
+            # bounds them); a second turn for THIS session waits here until the
+            # first finishes. Acquired outside _session_fs_lock (#148 lock order).
+            if turn_lock is not None:
+                turn_lock.acquire()
+                acquired = True
+            yield from _run_demo_turn_streaming_impl(
+                audio_in, actual_text, history, session_id_val, simulated_hour,
+                session_expired, is_proactive, trigger_type, consumer=consumer,
+            )
+        finally:
+            if acquired:
+                turn_lock.release()
+            consumer.close()
 
 
 def _run_demo_turn_streaming_impl(
@@ -1136,32 +1301,37 @@ def _run_demo_turn_streaming_impl(
     elif actual_text and actual_text.strip():
         transcript = actual_text.strip()
     elif audio_in:
-        transcript, biomarkers = hear.transcribe(Path(audio_in), return_metrics=True)
+        transcript, biomarkers, refusal = _guarded_transcribe(audio_in, True)
+        if refusal is not None:  # refused/failed audio writes nothing
+            out = (refusal, None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_")
+            if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
+            yield (*out, session_id_val, "", None)
+            return
     else:
         out = ("Record audio or type what Dad says first.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_")
-        if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+        if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
         yield (*out, session_id_val, "", None)
         return
 
     if not transcript.strip() and not is_proactive:
         out = ("Couldn't make out any speech or text -- try again.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_")
-        if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+        if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
         yield (*out, session_id_val, "", None)
         return
 
     block_turn, allow_hosted_call = _cap_decision(data_dir, transcript)
     if block_turn:
         out = ("This demo has hit its daily request cap -- please try again tomorrow.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_Rate limited_")
-        if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+        if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
         yield (*out, session_id_val, "", None)
         return
 
+    # Deletes the PREVIOUS turn's *.wav only: every file this turn yields
+    # still exists when Gradio's stream_output reads it.
     _clear_session_audio(audio_dir)
 
-    accumulated_audio_paths = []
-
     def _on_chunk(sentence: str, chunk_path: Path):
-        # #23231: returns the chunk's ack without blocking (False if the
+        # Returns the chunk's ack without blocking (False if the
         # stream already closed). It resolves True only after the generator
         # below dequeued AND yielded the chunk; `_speak_disclosure` waits on
         # it before attesting, the main reply's synthesis never does.
@@ -1191,6 +1361,7 @@ def _run_demo_turn_streaming_impl(
     _remember_background_thread(session_id_val, t)
 
     current_reply_text = ""
+    spoke = False  # did any reply chunk actually reach the browser
     while True:
         msg = consumer.get()
         if msg[0] == "DONE":
@@ -1209,7 +1380,7 @@ def _run_demo_turn_streaming_impl(
                     panel(),
                     "### 📊 Acoustic Biomarkers\n_Awaiting API Key_",
                 )
-                if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+                if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
                 yield (*out, session_id_val, "", None)
                 return
             
@@ -1223,16 +1394,17 @@ def _run_demo_turn_streaming_impl(
                 panel(),
                 "### 📊 Acoustic Biomarkers\n_Error_",
             )
-            if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+            if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
             yield (*out, session_id_val, "", None)
             return
         elif msg[0] == "CHUNK":
             _, sentence, chunk_path, ack = msg
             current_reply_text += sentence + " "
-            accumulated_audio_paths.append(chunk_path)
-            
-            combined_audio = _combine_audio_chunks(accumulated_audio_paths, audio_dir)
-            reply_audio = str(combined_audio) if combined_audio else None
+            # This chunk's own audio, once. The reply player streams,
+            # so it appends each yielded chunk; re-sending the accumulated
+            # recording made it restart from the first sentence.
+            reply_audio = str(chunk_path) if _chunk_readable(chunk_path) else None
+            spoke = spoke or reply_audio is not None
             
             if is_proactive:
                 transcript_and_reply = f'**ForeverYours initiated:**\n\n"{current_reply_text.strip()}"'
@@ -1242,9 +1414,9 @@ def _run_demo_turn_streaming_impl(
             biomarkers_panel = f"### 📊 Acoustic Biomarkers\n- Words per minute: {biomarkers.get('wpm', 0):.0f}\n- Avg pause: {biomarkers.get('avg_pause_s', 0.0):.1f}s"
             
             out = (transcript_and_reply, reply_audio, history, panel(), biomarkers_panel)
-            if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+            if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
             yield (*out, session_id_val, "", None)
-            consumer.accept(ack, _audio_carries_last(combined_audio, accumulated_audio_paths))
+            consumer.accept(ack, reply_audio is not None)
 
     _remember_background_thread(session_id_val, result.background_thread)
 
@@ -1260,8 +1432,9 @@ def _run_demo_turn_streaming_impl(
     else:
         new_history = history
 
-    combined_audio = _combine_audio_chunks(result.audio_paths, audio_dir)
-    reply_audio = str(combined_audio) if combined_audio else None
+    # Every sentence already went out on its own CHUNK yield; the
+    # DONE-final yield carries no audio (re-sending it is the replay bug), and
+    # the cap notice's "still played" rests on `spoke` (a chunk delivered).
 
     if is_proactive:
         transcript_and_reply = f'**ForeverYours initiated:**\n\n"{result.reply_text}"'
@@ -1278,26 +1451,25 @@ def _run_demo_turn_streaming_impl(
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
     if not allow_hosted_call:
-        transcript_and_reply += _cap_notice(bool(reply_audio), bool(result.caregiver_flag))
+        transcript_and_reply += _cap_notice(spoke, bool(result.caregiver_flag))
         biomarker_str = CAP_BIOMARKERS
     elif wpm > 0:
         biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
     else:
         biomarker_str = "### 📊 Acoustic Biomarkers\n_Calculated from live voice input only_"
 
-    out = (transcript_and_reply, reply_audio, new_history, panel(), biomarker_str)
-    if session_expired: out = ("_Your demo household was reset after a period of inactivity._\n\n" + out[0], *out[1:])
+    out = (transcript_and_reply, None, new_history, panel(), biomarker_str)
+    if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
     # The DONE-final yield: exactly once, immediately.
     yield (*out, session_id_val, "", None)
 
-    # Drain (#23231). The background AUDIT/extraction thread may speak a
+    # Drain. The background AUDIT/extraction thread may speak a
     # disclosure line seconds after DONE; keep consuming until it finishes or
     # _BG_JOIN_TIMEOUT_S elapses, so that audio reaches the browser and only
     # a chunk the browser actually got is attested. Each late yield is
-    # additive: same final history and text, fresher caregiver panel, audio
-    # recombined to include the disclosure.
+    # additive: same final history and text, fresher caregiver panel, and
+    # that disclosure chunk's own audio, once.
     bg = result.background_thread
-    final_audio_paths = list(result.audio_paths)
     deadline = time.monotonic() + _BG_JOIN_TIMEOUT_S
     late_yields = 0
     while True:
@@ -1313,25 +1485,21 @@ def _run_demo_turn_streaming_impl(
         if msg[0] != "CHUNK":
             continue
         _, _sentence, chunk_path, ack = msg
-        final_audio_paths.append(chunk_path)
-        combined_audio = _combine_audio_chunks(final_audio_paths, audio_dir)
-        if not _audio_carries_last(combined_audio, final_audio_paths):
-            # The recombined audio would not contain this line: refuse it
-            # (recorded undisclosed) rather than yield audio without it.
-            final_audio_paths.pop()
-            consumer.accept(ack, accepted=False)
-            continue
-        late = (out[0], str(combined_audio) if combined_audio else None, new_history, panel(), biomarker_str)
+        # An unreadable chunk yields no audio and is refused (recorded
+        # undisclosed) -- the browser never heard that line.
+        late_audio = str(chunk_path) if _chunk_readable(chunk_path) else None
+        late = (out[0], late_audio, new_history, panel(), biomarker_str)
         yield (*late, session_id_val, "", None)
-        consumer.accept(ack)
+        consumer.accept(ack, late_audio is not None)
         late_yields += 1
         out = late
     consumer.close()
     # The flag/lifestyle note is persisted only after its ack, i.e. after the
     # yield that carried its audio rendered the panel: one panel-only refresh
-    # (same history, same audio) once the background thread has finished.
+    # (same history, no audio -- every chunk already went out) once the
+    # background thread has finished.
     if late_yields and (bg is None or not bg.is_alive()):
-        yield (out[0], out[1], new_history, panel(), biomarker_str, session_id_val, "", None)
+        yield (out[0], None, new_history, panel(), biomarker_str, session_id_val, "", None)
 
 def run_proactive_turn_streaming(history, session, sim_time, trigger_type):
     yield from run_demo_turn_streaming(None, None, history, session, sim_time, is_proactive=True, trigger_type=trigger_type)
@@ -1353,21 +1521,8 @@ def _run_demo_turn(
     value, so `finally` covers every one of them, including the early
     "no speech detected" returns. `session_id` must already be a validated
     id by this point (the public wrappers normalize before calling in)."""
-    root = None if SHARED_PROFILE else _session_root(session_id)
-    if root is not None:
-        with _session_fs_lock:
-            _active_turns[session_id] = _active_turns.get(session_id, 0) + 1
-            _touch_session(root)
-    try:
+    with _session_active(session_id, refuse_if_deleted=False):
         return _run_demo_turn_impl(audio_in, text_in, history, session_id, simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type)
-    finally:
-        if root is not None:
-            with _session_fs_lock:
-                n = _active_turns.get(session_id, 0) - 1
-                if n <= 0:
-                    _active_turns.pop(session_id, None)
-                else:
-                    _active_turns[session_id] = n
 
 
 def _run_demo_turn_impl(
@@ -1392,7 +1547,9 @@ def _run_demo_turn_impl(
     elif text_in and text_in.strip():
         transcript = text_in.strip()
     elif audio_in:
-        transcript, biomarkers = hear.transcribe(Path(audio_in), return_metrics=True)
+        transcript, biomarkers, refusal = _guarded_transcribe(audio_in, True)
+        if refusal is not None:  # refused/failed audio writes nothing
+            return refusal, None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_"
     else:
         return "Record audio or type what Dad says first.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_"
 
@@ -1401,7 +1558,7 @@ def _run_demo_turn_impl(
 
     # Cap only what's actually about to spend a Nebius call -- not the empty
     # sends and no-key misses handled above. A fast-path utterance at the cap
-    # still runs, with only its THINK continuation withheld (#81 A1, #23228).
+    # still runs, with only its THINK continuation withheld (#81 A1).
     block_turn, allow_hosted_call = _cap_decision(data_dir, transcript)
     if block_turn:
         return (
@@ -1453,7 +1610,7 @@ def _run_demo_turn_impl(
     # review, PR #90). Flagged back on #11: if AUDIT flags a reply unsafe
     # after this returns, its spoken disclosure is generated but has already
     # missed this turn's `audio_out`. The STREAMING path closes that gap
-    # (#23231: it keeps consuming after DONE and attests only chunks the
+    # (It keeps consuming after DONE and attests only chunks the
     # browser received); this non-streaming path passes no `on_chunk`, so
     # such a disclosure is still recorded undisclosed, honestly.
     # `_join_previous_turn` (called at the top of this function, on
@@ -1502,49 +1659,89 @@ def _run_demo_turn_impl(
     return transcript_and_reply, reply_audio, new_history, panel(), biomarker_str
 
 
-def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> tuple[str, str, str]:
-    """Caregiver submits context via text note (e.g. from work / phone)."""
-    session_id = session_id or _new_session()
-    if not memo_text or not memo_text.strip():
-        return _format_caregiver_panel(session_id), session_id, ""
+def _session_id_invalid(session_id: str) -> bool:
+    """True for a malformed/foreign id (#149); never under SHARED_PROFILE."""
+    if SHARED_PROFILE:
+        return False
     try:
-        data_dir, _ = _session_dirs(session_id)
+        _session_root(session_id)
     except ValueError:
+        return True
+    return False
+
+
+def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> tuple[str, str, str]:
+    """Caregiver submits context via text note (e.g. from work / phone).
+
+    The whole session-dependent body -- empty-input branch, join, writes and
+    the returned panel -- runs inside `_session_active(...,
+    refuse_if_deleted=True)`, so the session counts as BUSY for
+    `_end_session` and the sweeper until the panel is rendered, and a save
+    for a household already deleted is REFUSED rather than recreating it:
+    the memo is written nowhere, a fresh household answers with
+    the reset notice, and the typed text stays in the box to resubmit."""
+    session_id = session_id or _new_session()
+    if _session_id_invalid(session_id):
         # Malformed/foreign id (#149): nothing to write to, so return the
         # same placeholder panel text rather than raise.
         return _format_caregiver_panel(session_id), session_id, ""
-    # A conversation turn's background extraction can still be writing this
-    # session's MemoryStore; join it first so this save doesn't get wiped by
-    # that thread's later _flush() of a now-stale snapshot (Codex review, PR #90).
-    _join_previous_turn(session_id)
-    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
-    for line in split_memo_facts(memo_text):  # one shared splitter (#23215)
-        store.add(line, source="caregiver_memo")
-    return _format_caregiver_panel(session_id), session_id, ""
+    try:
+        with _session_active(session_id, refuse_if_deleted=True):
+            if not memo_text or not memo_text.strip():
+                return _format_caregiver_panel(session_id), session_id, ""
+            data_dir, _ = _session_dirs(session_id)
+            # A conversation turn's background extraction can still be writing
+            # this session's MemoryStore; join it so writes stay ordered. The
+            # per-profile lock (memory/profile_io.py) is what keeps a
+            # writer still alive after the bounded join from dropping this save.
+            _join_previous_turn(session_id)
+            store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
+            facts = split_memo_facts(memo_text)  # one shared splitter
+            for line in facts:  # facts of one memo never supersede each other
+                store.add(line, source="caregiver_memo", keep_texts=facts)
+            return _format_caregiver_panel(session_id), session_id, ""
+    except SessionGone:
+        # Never _format_caregiver_panel(old id): it builds a store and would
+        # recreate the deleted directory.
+        new_sid = _new_session()
+        return _RESET_NOTICE + "\n\n" + _format_caregiver_panel(new_sid), new_sid, memo_text or ""
 
 
 def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) -> tuple[str, str]:
-    """Caregiver submits onboarding context via voice memo (Beat 1)."""
+    """Caregiver submits onboarding context via voice memo (Beat 1). Same
+    session lifecycle as save_caregiver_text_memo; transcription
+    runs before registering, since it reads Gradio's upload, not the session."""
     session_id = session_id or _new_session()
-    if not memo_audio:
-        return _format_caregiver_panel(session_id), session_id
-    transcript = hear.transcribe(Path(memo_audio))
-    try:
-        data_dir, _ = _session_dirs(session_id)
-    except ValueError:
+    if _session_id_invalid(session_id):
         return _format_caregiver_panel(session_id), session_id  # malformed/foreign id (#149)
-    _join_previous_turn(session_id)  # see save_caregiver_text_memo
-    store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
-    for line in split_memo_facts(transcript):  # one shared splitter (#23215)
-        store.add(line, source="caregiver_memo")
-    return _format_caregiver_panel(session_id), session_id
+    transcript = refusal = None
+    if memo_audio:
+        transcript, _m, refusal = _guarded_transcribe(memo_audio, False)
+    try:
+        with _session_active(session_id, refuse_if_deleted=True):
+            if not memo_audio:
+                return _format_caregiver_panel(session_id), session_id
+            if refusal is not None:  # nothing reaches the store
+                return "⚠️ " + refusal.replace("what Dad says", "the memo") + "\n\n" + _format_caregiver_panel(session_id), session_id
+            data_dir, _ = _session_dirs(session_id)
+            _join_previous_turn(session_id)  # see save_caregiver_text_memo
+            store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
+            facts = split_memo_facts(transcript)  # one shared splitter
+            for line in facts:  # facts of one memo never supersede each other
+                store.add(line, source="caregiver_memo", keep_texts=facts)
+            return _format_caregiver_panel(session_id), session_id
+    except SessionGone:
+        # The household is gone: the transcript is dropped (the voice memo has
+        # no textbox to hand it back in) and nothing is written anywhere.
+        new_sid = _new_session()
+        return _RESET_NOTICE + "\n\n" + _format_caregiver_panel(new_sid), new_sid
 
 
 def load_sample_family(session_id: str | None) -> tuple[str, str]:
     """One click, before anyone speaks: seed this session's own MemoryStore
     with caregiver.SAMPLE_FAMILY (a labelled-fictional senior, family, likes,
     daily routine and caregiver-entered medication REMINDER times) and return
-    the caregiver panel showing it (#23218). Structured items are written
+    the caregiver panel showing it. Structured items are written
     directly with their scope/privacy, never through the memo splitter.
     Validates the whole seed BEFORE the first write, so an invalid seed
     writes nothing. store.add no-ops on duplicates, so a second click adds
@@ -1558,10 +1755,14 @@ def load_sample_family(session_id: str | None) -> tuple[str, str]:
     validate_sample_profile(SAMPLE_FAMILY["items"])  # refuse dosing/diagnosis/clinical text up front
     _join_previous_turn(session_id)  # see save_caregiver_text_memo
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
+    seen = {i.text for i in store.all() if i.source == "caregiver_memo"}  # never revert an update
     for _group, text, privacy in SAMPLE_FAMILY["items"]:
+        if text in seen:
+            continue
         store.add(
             text,
             source="caregiver_memo",
+            supersede=False,  # a seed never replaces a caregiver fact, nor another seed line
             scope=MemoryScope.PERMANENT.value,  # clock-time items auto-scope TEMPORARY in add()
             privacy=PrivacyLevel.CAREGIVER_ONLY.value if privacy == "caregiver_only" else PrivacyLevel.PUBLIC_TO_SENIOR.value,
         )
@@ -1665,13 +1866,14 @@ def build_demo() -> gr.Blocks:
                         proactive_btn_silence = gr.Button("Silence Check-in")
 
                 transcript_out = gr.Markdown(label="Conversation")
-                audio_out = gr.Audio(label="Companion's reply", autoplay=True)
+                # Streaming, so each yielded sentence chunk is appended and heard once (a plain player restarted on every yield); every handler writing it must be a generator function, or Gradio does not stream it.
+                audio_out = gr.Audio(label="Companion's reply", streaming=True, autoplay=True)
             with gr.Column():
                 gr.Markdown("## 👩 Caregiver side (live)")
                 caregiver_panel = gr.Markdown(_format_caregiver_panel(None))
                 biomarkers_panel = gr.Markdown("### 📊 Acoustic Biomarkers\n_Awaiting voice input..._", visible=DEV_MODE)
                 # One click seeds a labelled-fictional household into this
-                # session only (#23218). Sits inside the caregiver column, next
+                # session only. Sits inside the caregiver column, next
                 # to the memo accordion, so the Senior/Caregiver split-screen
                 # the video script uses is unchanged.
                 load_sample_btn = gr.Button("Load sample family", variant="secondary")
@@ -1717,37 +1919,55 @@ def build_demo() -> gr.Blocks:
                             "**Audio Perception (HEAR):** `faster-whisper` (local CPU)\n\n"
                             "*Background memory extraction & safety audit run asynchronously via Nebius Token Factory.*")
 
+        # Every senior-turn producer (Send, Enter, the four proactive
+        # buttons) shares concurrency_id "senior_turn" with a bounded limit
+        # (FY_TURN_CONCURRENCY, default 4) instead of Gradio's default of 1, so
+        # one visitor's slow ASR/Nebius/TTS turn no longer queues everyone
+        # else's. Same id = one shared bound. Caregiver memo handlers keep
+        # Gradio's default (out of scope). ADR-003 "Concurrency".
         run_btn.click(
             fn=run_demo_turn_streaming,
             inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+            concurrency_limit=TURN_CONCURRENCY,
+            concurrency_id="senior_turn",
         )
 
         proactive_btn_morning.click(
-            fn=lambda h, s, t: run_proactive_turn_streaming(h, s, t, "morning"),
+            fn=functools.partial(run_proactive_turn_streaming, trigger_type="morning"),
             inputs=[history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+            concurrency_limit=TURN_CONCURRENCY,
+            concurrency_id="senior_turn",
         )
         proactive_btn_grocery.click(
-            fn=lambda h, s, t: run_proactive_turn_streaming(h, s, t, "reminder"),
+            fn=functools.partial(run_proactive_turn_streaming, trigger_type="reminder"),
             inputs=[history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+            concurrency_limit=TURN_CONCURRENCY,
+            concurrency_id="senior_turn",
         )
         proactive_btn_hobby.click(
-            fn=lambda h, s, t: run_proactive_turn_streaming(h, s, t, "hobby"),
+            fn=functools.partial(run_proactive_turn_streaming, trigger_type="hobby"),
             inputs=[history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+            concurrency_limit=TURN_CONCURRENCY,
+            concurrency_id="senior_turn",
         )
         proactive_btn_silence.click(
-            fn=lambda h, s, t: run_proactive_turn_streaming(h, s, t, "silence"),
+            fn=functools.partial(run_proactive_turn_streaming, trigger_type="silence"),
             inputs=[history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+            concurrency_limit=TURN_CONCURRENCY,
+            concurrency_id="senior_turn",
         )
 
         text_in.submit(
             fn=run_demo_turn_streaming,
             inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+            concurrency_limit=TURN_CONCURRENCY,
+            concurrency_id="senior_turn",
         )
 
         save_text_memo_btn.click(
@@ -1788,4 +2008,8 @@ def build_demo() -> gr.Blocks:
 
 if __name__ == "__main__":
     hear.warm_up()  # (#81 B4)
-    build_demo().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")))
+    build_demo().launch(
+        server_name="0.0.0.0",
+        server_port=int(os.environ.get("PORT", "7860")),
+        max_file_size=f"{MAX_AUDIO_UPLOAD_BYTES}b",  # Gradio refuses oversize uploads too
+    )

@@ -26,6 +26,7 @@ This folder is the **decision log**: *why* we made each major choice. Use it whe
 | [ADR-007](ADR-007-attribution.md) | The human is the author; AI help is an `Assisted-by` trailer (amended 2026-10-09; was `Co-Authored-By`); guardrails warn, never block | Accepted | 2026-10-05 |
 | [ADR-008](ADR-008-neural-tts.md) | Offline neural voice (Piper) preferred, with espeak-ng/System.Speech/pyttsx3 as fallbacks (supplements ADR-001) | Accepted | 2026-10-09 |
 | [ADR-009](ADR-009-build-vs-reuse.md) | Build vs reuse: keep privacy layer, fast-path and voice loop; licence check on `piper-tts` (GPL-3.0-or-later); trial embedding retrieval | Proposed | 2026-10-09 |
+| [ADR-010](ADR-010-audit-model-eval.md) | AUDIT model chosen by a labelled 36-row eval across served NVIDIA models; Nano kept (Super: recall 1.00 vs 0.63, same 0/17 false flags) | Accepted | 2026-10-22 |
 
 ## Superseded / reconsidered
 

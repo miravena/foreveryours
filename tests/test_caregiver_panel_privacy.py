@@ -151,7 +151,7 @@ class TestCaregiverPanelPrivacy(unittest.TestCase):
         # future code change could write a caregiver-sourced item with a
         # scope this code doesn't recognise, and the fail-closed guarantee
         # has to hold regardless of who (ostensibly) wrote the item
-        # (review-arm finding: the unknown-scope fallback had this
+        # (automated review finding: the unknown-scope fallback had this
         # uncovered exception).
         session_id, _ = webapp.init_session()
         data_dir, _ = webapp._session_dirs(session_id)
@@ -374,7 +374,7 @@ if __name__ == "__main__":
 
 
 class TestBriefedMemoryDedupe(unittest.TestCase):
-    """Office #23215: Briefed memory lists each caregiver-memo fact once.
+    """Briefed memory lists each caregiver-memo fact once.
 
     Seen on the live Space 2026-10-21: the panel listed the split facts AND
     the whole memo as one more entry, because the memo paths split on

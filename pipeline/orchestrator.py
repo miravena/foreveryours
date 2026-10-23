@@ -203,7 +203,7 @@ def _speak_turn(sentences, audio_out_dir: Path, on_chunk=None) -> tuple[str, lis
     ``on_chunk`` is None (the default), behavior is exactly as before, so
     callers like webapp.py that only read ``audio_paths`` are unaffected.
     The callback's return value is the consumer's acknowledgement; see
-    ``_speak_disclosure`` for how it gates attestation (#23231)."""
+    ``_speak_disclosure`` for how it gates attestation."""
     t0 = time.monotonic()
     parts: list[str] = []
     paths: list[Path] = []
@@ -227,7 +227,7 @@ def _speak_disclosure(
 
     Returns ``(paths, disclosed)``. ``disclosed`` is True only when audio was
     synthesized AND an ``on_chunk`` consumer exists AND it ACCEPTED every
-    chunk (Office #23231). Acceptance is the callback's return value, in the
+    chunk. Acceptance is the callback's return value, in the
     ``queue.task_done()`` sense -- an item counts as delivered only when the
     consumer says it took it, never because it was handed over: an explicit
     ``False`` (e.g. webapp's ``_ChunkConsumer.offer`` after the browser
@@ -278,7 +278,7 @@ def run_turn(
     across clicks in one browser session and passes it in each turn.
 
     `allow_hosted_call=False` is how webapp.py's daily request cap reaches
-    this turn (#23228): the offline safety fast-path still speaks and flags
+    this turn: the offline safety fast-path still speaks and flags
     exactly as it always does, and only the paid THINK continuation (and the
     AUDIT/extraction thread that would review it) is skipped. It is only valid
     for a transcript the fast-path answers -- anything else raises ValueError
@@ -362,8 +362,8 @@ def run_turn(
     immediate_audio_paths: list[Path] = []
     continuation_note = None
     if fast.triggered:
-        # Office #23233: the emergency flag is recorded whether or not speech
-        # works -- same rule as the perseveration branch below (#16084 RULE 4).
+        # The emergency flag is recorded whether or not speech
+        # works -- same rule as the perseveration branch below (RULE 4).
         # Synthesis is bounded by speak.TTS_TIMEOUT_S per tier, so a hung
         # Piper/espeak ends here as TimeoutExpired and the flag is written to
         # disk before THINK starts. disclosed_to_senior states the truth: True
@@ -432,7 +432,7 @@ def run_turn(
                         file=sys.stderr,
                     )
                     persev_paths, persev_first_time = [], None
-                # Fixes #159 (ticket #16084 RULE 4): the disclosure line is
+                # Fixes #159 (RULE 4): the disclosure line is
                 # already in the text reply (immediate_reply_text below), so
                 # disclosed_to_senior stays True whether or not TTS actually
                 # produced audio -- the flag must be recorded either way, not
@@ -532,7 +532,7 @@ def run_turn(
     filtered_profile = [f for f in filtered_profile if f not in filtered_schedule and f not in guardrails]
 
     pending_conflicts = memory_store.get_pending_conflicts()
-    # Only THINK asks a clarification; at the daily cap (#23228) THINK never
+    # Only THINK asks a clarification; at the daily cap THINK never
     # runs, so the conflict must stay pending for a later turn to ask.
     if pending_conflicts and allow_hosted_call:
         memory_store.mark_conflicts_asked()
@@ -544,7 +544,7 @@ def run_turn(
     hosted_call_capped = False
     is_fallback = False
     if not allow_hosted_call:
-        # Daily request cap (#23228): the same degraded continuation as the
+        # Daily request cap: the same degraded continuation as the
         # NebiusNotConfigured branch below, without entering it -- the
         # fast-path above already spoke, disclosed and flagged; only the paid
         # THINK call (and the AUDIT/extraction thread after it) is withheld.
@@ -649,7 +649,7 @@ def run_turn(
                     except Exception:  # pragma: no cover - best-effort disclosure
                         disclosed = False
                     
-                    # #23232: the flag text is a FIXED description of the
+                    # The flag text is a FIXED description of the
                     # trigger category -- never the auditor's one-sentence
                     # reason, which can carry health details, names or a bank
                     # PIN the senior said. The raw verdict still rides on

@@ -6,9 +6,9 @@ Multi-profile support is a later concern -- the demo only needs one.
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,7 +21,7 @@ DEMO_MEMO = (
     "I'm dropping off groceries at 4 PM today."
 )
 
-# One-click "Load sample family" seed (Office #23218). Outside reviewers of
+# One-click "Load sample family" seed. Outside reviewers of
 # the live Space said the demo "feels like just talking to a bot"; a visible,
 # caregiver-configured household shows what the product is. Every entry is a
 # STRUCTURED item written straight into the session MemoryStore with an
@@ -45,7 +45,7 @@ SAMPLE_FAMILY = {
         # visit...): MemoryStore.caregiver_schedule_updates() claims any
         # caregiver line with one, and senior_profile_facts() then drops it,
         # so "Who is my daughter?" would reach the model with no answer
-        # (openai_review on #23218). The visits and calls are routine items.
+        # (openai_review). The visits and calls are routine items.
         ("family", "Sarah is his daughter and primary caregiver.", "public"),
         ("family", "His grandson Leo is nine and loves hearing his trumpet stories.", "public"),
         ("family", "Rosa next door is his neighbour and oldest friend.", "public"),
@@ -129,13 +129,13 @@ def validate_sample_profile(text_or_items) -> None:
                 )
 
 
-# One sentence boundary for every memo path (#23215). Each caller used to
+# One sentence boundary for every memo path. Each caller used to
 # split on its own rule ("." + space here, [.!?\n]+ there), so the same memo
 # dictated once and typed once produced different texts -- MemoryStore.add's
 # exact (text, source) dedupe cannot see those as the same fact, and a
 # transcript with "!"/"?"/no space after "." was stored as one whole-memo
 # item beside its own fragments. A "." followed by a digit is a decimal
-# point ("Give 1.5 mg"), never a boundary (openai_review on #23215).
+# point ("Give 1.5 mg"), never a boundary (openai_review).
 _MEMO_FACT_BOUNDARY_RE = re.compile(r"(?:[!?\n]|\.(?!\d))+")
 
 
@@ -144,6 +144,51 @@ def split_memo_facts(memo: str | None) -> list[str]:
     fact per sentence, dropping empties. The ONLY splitter any memo path may
     use, so a memo saved by any route yields identical items."""
     return [part.strip() for part in _MEMO_FACT_BOUNDARY_RE.split(memo or "") if part.strip()]
+
+
+# A caregiver update ("groceries at 6 PM today") supersedes
+# the earlier caregiver fact about the same subject ("groceries at 4 PM
+# today") instead of sitting beside it, so the model never gets both.
+# Two facts are "about the same subject" when their keys are EXACTLY equal:
+# lower-cased, every clock time ("4 PM", "6:30pm") replaced by one
+# placeholder, every other standalone run of digits by another, sentence punctuation
+# (.,!?;: before a space or the end) dropped and whitespace collapsed. Exact
+# equality is deliberate: "Dad loves jazz" never supersedes "Dad loves jazz,
+# especially Ella Fitzgerald". A digit run, not a whole decimal, is one
+# placeholder, so a number keeps its shape: "1.5 mg" and "15 mg", "-5 C" and
+# "5 C" stay two facts (the panel test keeps both doses listed).
+_CLOCK_TIME_RE = re.compile(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b")
+# Standalone digit runs only: a number glued to a letter names the subject
+# ("vitamin B12" vs "B6", "room 4b") and stays (Codex P1).
+_DIGITS_RE = re.compile(r"(?<!\w)\d+(?!\w)")
+_SENTENCE_PUNCT_RE = re.compile(r"[.,!?;:]+(?=\s|$)")
+
+
+_CLOCK_TIME_PARTS_RE = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b")
+
+
+def _canonical_clock_time(match: re.Match) -> str:
+    hour, minutes, meridiem = match.group(1), match.group(2), match.group(3)
+    hour = str(int(hour))
+    return f"{hour} {meridiem}" if minutes in (None, "00") else f"{hour}:{minutes} {meridiem}"
+
+
+def normalize_fact_text(text: str) -> str:
+    """Lower-cased, clock times written one way ("8:00AM" -> "8 am"),
+    sentence punctuation dropped, whitespace collapsed: "Call Sarah." and
+    "call  sarah", "pill, 8 AM" and "pill, 8:00 am" normalize the same (a
+    restatement, not an update)."""
+    lowered = _CLOCK_TIME_PARTS_RE.sub(_canonical_clock_time, (text or "").lower())
+    return " ".join(_SENTENCE_PUNCT_RE.sub("", lowered).split())
+
+
+def fact_subject_key(text: str) -> str:
+    """The subject a caregiver fact is about, with its times and numbers
+    blanked out (see the comment above). Equal keys + different normalized
+    text = the newer fact replaces the older one."""
+    key = _CLOCK_TIME_RE.sub(" <time> ", (text or "").lower())
+    key = _DIGITS_RE.sub("<n>", key)
+    return normalize_fact_text(key)
 
 
 @dataclass
@@ -155,10 +200,38 @@ class CaregiverFlag:
 
 
 class CaregiverFlags:
+    """Safety flags for one profile, persisted to `<data_dir>/<profile>.flags.json`.
+
+    Concurrency: `add` runs as a transaction under the
+    profile's one lock (`memory.profile_io.profile_lock`) that RELOADS the
+    file before appending and flushes through a unique temp file, so two
+    instances never overwrite each other's flags. `_flags` is a SNAPSHOT
+    taken at construction and refreshed at the start of each of this
+    instance's own `add`; `all()` reads it without the lock and can miss
+    other writers' commits, so construct a fresh instance for current data.
+    """
+
     def __init__(self, profile_id: str, data_dir: Path):
+        from memory.profile_io import profile_lock
+
         self.path = data_dir / f"{profile_id}.flags.json"
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = profile_lock(self.path)
+        self._txn_depth = 0
         self._flags: list[CaregiverFlag] = self._load()
+
+    @contextmanager
+    def _transaction(self):
+        """Profile lock for the whole body; the outermost entry reloads from
+        disk so the write applies to the latest committed flags."""
+        with self._lock:
+            if self._txn_depth == 0:
+                self._flags = self._load()
+            self._txn_depth += 1
+            try:
+                yield
+            finally:
+                self._txn_depth -= 1
 
     def _load(self) -> list[CaregiverFlag]:
         if not self.path.exists():
@@ -167,9 +240,9 @@ class CaregiverFlags:
         return [CaregiverFlag(**item) for item in raw]
 
     def _flush(self) -> None:
-        tmp_path = self.path.with_suffix(self.path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps([f.__dict__ for f in self._flags], indent=2))
-        os.replace(tmp_path, self.path)
+        from memory.profile_io import atomic_write_json
+
+        atomic_write_json(self.path, [f.__dict__ for f in self._flags])
 
     def add(self, text: str, severity: str, disclosed_to_senior: bool) -> CaregiverFlag:
         """`disclosed_to_senior` must reflect reality, not a default: only
@@ -177,10 +250,11 @@ class CaregiverFlags:
         this flag was raised. See safety/fastpath.py (always discloses, part
         of the immediate reply) and pipeline/orchestrator.py's AUDIT path
         (discloses via a follow-up spoken line; False only if that fails)."""
-        flag = CaregiverFlag(text=text, severity=severity, disclosed_to_senior=disclosed_to_senior)
-        self._flags.append(flag)
-        self._flush()
-        return flag
+        with self._transaction():
+            flag = CaregiverFlag(text=text, severity=severity, disclosed_to_senior=disclosed_to_senior)
+            self._flags.append(flag)
+            self._flush()
+            return flag
 
     def all(self) -> list[CaregiverFlag]:
         return list(self._flags)

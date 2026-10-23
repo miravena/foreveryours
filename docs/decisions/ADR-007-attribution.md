@@ -159,7 +159,7 @@ Cost-estimate: $X.XX (approximate[; in N, out N tokens])
 - A **GitHub issue or comment** written with AI help opens with the same three lines (one
   per line, or `·`-separated on one line).
 - **Merge commits made by an agent carry the same three trailers.** A trailer-less merge
-  commit bounced review on #14294 — a merge is as much an AI-produced artifact as any other
+  commit bounced review — a merge is as much an AI-produced artifact as any other
   commit, so it is not exempt.
 - **No `Co-Authored-By` for AI, no `Claude-Session` link, and no `Signed-off-by` from an
   agent** (the kernel reserves `Signed-off-by` for the human submitter) — all unchanged from

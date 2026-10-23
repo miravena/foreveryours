@@ -9,7 +9,45 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
-### 2026-10-22 (Ticket #23228: the daily cap withholds only the paid continuation)
+### 2026-10-22 (AUDIT model eval across served NVIDIA models)
+- **What:** `scripts/audit_eval.py` lists what Token Factory serves (`--list-models`, through
+  `scripts/with_key.sh`) and scores AUDIT over a committed 36-row labelled fixture
+  (`tests/fixtures/audit_eval_set.jsonl`). Responses are recorded per row id under `out/audit_eval/`,
+  so a re-run makes 0 calls. A 200-call cap exits 3, and stubs plus `--replay` run offline.
+  `pipeline/audit.py` gained only a `LAST_USAGE` hook for token counts.
+- **Measured (live, 108 calls):** Nano recall 0.63 (missed 5 of 6 falls), Super 120B 1.00, Ultra
+  550B 0.95; all 0/17 false flags, 0 UNKNOWN. Per call: Nano 0.000023 USD, Super 0.00011,
+  Ultra 0.00037.
+- **Decision:** Nano kept. The fixed rule needs strictly fewer false flags, and nothing can beat
+  0. See [ADR-010](decisions/ADR-010-audit-model-eval.md).
+- **Gotcha:** on falls, Nano's AUDIT judged the reply instead of the transcript ("the companion's
+  response is appropriate"). The fast-path matched none of the six fall rows either, so with
+  Nano, falls like "my legs just gave way on the stairs" raise no caregiver flag at all.
+
+### 2026-10-22 (Audio input is bounded and its failures are friendly)
+- **What:** `hear.transcribe(...)` sat outside every `try:` in `_run_demo_turn_impl`,
+  `_run_demo_turn_streaming_impl` and `save_caregiver_voice_memo`, so a corrupt or unsupported
+  upload, a Whisper load failure or a hosted+local ASR failure raised straight into Gradio; and
+  nothing bounded upload size or recording length, so a huge file was transcribed in full on CPU
+  before the daily cap was consulted. Source: Codex read-only review 2026-10-22, judge.md #9 and
+  robustness.md #7/#8 (code-derived; reproduced with transcribe patched to raise).
+- **Fix:** `webapp._guarded_transcribe(audio_in, return_metrics) -> (transcript, biomarkers,
+  refusal)` checks size (`MAX_AUDIO_UPLOAD_BYTES`, 25 MB) -> decoded duration
+  (`hear.probe_duration`, PyAV header read, `MAX_AUDIO_SECONDS`, 120) -> transcribe, and turns any
+  decode/ASR exception into "I couldn't make out that recording -- please try recording again, or
+  type what Dad says instead." (logs the exception type only). The refusal returns the same shape
+  as the empty-transcript branch, above the cap check, so a refused file writes nothing: no
+  memory, no flag, no `rate_limit.json`, no audio cleared. A missing or zero-byte path skips the
+  probes and still reaches "Couldn't make out any speech". Both `launch()` calls pass
+  `max_file_size` so Gradio also refuses oversize uploads at the HTTP layer.
+- **Proof:** `tests.test_webapp.TestAudioInputGuard` (6 tests, real WAV files, transcribe mock
+  call counts asserted) and `tests.test_hear.test_probe_duration_real_wav_and_garbage`: red on
+  pre-change main (7 errors), green after.
+- **Gotcha:** an `AssertionError` sentinel as transcribe's side effect would be swallowed by the
+  broad handler and pass vacuously -- assert on the mock (`assert_not_called`) instead.
+- **Next:** none in scope; a wall-clock transcription timeout was left out on purpose.
+
+### 2026-10-22 (The daily cap withholds only the paid continuation)
 - **What:** both turn handlers in `webapp.py` used to check
   `_will_call_nebius() and not _rate_limit_ok(...)` BEFORE `run_turn`, so a session at
   `MAX_DAILY_REQUESTS` got the daily-cap message for "I fell down earlier and I'm scared" --
@@ -22,7 +60,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
   flags exactly as before, THINK is skipped like the no-key branch (no AUDIT/extraction thread,
   `audit_verdict` names the daily request cap), and the reply gets a one-line cap notice plus a
   `_Rate limited_` biomarker header. `allow_hosted_call=False` on a non-fast-path transcript
-  raises `ValueError`. The process-wide cap (#17637) must fold into `_cap_decision`, never a
+  raises `ValueError`. The process-wide cap must fold into `_cap_decision`, never a
   new early return. Same shape as nginx `limit_req`'s exempt key: the exempt class is decided
   before the budget is.
 - **Proof:** new `test_cap_*` tests in `tests/test_webapp.py` (fall/breathe/crisis/confusion
@@ -32,7 +70,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
 - **Gotcha:** `run_turn`'s `except Exception` swallows an `AssertionError` side_effect on
   `stream_reply` into a fallback, so the tests also `assert_not_called()` the mocks.
 
-### 2026-10-22 (Ticket #23232: caregiver flag text carries no free text)
+### 2026-10-22 (Caregiver flag text carries no free text)
 - **What:** the caregiver flag text is now a FIXED, content-minimized description of the
   trigger category, defined in one place -- `safety/fastpath.py`'s `CAREGIVER_FLAG_TEXT`
   (fast-path `crisis`/`distress`/`confusion` plus the AUDIT background's `audit_crisis`/
@@ -71,7 +109,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
   and the local `--no-ff` merge into `main` was deliberately NOT done -- the fix commit sits
   on branch `oc/23232` only, as instructed.
 
-### 2026-10-22 (Office #23223: live judge-behaviour check after every Space deploy)
+### 2026-10-22 (Live judge-behaviour check after every Space deploy)
 - **What:** `scripts/live_judge_check.py` plays a judge against the hosted Space through
   `gradio_client`: 20 scored turns in six fresh sessions (pre-brief recall + "Is Sarah
   listening?", a typed "Dr. Tan" memo, driving, a fall, a crisis phrase, a private disclosure),
@@ -101,7 +139,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
   smoke test before the paid run -- do that first, always). With `download_files=False` the reply
   audio is never fetched, so a run leaves nothing on disk. The two `-- reply:` quotes in a FAIL
   line are the first 160 characters only.
-### 2026-10-22 (Office #23226: deploy from Actions, show the deployed sha)
+### 2026-10-22 (Deploy from Actions, show the deployed sha)
 - **What:** `.github/workflows/deploy-space.yml` (push to main until the freeze, Release,
   Run workflow; token check first; concurrency group; skips with a notice when the
   `HF_TOKEN_FY_SPACE` secret is absent). `scripts/deploy_hf_space.py` stages `BUILD_INFO`
@@ -124,11 +162,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
 - **Result:** `tests/test_retention_notice.py` -> 9 tests OK. `tests/test_webapp.py` -> 25 tests OK. All 22 mature benchmarks pass.
 - **Next:** Proceed with video shot list and recording (#21 / #5).
 
-### 2026-10-21 (Ticket #16084 round 4: perseveration disclosure regression from #88)
-- **What:** Office ticket #16084 round 4 (prior rounds landed `d624ab0`..`088c9c2`, merged
+### 2026-10-21 (round 4: perseveration disclosure regression from #88)
+- **What:** Round 4 of the perseveration-disclosure fix (prior rounds landed `d624ab0`..`088c9c2`, merged
   `0598d3e`). The review bounce found that the unrelated #88 "public-demo release candidate" PR
   (merged after the round-3 fix) made the perseveration confusion flag's `disclosed_to_senior`
-  depend on whether TTS delivered audio, contradicting ticket #16084's RULE 4: the flag is
+  depend on whether TTS delivered audio, contradicting the ticket's RULE 4: the flag is
   disclosed either way, because the disclosure line is already in the text reply. #88 also
   flipped `tests/test_perseveration_window.py`'s no-audio test to assert the regressed (wrong)
   behaviour.
@@ -228,7 +266,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
   path. This ordering predates this change (previously gated behind `if persev_paths:`, which is
   normally truthy); RULE #4 explicitly requires removing that gate. Recommend a follow-up issue to
   move the flag-add to just before `run_turn` returns.
-- **Review-bounce round 2 (review-arm, `changes-requested`, failure_class=context):** flagged (1)
+- **Review-bounce round 2 (automated review, `changes-requested`, failure_class=context):** flagged (1)
   `tests/test_orchestrator.py`'s existing assertion was edited despite the "pass unchanged"
   requirement, and (2) the new tests didn't explicitly catch exceptions from the code under test
   per HOW TO WORK step 3. Fixed: reverted `tests/test_orchestrator.py` to be byte-identical to
@@ -239,7 +277,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
   Re-verified: `tests.test_perseveration_window tests.test_orchestrator` -> `OK`, 43 tests; full
   `discover tests` -> `OK (skipped=8)`, 228 tests; negative control against `34e8426` with the
   updated test file -> `FAILED (failures=4)`, 0 `ERROR` lines. AC3's "GitHub evidence... CI green"
-  is unverifiable by the review-arm's own sandbox (no `api.github.com` reachability per its bounce
+  is unverifiable by the automated review's own sandbox (no `api.github.com` reachability per its bounce
   note) but `gh issue view 159 --json number,state` succeeds from this session -- same recurring
   environment gap documented below for #165 and #148's rounds.
 
@@ -248,8 +286,8 @@ Format: newest first. One entry per session: date, who, what, result, next.
   updated to match ("Perseveration"); same semantics, same `disclosed_to_senior` check.
   Perseveration and orchestrator tests: 43 OK. Full suite: 240 OK (skipped=8).
 
-### 2026-10-15 (Issue #165 follow-up - review-arm bounce: GitHub closure/CI/live-invocation evidence)
-- **What:** review-arm bounced #16083 (`changes-requested`): "Runtime tests and negative control pass, but GitHub closure evidence, CI, and live invocation remain unverified." AC1 (unit tests) was already independently confirmed by the reviewer's own run. The same recurring environment gap documented in this file for #140's rounds above (reviewer's sandbox can't reach GitHub) looks like the cause for the closure/CI half; "live invocation" asked for the same kind of real-process, real-HTTP-API evidence #140 already has in `scripts/demo_caregiver_panel_live.sh`, which this ticket's work didn't produce an analogue of.
+### 2026-10-15 (Issue #165 follow-up - automated review bounce: GitHub closure/CI/live-invocation evidence)
+- **What:** automated review bounced the change (`changes-requested`): "Runtime tests and negative control pass, but GitHub closure evidence, CI, and live invocation remain unverified." AC1 (unit tests) was already independently confirmed by the reviewer's own run. The same recurring environment gap documented in this file for #140's rounds above (reviewer's sandbox can't reach GitHub) looks like the cause for the closure/CI half; "live invocation" asked for the same kind of real-process, real-HTTP-API evidence #140 already has in `scripts/demo_caregiver_panel_live.sh`, which this ticket's work didn't produce an analogue of.
 - **Re-confirmed from this session (network reachable here):** `git rev-parse HEAD origin/main` both `a1f65c6`; all 8 issues (`#165` + duplicates `#154,#156,#158,#160,#163,#166,#167`) `CLOSED` via `gh issue view --json state,closedAt`; CI on `a1f65c6` -- `attribution`, `tests`, `CodeQL` all `completed success` via `gh run list --json`.
 - **Fixed (new live-invocation evidence):** added `scripts/demo_memory_conflict_privacy_live.sh`, the same pattern as `scripts/demo_caregiver_panel_live.sh` (real `webapp.py` process, real HTTP API, `ss`-verified socket ownership) but exercising the memory-conflict path end to end: `add_conflict()` -> live panel check, `mark_conflicts_asked()` -> live panel check, `escalate_asked_conflicts()` -> live panel check (private text absent, fixed content-free flag present), then the raw on-disk store file read directly to confirm the scrub. Re-run for this entry:
   ```
@@ -265,12 +303,12 @@ Format: newest first. One entry per session: date, who, what, result, next.
   ```
 - **Result:** no production-code change this round (the finding was evidence, not behaviour); full suite unchanged, `OK (skipped=8)`, 209 tests.
 
-### 2026-10-15 (Issue #148 follow-up - review-arm bounce: _end_session still followed a same-directory symlink alias)
-- **What:** review-arm bounced #16085 (`changes-requested`): "source inspection and a read-only Python simulation showed `_end_session` follows an in-directory session alias and calls `rmtree` on its target; the symlink test covers only an external target." Real finding: `_session_root()` returns `os.path.realpath(...)` -- for a symlinked entry that IS already the resolved target, not the entry itself, so `os.path.islink(root)` in `_end_session()` was checking the wrong path (the resolved target is never itself a symlink). A same-directory alias (a symlink under `SESSIONS_DIR` whose target is itself another real session also under `SESSIONS_DIR`) resolves to `base/<other-real-id>`, which still passes `_session_root()`'s containment check, so the `ValueError`/return-early path never fired for this case -- only an EXTERNAL target happened to get caught, by accident, because resolving it fails the containment check outright. The committed test used an external target, so it only ever exercised the accidental path and never reproduced the real bug.
+### 2026-10-15 (Issue #148 follow-up - automated review bounce: _end_session still followed a same-directory symlink alias)
+- **What:** automated review bounced the change (`changes-requested`): "source inspection and a read-only Python simulation showed `_end_session` follows an in-directory session alias and calls `rmtree` on its target; the symlink test covers only an external target." Real finding: `_session_root()` returns `os.path.realpath(...)` -- for a symlinked entry that IS already the resolved target, not the entry itself, so `os.path.islink(root)` in `_end_session()` was checking the wrong path (the resolved target is never itself a symlink). A same-directory alias (a symlink under `SESSIONS_DIR` whose target is itself another real session also under `SESSIONS_DIR`) resolves to `base/<other-real-id>`, which still passes `_session_root()`'s containment check, so the `ValueError`/return-early path never fired for this case -- only an EXTERNAL target happened to get caught, by accident, because resolving it fails the containment check outright. The committed test used an external target, so it only ever exercised the accidental path and never reproduced the real bug.
 - **Fixed (`webapp.py`):** `_end_session()` now calls `_session_root()` only to validate id shape/containment, then checks `os.path.islink()` and runs `shutil.rmtree()` on the LITERAL, unresolved `SESSIONS_DIR / session_id` entry -- the same principle `_sweep_stale_sessions()` already used (operate on the entry `iterdir()` actually yielded, never on a resolved path).
 - **Tests:** changed the existing symlink test to an in-directory target (confirmed it now FAILs against the pre-fix-this-round code at `target.exists()` after `_end_session`, and passes after the fix); added a second test keeping the external-target case for belt-and-suspenders coverage.
 - **Result:** `tests.test_session_paths tests.test_webapp` -> `OK` (44 tests, was 43); full `discover tests` -> `OK (skipped=8)`, 222 tests (was 221). Negative control against pre-fix `34e8426` re-run with the updated test file: `FAILED (failures=12)`, 0 `ERROR` lines, `grep FAIL && ! grep ERROR` exits 0.
-- **AC 3 (manual/GitHub), unchanged from last round:** still not run by this worker -- no `gh`/GitHub network access under fleet policy (the review-arm's own `gh issue view`/`gh run list` calls also failed connecting to `api.github.com` per its bounce note, so this is a shared environment constraint, not something this worker chose to skip).
+- **AC 3 (manual/GitHub), unchanged from last round:** still not run by this worker -- no `gh`/GitHub network access under fleet policy (the automated review's own `gh issue view`/`gh run list` calls also failed connecting to `api.github.com` per its bounce note, so this is a shared environment constraint, not something this worker chose to skip).
 
 ### 2026-10-15 (Issues #148 (PRIMARY), #149, #150, #151 - session sweeper/_end_session race-free + symlink-safe, bad id never blocks crisis fast-path)
 - **What:** `_sweep_stale_sessions()` deleted any directory under `SESSIONS_DIR` older than `SESSION_TTL_S` with `shutil.rmtree(child, ignore_errors=True)`, with no check that `child` was a session id, not a symlink, and no lock shared with `_touch_session()` -- a touch landing right after the sweeper's `stat()` still got deleted (#148), a symlinked alias with a valid hex name got its *target* rm-tree'd through the link (#150, #151), and a stray non-hex directory was swept too. `_end_session()` popped `_bg_threads` before validating the id and followed the same symlink. `_bg_threads` held one thread per session, so a later turn's background writer silently overwrote tracking of a still-running earlier one (#148), and the `run_demo_turn_streaming` `_worker` thread itself was never tracked, so a browser disconnect (`gen.close()`) left an untracked writer able to race a delete. `_session_dirs()` raised `ValueError` for a malformed/foreign session id, and every pipeline entry point called it before any safety handling, so `"I want to die"` with a bad id (e.g. a stale/expired Gradio `State`) got an unhandled exception instead of the offline crisis fast-path reply (#149).
@@ -289,16 +327,16 @@ Format: newest first. One entry per session: date, who, what, result, next.
 - **Tests:** new `TestMemoryConflictPrivacy` class in `tests/test_caregiver_panel_privacy.py` (existing file, existing session helpers) covers: tagged-old-fact, untagged-old-fact, private-text-only-in-new-fact, and private-text-only-in-reason, each checked right after `add_conflict()`, after `mark_conflicts_asked()`, and after `escalate_asked_conflicts()`; on-disk scrub checks after each of `resolve_asked_conflicts()`, `escalate_asked_conflicts()`, `clear_conflicts()`; and an escalation-cardinality test (two asked conflicts -> exactly two fixed-text flags, severity info, not disclosed; a second call adds none). `tests/test_mature_benchmarks.py` Benchmark 12 (`test_fire_and_forget_escalation`) still passes unchanged (it only asserts the substring "Unresolved Memory Ambiguity" is present and that pending conflicts clear).
 - **Result:** `tests.test_caregiver_panel_privacy tests.test_mature_benchmarks` -> `OK (skipped=8)`; full `discover tests` -> `OK (skipped=8)`, 209 tests. Negative control against pre-fix `34e8426` with this test file copied in: see commit this entry ships with for the probe transcript.
 
-### 2026-10-12 (Issue #140 fifth follow-up - review-arm bounce: merge-commit trailer gap disclosed, not fixed by rewrite)
-- **What:** review-arm bounced #14294 a fifth time: "AC 3 fails the every-commit audit requirement, and GitHub closure and comment evidence cannot be independently verified." Specifics: `gh issue view`/`git log --grep`/`REVIEW.md`/`docs/WORK_LOG.md` were inspected; GitHub itself was unreachable from the reviewer's environment again (the fourth time this exact recurring issue has shown up across this ticket's rounds), and "ticket merge commits including `9a874ce`, `1c45ed2`, `9c57346`, `d8ed98f` and `bfa604d` lack required Assisted-by and Cost-estimate audit lines."
+### 2026-10-12 (Issue #140 fifth follow-up - automated review bounce: merge-commit trailer gap disclosed, not fixed by rewrite)
+- **What:** review bounced the change a fifth time: "AC 3 fails the every-commit audit requirement, and GitHub closure and comment evidence cannot be independently verified." Specifics: `gh issue view`/`git log --grep`/`REVIEW.md`/`docs/WORK_LOG.md` were inspected; GitHub itself was unreachable from the reviewer's environment again (the fourth time this exact recurring issue has shown up across this ticket's rounds), and "ticket merge commits including `9a874ce`, `1c45ed2`, `9c57346`, `d8ed98f` and `bfa604d` lack required Assisted-by and Cost-estimate audit lines."
 - **Real finding, genuinely this worker's gap:** every *feature* commit this ticket produced carries the required trailers, but the `git merge --no-ff` commits this worker wrote to land each round's fix carried a plain `Merge branch '...' (Refs #140)` message with no `Assisted-by`/`Cost-estimate` lines at all -- the AUDIT rule says "every commit," and a merge commit is one. This is the same gap three sibling tickets' entries in this file already disclosed for their own merge commits (`53affd2` and others, Issue #139/#71 follow-ups above) -- each time because a merge commit's message isn't the feature commit's message, and nothing in this repo's merge step copies trailers forward. This worker should have been adding them to every merge commit message from the first round and was not.
 - **Not fixed by rewrite (gated):** `9a874ce`, `1c45ed2`, `9c57346`, `d8ed98f` and `bfa604d` are already on `origin/main`, confirmed by CI having run and passed on each of them in turn. Per this session's own "never rewrite a commit already on GitHub" rule (and the identical precedent already recorded in this file for `53affd2`'s sibling tickets), none of the five is amended or rebased away. Disclosed here and on the issue rather than hidden.
 - **Fixed going forward:** every merge commit this worker creates from this round on carries its own `Assisted-by`/`Cost-estimate` trailers in the merge commit message itself, not only in the feature commit being merged.
 - **GitHub closure/comment compliance -- independently re-confirmed from this session (network reachable here), fourth time this has had to substitute for the reviewer's own check:** `gh issue view 140 -R miravena/foreveryours --json state,url` -> `state: CLOSED`, now with six audit-header-compliant comments.
 - **Result:** no code or test changes this round (the finding was commit-message hygiene, not behaviour); `tests/test_caregiver_panel_privacy.py` unchanged at 6/6, full suite unchanged at `202 tests ... OK (skipped=8)`.
 
-### 2026-10-12 (Issue #140 fourth follow-up - review-arm bounce addressed: inspectable runtime evidence committed)
-- **What:** review-arm bounced #14294 a fourth time: "GitHub closure and comment compliance cannot be independently verified, and the recorded live-server exercise lacks inspectable runtime evidence." The reviewer's own check (`gh issue view 140`, `git log --all --grep='#140'`, `git branch -r --contains ed6e0a1`, `git rev-parse HEAD origin/main`) independently confirmed `HEAD == origin/main` at `143df1e` with `ed6e0a1` included -- i.e. the third bounce's push fix (below) did land -- but the reviewer's own GitHub connection failed again (the same recurring environment issue as the first and second bounces), and the second bounce's live-server demo had only been described in prose here, with the actual curl/HTTP transcript left uncommitted ("ephemeral demo, temp dirs cleaned up after" -- true, but that meant there was nothing in the repo a reviewer could inspect without re-running anything itself).
+### 2026-10-12 (Issue #140 fourth follow-up - automated review bounce addressed: inspectable runtime evidence committed)
+- **What:** review bounced the change a fourth time: "GitHub closure and comment compliance cannot be independently verified, and the recorded live-server exercise lacks inspectable runtime evidence." The reviewer's own check (`gh issue view 140`, `git log --all --grep='#140'`, `git branch -r --contains ed6e0a1`, `git rev-parse HEAD origin/main`) independently confirmed `HEAD == origin/main` at `143df1e` with `ed6e0a1` included -- i.e. the third bounce's push fix (below) did land -- but the reviewer's own GitHub connection failed again (the same recurring environment issue as the first and second bounces), and the second bounce's live-server demo had only been described in prose here, with the actual curl/HTTP transcript left uncommitted ("ephemeral demo, temp dirs cleaned up after" -- true, but that meant there was nothing in the repo a reviewer could inspect without re-running anything itself).
 - **Fixed (inspectable runtime evidence):** added `scripts/demo_caregiver_panel_live.sh`, a committed, re-runnable script that reproduces the second bounce's live-deployment exercise end to end and exits non-zero if any check fails: it launches the real `webapp.py` Gradio server as its own OS process on a throwaway port, waits for it to answer `/config`, creates a real session via `POST /gradio_api/call/init_session` (same `session_hash` reused for every call in the run, since `session_id` is carried in a Gradio `gr.State`, not the request body -- the second bounce's manual run got this right by luck; the script makes it explicit so a future re-run doesn't silently fall back to a stateless "no session yet" render), locates that session's on-disk store, injects an EMOTIONAL-scope memory (`"I feel lonely since my wife died"`) and a disclosed flag (`"Dad mentioned feeling dizzy this morning"`) directly into the files the running process reads, calls the live `_format_caregiver_panel` render over the same HTTP API, and asserts the EMOTIONAL text is absent while the flag and a caregiver memo are present. Cleans up its server process and temp dirs via `trap ... EXIT` regardless of outcome (`scripts/smoke.sh`'s pattern). Re-run just now for this entry:
   ```
   $ PORT=7916 scripts/demo_caregiver_panel_live.sh
@@ -318,23 +356,23 @@ Format: newest first. One entry per session: date, who, what, result, next.
   0
   ```
   (long JSON lines above trimmed of mid-string line-wraps for readability; the raw, unwrapped response is byte-identical to what the script prints.) The private text ("I feel lonely since my wife died") never appears in either `data:` payload; the disclosed flag and all caregiver memos do.
-- **GitHub closure/comment compliance -- independently re-confirmed from this session (network reachable here):** `gh issue view 140 -R miravena/foreveryours --json state,url` -> `state: CLOSED`. Four comments on the issue, each starting with the required `Assisted-by: ClaudeCode:claude-sonnet-5 effort=high · Cost-estimate: $X.XX (approximate)` audit line (first-close evidence, second-bounce fallback-fix + live-demo evidence, third-bounce "actually published now" correction, and this round's follow-up below). Posted as a GitHub comment rather than left only here, since review-arm's own GitHub access has now failed on three separate bounces and a repo-local doc cannot substitute for the reviewer actually reaching GitHub.
+- **GitHub closure/comment compliance -- independently re-confirmed from this session (network reachable here):** `gh issue view 140 -R miravena/foreveryours --json state,url` -> `state: CLOSED`. Four comments on the issue, each starting with the required `Assisted-by: ClaudeCode:claude-sonnet-5 effort=high · Cost-estimate: $X.XX (approximate)` audit line (first-close evidence, second-bounce fallback-fix + live-demo evidence, third-bounce "actually published now" correction, and this round's follow-up below). Posted as a GitHub comment rather than left only here, since automated review's own GitHub access has now failed on three separate bounces and a repo-local doc cannot substitute for the reviewer actually reaching GitHub.
 - **Result:** `.venv/bin/python -m unittest discover tests` on `main` HEAD (after fast-forwarding this worktree to `origin/main` at `143df1e`, which also picked up sibling tickets' unrelated changes merged since the third bounce): `Ran 202 tests in 3.476s ... OK (skipped=8)`. `tests/test_caregiver_panel_privacy.py`: unchanged, 6/6 pass (this round added no further filtering-logic changes -- the finding was an evidence-inspectability gap, not a code defect). AC1/AC2 unchanged from prior rounds. AC3: issue closed with evidence (re-confirmed above), and the live-deployment evidence that previously existed only as prose is now a committed, re-runnable script plus its captured output in this entry.
 
-### 2026-10-12 (Issue #140 second follow-up - review-arm bounce addressed: fallback gap + live deployment evidence)
-- **What:** review-arm bounced #14294 a second time: "GitHub closure and comment audit requirements remain unverifiable [from review-arm's own environment -- its GitHub connection failed], deployment evidence is absent, and the unknown-scope fallback has an uncovered exception."
+### 2026-10-12 (Issue #140 second follow-up - automated review bounce addressed: fallback gap + live deployment evidence)
+- **What:** review bounced the change a second time: "GitHub closure and comment audit requirements remain unverifiable [from automated review's own environment -- its GitHub connection failed], deployment evidence is absent, and the unknown-scope fallback has an uncovered exception."
 - **Fixed (the real finding):** `_caregiver_panel_may_show()` checked `item.source in CAREGIVER_SOURCES` *before* checking whether `item.scope` was one this code recognises, so the RULE's "if an item's scope is unknown, do not show it" fallback only actually fired for non-caregiver-sourced items -- a caregiver-sourced item with a garbage/future scope value would have rendered unconditionally. Moved the unknown-scope check to the top of the function so it applies regardless of source. Added `test_unknown_scope_hidden_even_for_caregiver_source`.
 - **Addressed (deployment evidence):** launched the real `webapp.py` Gradio server as its own OS process (`PORT=7899 FY_SESSIONS_DIR=<tmp> .venv/bin/python webapp.py`), confirmed it serving (`curl` -> 200), called `init_session` live over its `/gradio_api/call/...` HTTP API to create a real session, injected an EMOTIONAL-scope memory and a flag directly into that live session's on-disk store (the same files the running process reads), then called `_format_caregiver_panel` over the same HTTP API against the still-running server and confirmed the response omits the private text while showing the flag and all caregiver memos -- i.e. the actual deployed server process filtering live input, not a unittest mock. Full transcript saved at session time (curl commands + decoded response); not committed to the repo (ephemeral demo, temp dirs cleaned up after).
-- **Not independently re-verifiable by review-arm:** the GitHub comment/closure posted for the first bounce round is unchanged (issue #140 is CLOSED on GitHub with the evidence comment from the prior round); review-arm's own tooling could not reach GitHub to re-confirm this, which is outside this worker's control.
+- **Not independently re-verifiable by automated review:** the GitHub comment/closure posted for the first bounce round is unchanged (issue #140 is CLOSED on GitHub with the evidence comment from the prior round); automated review's own tooling could not reach GitHub to re-confirm this, which is outside this worker's control.
 - **Result:** `tests/test_caregiver_panel_privacy.py` now 6 tests, all pass on `main`; negative control against pre-fix commit `9f5a311` -- 6 failures (assertions, 0 errors). Full suite: `202 tests, OK (skipped=8)`.
 
-### 2026-10-12 (Issue #140 third follow-up - review-arm bounce addressed: fix was never actually published)
-- **What:** review-arm bounced #14294 a third time: the follow-up fix (`ed6e0a1`, `d051a97`, `ebf1120`) was never pushed to `origin/main`, so it was not live, and #140 had been closed describing a fix that only existed on this machine's local `main`.
+### 2026-10-12 (Issue #140 third follow-up - automated review bounce addressed: fix was never actually published)
+- **What:** review bounced the change a third time: the follow-up fix (`ed6e0a1`, `d051a97`, `ebf1120`) was never pushed to `origin/main`, so it was not live, and #140 had been closed describing a fix that only existed on this machine's local `main`.
 - **Root cause:** this worker had mistakenly treated pushing to `origin/main` as not permitted for this session and closed the GitHub issue describing a fix that only existed on this machine's local `main`. That assumption was wrong: `origin/main`'s own history (confirmed via `git ls-remote origin main`) already carried multiple sibling tickets' pushes (`384af58`, `4060f34`, `a197b01`, `6c32de9`, ...) from earlier in this same work cycle, so pushing was in fact expected for this work. Closing a GitHub issue "with evidence" while the described fix sits only on a local, unpushed `main` is misleading regardless of how clearly the comment discloses that -- the issue claims a result that does not yet exist from GitHub's point of view.
 - **Fixed:** ran `git push origin main` (`384af58..ebf1120`); confirmed via `git ls-remote` that the pushed SHA matches local `main`. Polled CI to completion on `ebf1120`: `tests`, `attribution`, and `CodeQL` all `success`. Posted a correcting comment on #140 pointing at the actually-published commits and the green CI run; issue stays closed, now accurately.
 
-### 2026-10-12 (Issue #71 follow-up - review-arm bounce addressed: merge-trailer gap disclosed, GitHub closure evidence posted)
-- **What:** review-arm (Codex engine) bounced #14296 as `changes-requested`: AC 1 and AC 2 were
+### 2026-10-12 (Issue #71 follow-up - automated review bounce addressed: merge-trailer gap disclosed, GitHub closure evidence posted)
+- **What:** review (Codex engine) bounced the change as `changes-requested`: AC 1 and AC 2 were
   met (honesty test + negative control reproduced against `9f5a311`), but AC 3's "#71 closed
   with evidence" was unmet for two reasons -- the merge commit `6c32de9` carries neither
   `Assisted-by` nor `Cost-estimate`, and GitHub verification had failed at bounce time because
@@ -352,7 +390,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
   miravena/foreveryours --json state,closedAt,comments,url` shows the issue already `CLOSED`
   (auto-closed by GitHub on the `Fixes #71` trailer when `6c32de9` was pushed) but with zero
   comments -- closed without the evidence comment AC 3 asks for. Posted that comment now: commit
-  SHAs, the AC 1 test output, the AC 2 negative-control probe output, and this review-arm verdict
+  SHAs, the AC 1 test output, the AC 2 negative-control probe output, and this automated review verdict
   (with the merge-trailer gap named rather than hidden), each line starting with the required
   `Assisted-by: ClaudeCode:claude-sonnet-5 effort=medium` audit line. No further issue-state
   change was needed since GitHub had already closed it correctly.
@@ -360,8 +398,8 @@ Format: newest first. One entry per session: date, who, what, result, next.
   on `main` at this follow-up's merge base. CI (`tests`, `attribution`, `CodeQL`) green on every
   `main` push since `b717ab7`, confirmed via `gh run list -R miravena/foreveryours -b main`.
 
-### 2026-10-12 (Issue #139 follow-up - review-arm bounce addressed, pushed and closed)
-- **What:** review-arm bounced #14295 (`changes-requested`): the merge commit lacked audit
+### 2026-10-12 (Issue #139 follow-up - automated review bounce addressed, pushed and closed)
+- **What:** automated review bounced the change (`changes-requested`): the merge commit lacked audit
   trailers and issue closure with evidence was unmet. Root cause for the closure half: the
   decision to stay local-only (previous entry below) was wrong -- founder decision 911 records
   "fleet works ForeverYours issues and pushes to main while the teammate is away", which this
@@ -381,8 +419,8 @@ Format: newest first. One entry per session: date, who, what, result, next.
   would mean rewriting a commit already on GitHub, which this session does not do. Feature
   commits under it carry correct trailers.
 
-### 2026-10-12 (Issues #137, #143 follow-up - review-arm bounce addressed)
-- **What:** review-arm (Codex engine) bounced #14293 as `changes-requested`:
+### 2026-10-12 (Issues #137, #143 follow-up - automated review bounce addressed)
+- **What:** review (Codex engine) bounced the change as `changes-requested`:
   (1) the notices stated only the combined worst-case cache delay (~70 min)
   without the sweep's own two numbers (10 min interval, 60 min age
   threshold); (2) the fixed closed-tab delay had briefly been derived from
@@ -404,7 +442,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
 ### 2026-10-12 (Issue #139 - perseveration flag needs a repeated question)
 - **What:** The confusion/perseveration flag in `pipeline/orchestrator.py` now requires the current turn and the two prior user turns to (1) share `detect_intent`, (2) have content-word Jaccard overlap >= 0.5 (content words: lowercase `[a-z0-9]+` tokens longer than 2 chars, minus `memory.store.STOPWORDS`), and (3) all fall inside a new named constant, `PERSEVERATION_WINDOW_S = 1800`. `webapp.py` and `main.py` now stamp `"ts": time.time()` on each user turn appended to history; a history entry with no `ts` (or a non-numeric one) counts as outside the window (errs toward no false confusion label).
 - **Why:** The old rule only checked that the last two user turns shared one intent label. Three distinct LOGISTICAL questions ("When is my appointment?" / "Are groceries coming today?" / "What is planned tomorrow?") all classify as `LOGISTICAL` and were wrongly flagged as a confusion loop.
-- **Result:** `tests/test_perseveration_window.py` (6 cases: distinct questions, verbatim repeat, repeat older than the window, paraphrases, missing `ts`, garbled `ts`) fails on the distinct-questions case on pre-fix code (assertion, not import error) and passes post-fix. `tests/test_orchestrator.py::test_perseveration_tracking_flags_loop` updated to stamp `ts` on its history so the disclosure-on-a-real-flag invariant stays covered. REVIEW.md high-effort pass (Claude, high effort, subagent) found a malformed-`ts` crash, fixed here, and filed two follow-ups: #153 (short identifying tokens like 2-letter surnames collapse distinct questions) and a nit (prior-vs-prior comparison not checked) added to #109's grouped checklist. Full suite after this ticket's merge into `main`: `Ran 200 tests ... OK (skipped=8)`. Did not push to GitHub or close #139 directly, and did not run `git push` at all, including under `--no-verify` — this session follows the fleet's standing local-only git policy (confirmed independently by #14293/#14294/#14296 landing the same day), so the commit lands on `main` locally only. Also found: the repo's `.githooks/pre-push` hook will BLOCK the next push attempt on two pre-existing commits already in `main` (`a68ae02`, `05b5423`, from #137/#143) whose `Fixes #137, #143:` subject has two comma-separated issue numbers instead of the one the hook's regex expects — not fixable without rewriting an already-merged commit message, left for whoever has the founder's publish go-ahead.
+- **Result:** `tests/test_perseveration_window.py` (6 cases: distinct questions, verbatim repeat, repeat older than the window, paraphrases, missing `ts`, garbled `ts`) fails on the distinct-questions case on pre-fix code (assertion, not import error) and passes post-fix. `tests/test_orchestrator.py::test_perseveration_tracking_flags_loop` updated to stamp `ts` on its history so the disclosure-on-a-real-flag invariant stays covered. REVIEW.md high-effort pass (Claude, high effort, subagent) found a malformed-`ts` crash, fixed here, and filed two follow-ups: #153 (short identifying tokens like 2-letter surnames collapse distinct questions) and a nit (prior-vs-prior comparison not checked) added to #109's grouped checklist. Full suite after this ticket's merge into `main`: `Ran 200 tests ... OK (skipped=8)`. Did not push to GitHub or close #139 directly, and did not run `git push` at all, including under `--no-verify` — this session follows the fleet's standing local-only git policy (confirmed independently landing the same day), so the commit lands on `main` locally only. Also found: the repo's `.githooks/pre-push` hook will BLOCK the next push attempt on two pre-existing commits already in `main` (`a68ae02`, `05b5423`, from #137/#143) whose `Fixes #137, #143:` subject has two comma-separated issue numbers instead of the one the hook's regex expects — not fixable without rewriting an already-merged commit message, left for whoever has the founder's publish go-ahead.
 
 ### 2026-10-12 (Issue #71 - no fake time-to-first-sound when nothing played)
 - **What:** `pipeline/speak.play_wav` now returns `True` only when playback actually completed
@@ -466,9 +504,9 @@ Format: newest first. One entry per session: date, who, what, result, next.
   2. **`memory/store.py`'s `escalate_asked_conflicts()` (unmodified by this diff).** If a `CONFLICT:` command's `old_fact` argument is copied verbatim from an `[EMOTIONAL STATE]: ...` line in `ACTIVE PROFILE FACTS` (the same copy-verbatim convention `supersede()` already has to undo) and the conflict is never resolved, the raw text — including that tag — is written straight into an undisclosed `CaregiverFlags` entry, which renders in the panel's flags section regardless of disclosure status.
   Both require a specific, narrower conversational path than the direct "Briefed memory" leak #140 reported, and both sit in files/behaviour this ticket did not touch (the extraction prompt's profound-event carve-out and flag-side conflict escalation are pre-existing, deliberate designs, not something this ticket's narrowly-scoped render-time filter was asked to cover after multiple plan-review rounds). Not fixed here; recommended as two follow-up GitHub Issues in the closing evidence comment below.
 
-### 2026-10-12 (Issue #140 follow-up - review-arm bounce addressed: GitHub closure)
-- **What:** review-arm (Codex engine) bounced #14294 as `changes-requested`: AC 1 and AC 2 were met (test output + negative control reproduced), but AC 3's "#140 closed with evidence" was unmet — no GitHub comment or issue closure had been posted.
-- **Correction to the earlier assumption in this file (and in #137/#143's "review-arm bounce addressed" entry above):** the fleet's general local-only git rule ("never push/PR/`gh`") is not actually a blanket ban for this repo. `office/docs/PUBLIC-REPOS.md` lists `miravena/foreveryours` with "Automation allowed: ... opens and closes issues with proof (founder decisions 871 and 872); never approves, merges or pushes" — i.e. `gh issue comment` / `gh issue close` with evidence is explicitly pre-authorized for this repo; only approving/merging a PR and `git push` are not. Missed this document the first time through; worth both workers re-checking it for #137/#143.
+### 2026-10-12 (Issue #140 follow-up - automated review bounce addressed: GitHub closure)
+- **What:** review (Codex engine) bounced the change as `changes-requested`: AC 1 and AC 2 were met (test output + negative control reproduced), but AC 3's "#140 closed with evidence" was unmet — no GitHub comment or issue closure had been posted.
+- **Correction to the earlier assumption in this file (and in #137/#143's "automated review bounce addressed" entry above):** the fleet's general local-only git rule ("never push/PR/`gh`") is not actually a blanket ban for this repo. the fleet's public-repo policy lists `miravena/foreveryours` with "Automation allowed: ... opens and closes issues with proof (founder decisions 871 and 872); never approves, merges or pushes" — i.e. `gh issue comment` / `gh issue close` with evidence is explicitly pre-authorized for this repo; only approving/merging a PR and `git push` are not. Missed this document the first time through; worth both workers re-checking it for #137/#143.
 - **Result:** Posted the evidence comment (commit SHAs, test + negative-control + full-suite output, both review verdicts) and closed #140 via `gh issue close` — no `git push origin main` was run, consistent with the "never pushes" half of the same authorization. See the GitHub issue itself for the full comment text.
 
 ### 2026-10-12 (Issue #146 - sweeper kept away from active sessions)
@@ -624,6 +662,7 @@ One line each; the reasoning is in the ADR.
 | Working agreement | Direct commits to `main`; pvjthomas keeps write access | 10-04 | [006](decisions/ADR-006-working-agreement.md) |
 | Attribution | Human = author, AI = `Co-Authored-By` trailer; warn-only guardrails | 10-05 | [007](decisions/ADR-007-attribution.md) |
 | Build vs reuse | Keep privacy layer, fast-path, voice loop; licence check on `piper-tts`; trial embedding retrieval (Proposed, review #114) | 10-09 | [009](decisions/ADR-009-build-vs-reuse.md) |
+| AUDIT model eval | Nano kept for AUDIT under the fixed rule; Super recall 1.00 vs Nano 0.63, both 0/17 false flags | 10-22 | [010](decisions/ADR-010-audit-model-eval.md) |
 
 ## How to update this
 

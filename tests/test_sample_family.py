@@ -1,4 +1,4 @@
-"""Office #23218: one-click "Load sample family".
+"""one-click "Load sample family".
 
 A judge clicks one button before saying anything and the caregiver panel
 shows a labelled-fictional senior with family, likes, a daily routine and
@@ -59,7 +59,7 @@ class TestSampleSeedAndValidator(unittest.TestCase):
         self.assertIn("visit", routine)
 
     def test_identity_facts_carry_no_schedule_words(self):
-        """openai_review on #23218: a family/persona/likes line that also
+        """openai_review: a family/persona/likes line that also
         says "every evening" or "visits on Saturday afternoons" is claimed by
         MemoryStore.caregiver_schedule_updates() and dropped from
         senior_profile_facts(), so "Who is my daughter?" would get nothing.
