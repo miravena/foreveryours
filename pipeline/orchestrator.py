@@ -102,6 +102,11 @@ _DRIVING_INTENT_RE = re.compile(
     r"\b(?:i|i'll|i will|i'm going to|i am going to|i'd like to|i think i'll|i'm gonna|gonna|let me)\b[^.!?]{0,40}\bdriv(?:e|ing)\b",
     re.IGNORECASE,
 )
+# Past or negated driving ("I used to drive", "I don't drive anymore") is not a plan to drive.
+_DRIVING_NOT_INTENT_RE = re.compile(
+    r"\b(?:used to|can't|cannot|can not|don't|do not|won't|will not|never|stopped|gave up|no longer)\b[^.!?]{0,20}\bdriv",
+    re.IGNORECASE,
+)
 _DRIVING_ALTERNATIVE_RE = re.compile(
     r"(lift|ride|drive you|take you|pick you up|instead of driving|rather than driving|"
     r"not (to )?drive|avoid(ing)? driving|best not to drive|without driving|"
@@ -111,12 +116,13 @@ _DRIVING_ALTERNATIVE_RE = re.compile(
 
 
 def _driving_alternative_sentence(caregiver_name: str) -> str:
-    return f"Would you like me to ask {caregiver_name} for a lift to the shop instead?"
+    return f"Would you like me to ask {caregiver_name} for a lift instead?"
 
 
 def _needs_driving_alternative(transcript: str, reply: str) -> bool:
     return bool(
         _DRIVING_INTENT_RE.search(transcript)
+        and not _DRIVING_NOT_INTENT_RE.search(transcript)
         and reply.strip()
         and not _DRIVING_ALTERNATIVE_RE.search(reply)
     )

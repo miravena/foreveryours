@@ -719,6 +719,11 @@ class TestDrivingAlternative(unittest.TestCase):
         for t in ("Alright, I'll wait for Sarah then.", "Dad used to drive a truck"):
             self.assertFalse(orchestrator._DRIVING_INTENT_RE.search(t), t)
 
+    def test_past_or_negated_driving_is_untouched(self):
+        reply = "You must miss those days on the road."
+        for t in ("I used to drive a truck for forty years.", "I don't drive anymore, I gave it up."):
+            self.assertEqual(self._run(t, reply), reply, t)
+
 
 if __name__ == "__main__":
     unittest.main()
