@@ -95,6 +95,7 @@ from caregiver import (
 from memory.store import CAREGIVER_SOURCES, MemoryScope, MemoryStore, PrivacyLevel
 import notify
 from pipeline import hear
+from pipeline.think import DEFAULT_THINK_MODEL
 from pipeline.orchestrator import run_turn
 from safety import fastpath
 from samples.generate_samples import SAMPLES as SAMPLE_SCRIPTS
@@ -1149,7 +1150,12 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     for flag in reversed(flag_items):  # newest first -- this is the thing a caregiver glances at
         disclosed = "✅ Dad was told" if flag.disclosed_to_senior else "⚠️ NOT yet disclosed to Dad"
         status = _notification_status(flag)
-        lines.append(f"- **({flag.severity})** {flag.text}\n  {disclosed}" + (f" · {status}" if status else ""))
+        origin = _flag_origin(flag)
+        lines.append(
+            f"- **({flag.severity})** {flag.text}\n  {disclosed}"
+            + (f" · {status}" if status else "")
+            + (f" · {origin}" if origin else "")
+        )
 
     now = time.time()
     sample_loaded = _sample_family_loaded(store, now)
@@ -2082,6 +2088,30 @@ def _build_line(path: Path = BUILD_INFO_PATH) -> str:
     return f"Build: `{sha[:7]}`"
 
 
+_FLAG_ORIGINS = {
+    "fastpath": "raised by: safety rules, before the model",
+    "audit": "raised by: Nemotron backstop, after the reply",
+    "perseveration": "raised by: repeated-question check",
+}
+
+
+def _flag_origin(flag) -> str:
+    """Which layer raised `flag` (#214); empty when unknown. Display only."""
+    return _FLAG_ORIGINS.get(getattr(flag, "source", None) or "", "")
+
+
+def _model_footer() -> str:
+    """One always-visible line saying which model does what (#214). The model
+    name is derived from the id pipeline/think.py calls, so it cannot drift."""
+    name = DEFAULT_THINK_MODEL.rsplit("/", 1)[-1]
+    name = re.sub(r"^NVIDIA-", "", name)
+    name = re.sub(r"-A\d+B$", "", name)
+    return (
+        f"Reply and safety backstop: NVIDIA {name.replace('-', ' ')} on Nebius Token Factory · "
+        "Hearing: faster-whisper, on this app's server · Voice: Piper, on this app's server"
+    )
+
+
 def build_demo() -> gr.Blocks:
     _start_session_sweeper()
     with gr.Blocks(
@@ -2231,6 +2261,8 @@ def build_demo() -> gr.Blocks:
                 gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
                             "**Audio Perception (HEAR):** `faster-whisper` (local CPU)\n\n"
                             "*Background memory extraction & safety audit run asynchronously via Nebius Token Factory.*")
+
+        gr.Markdown(_model_footer())
 
         # Every senior-turn producer (Send, Enter, the four proactive
         # buttons) shares concurrency_id "senior_turn" with a bounded limit

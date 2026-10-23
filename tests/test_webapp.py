@@ -169,6 +169,27 @@ class TestWebappSessions(unittest.TestCase):
         self.assertNotIn("No flags yet", panel)
         self.assertNotEqual(strip, "")
 
+    def test_fast_path_flag_says_it_was_raised_by_safety_rules(self):
+        session_id, _ = webapp.init_session()
+        self._turn("I want to die", session_id)
+        panel = webapp._format_caregiver_panel(session_id)
+        self.assertIn("raised by: safety rules, before the model", panel)
+        self.assertNotIn("raised by: Nemotron backstop", panel)
+
+    def test_audit_flag_says_it_was_raised_by_the_backstop(self):
+        from caregiver import CaregiverFlag
+
+        flag = CaregiverFlag(text="x", severity="audit", disclosed_to_senior=True, source="audit")
+        self.assertIn("raised by: Nemotron backstop, after the reply", webapp._flag_origin(flag))
+        flag = CaregiverFlag(text="x", severity="confusion", disclosed_to_senior=True, source="perseveration")
+        self.assertIn("raised by: repeated-question check", webapp._flag_origin(flag))
+
+    def test_flag_without_source_renders_no_origin(self):
+        from caregiver import CaregiverFlag
+
+        flag = CaregiverFlag(text="x", severity="audit", disclosed_to_senior=True)
+        self.assertEqual(webapp._flag_origin(flag), "")
+
     def test_end_session_deletes_everything(self):
 
         session_id, _ = webapp.init_session()
@@ -928,6 +949,22 @@ class TestBuildDemoCss(unittest.TestCase):
             self.assertEqual(webapp._build_line(info), "Build: `0123456`")
             info.write_text("\n", encoding="utf-8")
             self.assertEqual(webapp._build_line(info), "")
+
+    def test_model_footer_is_always_visible_and_names_the_think_model(self):
+        from pipeline import think
+
+        demo = webapp.build_demo()
+        footers = [
+            b for b in demo.blocks.values()
+            if "Reply and safety backstop:" in str(getattr(b, "value", ""))
+        ]
+        self.assertEqual(len(footers), 1)
+        text = footers[0].value
+        self.assertTrue(footers[0].visible)
+        self.assertIn("NVIDIA Nemotron 3 Nano 30B on Nebius Token Factory", text)
+        self.assertIn("Hearing: faster-whisper, on this app's server", text)
+        self.assertIn("Voice: Piper, on this app's server", text)
+        self.assertEqual(think.DEFAULT_THINK_MODEL, "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
 
     def test_css_set_on_blocks_not_only_launch_kwargs(self):
         """#83 PR #85 Codex review: app.py (the hosted/Spaces entrypoint) calls

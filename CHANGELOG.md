@@ -10,6 +10,11 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Added
+- Hosted page names which model does what in an always-visible footer, and each caregiver flag
+  says which layer raised it (safety rules, Nemotron backstop, or repeated-question check);
+  `CaregiverFlag` gains a persisted `source` field, old flag files load as unknown (#214).
+
 ### Docs
 - Submission review against the judges' advice (`docs/plans/SUBMISSION-REVIEW-2026-10-23.md`) and
   the changes it asked for (#216, #217): README opens with the scenario and the one-sentence

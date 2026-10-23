@@ -161,6 +161,7 @@ appear in the submission.
 
 [`webapp.py`](webapp.py) wraps the exact same pipeline in a one-page browser UI (mic in, reply
 audio out, live memory/flags panel) — no new pipeline logic, just a UI on top of `run_turn`.
+The page footer states which model does what, and each caregiver flag says whether the safety rules or the Nemotron backstop raised it.
 This is what we'll host as the "working demo" link the hackathon requires; see
 [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`VENDOR_DECISIONS.md`](VENDOR_DECISIONS.md) for why.
 
