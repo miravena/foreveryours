@@ -10,6 +10,12 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Docs
+- After-submission plan (`docs/plans/AFTER-SUBMISSION-PLAN-2026-10-23.md`): the judging window
+  (patch-only, the demo stays up through 2026-12-15) and the post-judging backlog, with a PRD and
+  a plan per issue under `docs/specs/` for #196 to #206; `docs/ROADMAP.md` gains the section and
+  drops the interview-mode stretch line now tracked by #206.
+
 ### Added
 - AUDIT model eval ([ADR-010](docs/decisions/ADR-010-audit-model-eval.md)):
   `scripts/audit_eval.py` lists the models Token Factory serves (`--list-models`) and scores AUDIT

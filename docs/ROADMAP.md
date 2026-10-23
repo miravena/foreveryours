@@ -41,6 +41,17 @@ enforced version is each Issue's *blocked by* relationship.
 
 Work completed before these milestones is recorded in [`CHANGELOG.md`](../CHANGELOG.md).
 
+## After the cutoff: the judging window, then the backlog
+
+Two windows with opposite rules, from the hackathon's own terms ([`HACKATHON_RULES.md`](HACKATHON_RULES.md)
+sections 4 and 5): after the Submission Period the entry cannot change but the Project may, and
+the demo must stay free and reachable until the Judging Period ends. So during judging only
+`v1.0.x` patches ship, each keeping a claim the frozen text already makes; everything else waits
+for `v1.1.0`. The label `judging-window` marks the first, `after-submission` the second. The
+reasoning, the owners and the per-issue PRDs are in
+[`plans/AFTER-SUBMISSION-PLAN-2026-10-23.md`](plans/AFTER-SUBMISSION-PLAN-2026-10-23.md); the
+deploy rule itself is the ADR that [#197](../../issues/197) produces.
+
 ## Staging: MVP1 → MVP2 → MVP3
 
 We deliver in three complete stages rather than one drop at the deadline. **A stage is a whole
@@ -141,9 +152,6 @@ deadline gets close:
 - A caregiver-facing UI beyond the web page's caregiver column (see `PRD.md`'s non-goals — a
   full dashboard was deliberately cut once already; don't re-add it under time pressure)
 - The early-memory-loss framing angle (optional/secondary, not required either way)
-- A guided get-to-know-you interview mode for the caregiver (the companion asks Sarah the
-  profile questions one at a time) -- follow-up idea from the one-click sample household;
-  the sample seed in `caregiver.SAMPLE_FAMILY` is the shape it would fill
 - Anything from `IMPLEMENTATION_PLAN.md`'s backlog not listed as a milestone above
 
 ## How to follow this
