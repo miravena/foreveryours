@@ -65,7 +65,8 @@ def is_topic_invitation(transcript: str) -> bool:
 # updates instead of letting THINK improvise a visitor.
 VISITOR_QUESTION_RE = re.compile(
     r"\b(anyone|anybody|someone|somebody|who|visitors?)\b[^?.!]*"
-    r"\b(coming|come|comes|visiting|visit|visits|stopping|stop|dropping|drop|popping|pop|arriving|expected|over|by)\b"
+    r"\b(coming|comes?\s+(by|over|round|around|to\s+see)|visiting|visits?|stopping\s+(by|in)|stop\s+(by|in)|"
+    r"dropping\s+(by|in)|drop\s+(by|in)|popping\s+(by|in|round|over)|pop\s+(by|in|round|over)|arriving|expected)\b"
     r"|\bany\s+(visitors?|company|guests?)\b",
     re.IGNORECASE,
 )

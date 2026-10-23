@@ -93,3 +93,18 @@ class TestVisitorAnswerIsGrounded(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestVisitorReviewFollowUp(unittest.TestCase):
+    def test_detector_ignores_incidental_by_and_over(self):
+        from pipeline.intent import is_visitor_question
+        for t in ("Who wrote this song, by the way?", "Who is over there?", "I wish someone would stop that noise."):
+            self.assertFalse(is_visitor_question(t), t)
+        for t in ("Is anyone coming by today?", "Is someone popping in later?", "Any visitors today?",
+                  "Will anybody come over this afternoon?"):
+            self.assertTrue(is_visitor_question(t), t)
+
+    def test_first_person_update_keeps_capital_i(self):
+        from pipeline.orchestrator import _visitor_answer
+        out = _visitor_answer("Is anyone coming by today?", ["I'll drop off groceries at 4 PM."], "Sarah")
+        self.assertEqual(out, "Sarah mentioned: I'll drop off groceries at 4 PM.")

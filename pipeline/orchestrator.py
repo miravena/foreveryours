@@ -325,7 +325,8 @@ def _visitor_answer(transcript: str, updates: list[str], caregiver_name: str) ->
         if not u or not _VISIT_UPDATE_RE.search(u):
             continue
         if caregiver_name.lower() not in u.lower():
-            u = f"{caregiver_name} mentioned: {u[0].lower() + u[1:]}" if u[0].isupper() and not u[:2].isupper() else f"{caregiver_name} mentioned: {u}"
+            keep_case = u[:2].isupper() or re.match(r"I\b", u)
+            u = f"{caregiver_name} mentioned: {u if keep_case else u[0].lower() + u[1:]}"
         parts.append(u if u[-1] in ".!?" else u + ".")
     return " ".join(parts) or None
 
@@ -917,7 +918,9 @@ def run_turn(
     else:
         try:
             visitor_answer = _visitor_answer(transcript, caregiver_updates, caregiver_name)
-            if visitor_answer is not None and not fast.triggered:
+            # Only a plain logistics question gets the read-out; an emotional
+            # "is anyone coming?" still goes to THINK for a warm reply.
+            if visitor_answer is not None and not fast.triggered and intent == Intent.LOGISTICAL:
                 token_stream = iter([visitor_answer])
             else:
                 token_stream = think.stream_reply(
