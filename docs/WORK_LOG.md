@@ -9,6 +9,26 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-23 (Judge turns T07, T12, T19: visitor recall, driving alternative, in-session recall)
+- **What:** live run 40035032743 (313b1c5) scored 18/21. T07 dropped Sarah (#229), T12 offered no
+  alternative to driving (#192), T19 "What did I just tell you?" said "I missed that" (#230).
+- **#229:** THINK already had Sarah's 4 PM update; the 30B model's wording varied. A plain visitor
+  question (new `is_visitor_question`, routed LOGISTICAL) is now answered verbatim from the visit
+  updates without calling THINK; no visit update or an emotional turn falls back to THINK.
+- **#230:** the disclosure was in THINK's history all along. SYSTEM_PROMPT rules 10/20 read as
+  "only profile and caregiver facts", so the model declined. Rule 24 says the current conversation
+  may be recalled, and a recall question adds the previous user message to the THINK-only note.
+  #185 was not involved (the live check sends turns one at a time).
+- **#192:** an output-side check appends "Would you like me to ask Sarah for a lift instead?" when
+  the senior states a plan to drive and the reply has no alternative; past or negated driving
+  ("I used to drive") is skipped.
+- **Result:** full suite 644 passed, 9 skipped, repeated 3 times. Stubbed THINK only; no live calls,
+  so the next live judge run is the real check.
+- **Gotcha:** run pytest from a worktree not named `main`: in `foreveryours/main` the directory's
+  `__init__.py` shadows `main.py` and 4 `test_main`/`test_fact_replacement` tests fail with
+  `module 'main' has no attribute 'DATA_DIR'`. A test that runs `run_turn` must join
+  `res.background_thread` before its temp dir is removed, or it flakes with "Directory not empty".
+
 ### 2026-10-23 (Judge turns T09/T11: a general appointments question recalls the memo)
 - **What:** the Space answered "Do I have any appointments this week?" with "I don't have any
   appointments listed" right after the Dr. Tan memo (#189). The memo was stored and passed the

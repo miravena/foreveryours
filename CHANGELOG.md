@@ -22,6 +22,12 @@ rename `Unreleased` to the version and date, then tag it.
   "household was reset" note only after a real expiry, not on the first turn of a fresh page (#215).
 
 ### Fixed
+- "Is anyone coming by today?" is answered from the caregiver's visit updates (e.g. Sarah at 4 PM),
+  so the companion can no longer invent a visitor or drop the time; an emotional "is anyone coming?"
+  still gets a warm reply (#229).
+- "What did I just tell you?" recalls the previous turn, including something said "between us",
+  without putting it on the caregiver panel (#230).
+- When the senior says they will drive, the reply always offers a lift instead (#192).
 - "Do I have any appointments this week?" recalls the caregiver's memo (Dr. Tan, Thursday 10 AM)
   instead of "no appointments listed": the plural "appointments" (and "doctors", "visits") now
   counts as a schedule question, so the caregiver updates reach the reply (#189).
