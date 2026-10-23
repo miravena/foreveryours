@@ -109,10 +109,18 @@ SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
 # build line and the Space shows exactly the commit judges are looking at.
 BUILD_INFO_PATH = Path(__file__).resolve().parent / "BUILD_INFO"
 SAMPLE_CLIPS = ("senior_schedule.wav", "senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav")
-# Each sample chip is labelled with what the clip says. The words come from
-# samples/generate_samples.py (the script that synthesises the clips), so a
-# label can never drift from its audio.
-SAMPLE_CLIP_LABELS = tuple(f'"{SAMPLE_SCRIPTS[name]}"' for name in SAMPLE_CLIPS)
+# Each sample chip carries a plain name for the clip (#215); the order matches
+# SAMPLE_CLIPS. SAMPLE_SCRIPTS (what each clip says) stays imported so the
+# deployed build keeps shipping the script that synthesises the clips; the
+# check below fails fast if a clip has no script.
+SAMPLE_CLIP_LABELS = (
+    "Dad asks what's happening today",
+    "Dad talks about jazz",
+    "Dad asks his grandson's name",
+    "Dad says he fell and is scared",
+)
+if not all(name in SAMPLE_SCRIPTS for name in SAMPLE_CLIPS):
+    raise RuntimeError("a sample clip has no script in samples/generate_samples.py")
 MAX_DAILY_REQUESTS = int(os.environ.get("MAX_DAILY_REQUESTS", "50"))
 # Audio input bounds, checked before any ASR runs. 25 MB is the ceiling
 # OpenAI-compatible transcription endpoints enforce; 120 s is far above any demo
@@ -378,6 +386,15 @@ _BG_JOIN_TIMEOUT_S = 10
 # The one notice shown when a browser's household is gone and a fresh one
 # answers instead (#83). Prefixed to the first output with "\n\n".
 _RESET_NOTICE = "_Your demo household was reset after a period of inactivity._"
+
+
+def _session_really_expired(session_id: str | None, history: list) -> bool:
+    """True only when an earlier session was really lost (#215). A missing
+    session id with no conversation is a first turn (the public API never runs
+    the page's load handler), not an expiry, so the notice would be false. A
+    real expiry mid-demo leaves the browser's history behind: the history State
+    has no time-to-live, the session State does."""
+    return session_id is None and bool(history)
 
 
 class SessionGone(Exception):
@@ -1296,7 +1313,7 @@ def run_demo_turn(
     # A missing session_id here means the Gradio State expired mid-demo (#83,
     # #80 3.C7): a fresh, unbriefed household is about to answer, so say so
     # rather than silently looking like a reset conversation.
-    session_expired = session_id_val is None
+    session_expired = _session_really_expired(session_id_val, history)
     session_id_val = session_id_val or _new_session()
     if not SHARED_PROFILE:
         session_id_val = _normalize_or_new_session(session_id_val)
@@ -1352,7 +1369,7 @@ def run_demo_turn_streaming(
         session_id_val = session_id
         simulated_time_str = simulated_time_in or "Morning (Default)"
 
-    session_expired = session_id_val is None
+    session_expired = _session_really_expired(session_id_val, history)
     session_id_val = session_id_val or _new_session()
     if not SHARED_PROFILE:
         session_id_val = _normalize_or_new_session(session_id_val)
@@ -2169,14 +2186,11 @@ def build_demo() -> gr.Blocks:
     ) as demo:
         gr.Markdown(
             "# ForeverYours\n"
-            "**⚠️ TRANSPARENCY NOTICE: You are interacting with an Artificial Intelligence (AI) companion, not a human.**\n\n"
-            "Talk or type as the senior on the left, or brief the companion as the caregiver on the right "
-            "(Sarah, Dad's daughter); the caregiver side updates live. "
-            "No mic? Use a sample clip below. Try \"I fell down earlier\" to see the honest-disclosure moment."
-        )
-        gr.Markdown(
-            "🤖 **This is an AI companion, not a person.** "
-            f"Read the [privacy notice]({PRIVACY_NOTICE_URL}) before you speak."
+            "**Try this first: *I fell down earlier and I'm scared***\n\n"
+            "Talk or type as the senior on the left; the caregiver on the right (Sarah, Dad's daughter) "
+            "updates live. No mic? Use a sample clip below.\n\n"
+            "**⚠️ TRANSPARENCY NOTICE: You are interacting with an Artificial Intelligence (AI) companion, not a human.** "
+            f"[Privacy notice]({PRIVACY_NOTICE_URL})"
         )
         # The retention minutes sit collapsed here, beside the privacy-notice
         # link, so the short recording notice above the mic stays one glance
@@ -2215,6 +2229,14 @@ def build_demo() -> gr.Blocks:
                     lines=1,
                 )
                 run_btn = gr.Button("Send", variant="primary")
+                # One click fills the type box with the line the page asks the
+                # judge to try first (#215); the typed path needs no mic.
+                gr.Examples(
+                    examples=[["I fell down earlier and I'm scared"]],
+                    inputs=[text_in],
+                    label="Try this first",
+                    cache_examples=False,
+                )
                 # Judges without a mic (or who'd rather not record their own voice)
                 # can still drive every beat with one click. First chip asks a
                 # schedule question so the reply recalls a caregiver fact,

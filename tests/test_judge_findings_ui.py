@@ -13,7 +13,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import webapp
-from samples.generate_samples import SAMPLES
 
 ACCORDION_LABEL = "Brief Dad companion (as Sarah, his daughter)"
 
@@ -80,16 +79,43 @@ class TestJudgeFindingsUi(unittest.TestCase):
         )
         self.assertNotIn("removed about the session", about[0])
 
-    def test_sample_clips_are_labelled_with_their_scripts(self):
+    def test_sample_clips_carry_plain_names(self):
+        """#215: the chips read as what Dad does, not as the clip's script."""
         datasets = [d for d in self._of_type("dataset") if d["props"].get("label") == "No mic? Try a sample clip"]
         self.assertEqual(len(datasets), 1)
-        expected = [f'"{SAMPLES[name]}"' for name in webapp.SAMPLE_CLIPS]
-        self.assertEqual(datasets[0]["props"]["sample_labels"], expected)
+        self.assertEqual(
+            datasets[0]["props"]["sample_labels"],
+            [
+                "Dad asks what's happening today",
+                "Dad talks about jazz",
+                "Dad asks his grandson's name",
+                "Dad says he fell and is scared",
+            ],
+        )
         self.assertEqual(
             list(webapp.SAMPLE_CLIPS),
             ["senior_schedule.wav", "senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav"],
         )
-        self.assertIn("Is anyone coming by today?", expected[0])
+
+    def test_try_first_line_is_in_the_header(self):
+        intro = [v for v in self.markdown if v.startswith("# ForeverYours")][0]
+        self.assertIn("Try this first: *I fell down earlier and I'm scared*", intro)
+
+    def test_try_first_example_fills_the_type_box(self):
+        datasets = [d for d in self._of_type("dataset") if d["props"].get("label") == "Try this first"]
+        self.assertEqual(len(datasets), 1)
+        self.assertEqual(datasets[0]["props"]["samples"], [["I fell down earlier and I'm scared"]])
+        comps = datasets[0]["props"]["components"]
+        self.assertEqual(len(comps), 1)
+        self.assertEqual(comps[0]["name"], "textbox")
+
+    def test_transparency_notice_is_one_line_with_privacy_link(self):
+        notice = [v for v in self.markdown if "TRANSPARENCY NOTICE" in v]
+        self.assertEqual(len(notice), 1)
+        line = [l for l in notice[0].split("\n") if "TRANSPARENCY NOTICE" in l]
+        self.assertEqual(len(line), 1)
+        self.assertIn("Privacy notice", line[0])
+        self.assertIn(webapp.PRIVACY_NOTICE_URL, line[0])
 
     def test_retention_minutes_are_collapsed_but_still_rendered(self):
         found = [a for a in self._of_type("accordion") if "kept" in str(a["props"].get("label", ""))]

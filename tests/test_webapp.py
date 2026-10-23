@@ -119,11 +119,29 @@ class TestWebappSessions(unittest.TestCase):
     def test_expired_session_shows_reset_notice(self):
         """#83, #80 3.C7: a turn with no session_id (State expired mid-demo)
         gets a fresh household and says so, instead of silently looking like
-        a reset conversation."""
+        a reset conversation. Mid-demo means the browser still holds the
+        conversation; with no history it is a first turn (#215)."""
+        history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
         with patch.object(webapp.hear, "transcribe", return_value=("Hello", {"wpm": 0.0, "avg_pause_s": 0.0})):
-            result = webapp.run_demo_turn(FAKE_UPLOAD, [], None)
+            result = webapp.run_demo_turn(FAKE_UPLOAD, history, None)
         self.assertIn("reset after a period of inactivity", result[0])
         self.assertIsNotNone(result[5])  # a new session_id was minted
+
+    def test_fresh_session_shows_no_reset_notice(self):
+        """#215: the first turn of a fresh page has no session id and no
+        history; nothing was reset, so the notice would be false."""
+        with patch.object(webapp.hear, "transcribe", return_value=("Hello", {"wpm": 0.0, "avg_pause_s": 0.0})):
+            result = webapp.run_demo_turn(FAKE_UPLOAD, None, [], None)
+        self.assertNotIn("reset after a period of inactivity", result[0])
+        self.assertIsNotNone(result[5])
+
+    def test_expired_session_with_history_shows_reset_notice(self):
+        """#215: a session id lost while the browser still holds the
+        conversation is a real expiry."""
+        history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
+        with patch.object(webapp.hear, "transcribe", return_value=("Hello", {"wpm": 0.0, "avg_pause_s": 0.0})):
+            result = webapp.run_demo_turn(FAKE_UPLOAD, None, history, None)
+        self.assertIn("reset after a period of inactivity", result[0])
 
     def test_new_session_is_prebriefed(self):
 
