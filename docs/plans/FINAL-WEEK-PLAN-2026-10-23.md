@@ -5,8 +5,8 @@ state (open/closed, owner, due date, blocked-by) lives only on GitHub Issues and
 Office queue holds the fleet's tickets; the verdict labels (`must-before-freeze`, `should-if-time`,
 `after-submission`), milestones and priorities set from this plan are the live state. If a row here
 and GitHub disagree, GitHub is right. Snapshot taken 2026-10-23 from `gh issue list --state open`
-(30 issues), the Office queue (23 open tickets with `repo_dir /home/ubuntu/foreveryours/main`,
-plus the planning ticket itself), and judge-check run
+(30 issues), the fleet's Office queue (23 open ForeverYours tickets plus the planning ticket
+itself; `office#` rows below, the same ids `CHANGELOG.md` already cites), and judge-check run
 [39802780048](https://github.com/miravena/foreveryours/actions/runs/39802780048) (deploy of
 `7fe1ad2`, 2026-10-22 15:17Z): **12 of 21 live judge turns passed**.
 
@@ -19,7 +19,7 @@ the Idea**.
 **Verdict scale** (MoSCoW, for a fixed timebox): **MUST** = without it the submission is weaker on a
 criterion a judge will actually exercise, or it is a submission artefact; **SHOULD** = lands before
 the freeze only if the MUST list is done; **AFTER** = deferred past 2026-10-30; **CLOSE** = done,
-duplicate or obsolete. Owner is who does the work: `fleet` (Office tickets, worker seats),
+duplicate or obsolete. Owner is who does the work: `fleet` (the Office tickets),
 `teammate` (@SirTehTarik, human co-author and Devpost Representative), `founder` (elevenbaselab,
 human). Protected issues (authored by or assigned to the teammate) carry owner `teammate` and are
 never closed, relabelled or re-milestoned by this plan: section 4 proposes, he decides.
@@ -172,7 +172,7 @@ Humans own what only humans can do; every item has exactly one owner.
   into the Devpost form, submit, and post the confirmation on #37. Be reachable 2026-10-29 and
   2026-10-30 until 17:00Z in case the form or the Space needs a fix.
 
-Rules that stay: each side merges its own PRs (`fy-ops merge-own-pr` refuses the other side's), the
+Rules that stay: each side merges its own PRs (the fleet's merge step refuses the other side's), the
 fleet never takes over his PRs without the founder, and the coordination issue is the only place
 this plan tags him.
 
