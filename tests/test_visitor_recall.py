@@ -85,9 +85,12 @@ class TestVisitorAnswerIsGrounded(unittest.TestCase):
             client = _CapturingClient("I don't have any visitors noted for today.")
             with patch("pipeline.think.get_client", return_value=client), \
                  patch("pipeline.orchestrator._speak_turn", side_effect=_speak_joined):
-                run_turn(transcript=QUESTIONS[0], memory_store=store,
-                         flags=CaregiverFlags("empty_dad", root / "data"),
-                         audio_out_dir=self.audio_dir, caregiver_name="Sarah")
+                res = run_turn(transcript=QUESTIONS[0], memory_store=store,
+                               flags=CaregiverFlags("empty_dad", root / "data"),
+                               audio_out_dir=self.audio_dir, caregiver_name="Sarah")
+                # Join the memory/audit thread before the temp dir is removed.
+                if res.background_thread:
+                    res.background_thread.join(timeout=10)
             self.assertIsNotNone(client.messages)
 
 
