@@ -583,6 +583,37 @@ def _notify_in_background(flags: CaregiverFlags, flag, threads: list, told=None)
         print(f"[orchestrator] notification not scheduled: {type(exc).__name__}", file=sys.stderr)
 
 
+# "What did I just tell you?" -- a question about the conversation itself, not
+# about stored memory (#230). The answer is in the session history, which
+# reaches THINK as chat turns; the note below points at it so the reply does not
+# fall back to "I missed that". It goes to THINK only, never to the caregiver
+# panel, flags or memory, so a private disclosure stays private.
+_SESSION_RECALL_RE = re.compile(
+    r"\b(what\s+(did|was|were)\s+(i|we)\s+(just\s+)?(say|said|tell|told|mention|mentioned|talk(ed)?\s+about)"
+    r"|what\s+(have\s+)?(i|we)\s+(just\s+)?(said|told|mentioned)"
+    r"|do\s+you\s+remember\s+what\s+i\s+(just\s+)?(said|told|mentioned)"
+    r"|what\s+i\s+just\s+(said|told|mentioned))\b",
+    re.IGNORECASE,
+)
+
+
+def _session_recall_note(transcript: str, history: list[dict] | None) -> str | None:
+    if not history or not _SESSION_RECALL_RE.search(transcript):
+        return None
+    last_user = next(
+        (m.get("content", "") for m in reversed(history) if m.get("role") == "user" and m.get("content")),
+        "",
+    )
+    if not last_user:
+        return None
+    last_user = " ".join(last_user.split())[:300]
+    return (
+        "The senior is asking what he said earlier in this conversation. "
+        f'His previous message was: "{last_user}". Tell it back to him plainly; '
+        "do not say you missed it."
+    )
+
+
 def run_turn(
     transcript: str,
     memory_store: MemoryStore,
@@ -902,6 +933,9 @@ def run_turn(
     if pending_conflicts and allow_hosted_call:
         memory_store.mark_conflicts_asked()
 
+    recall_note = _session_recall_note(transcript, history)
+    if recall_note:
+        continuation_note = f"{continuation_note} {recall_note}" if continuation_note else recall_note
     think_input = transcript if not continuation_note else f"{transcript}\n\n[{continuation_note}]"
     reply_text = ""
     think_audio_paths: list[Path] = []
