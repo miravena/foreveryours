@@ -1,3 +1,4 @@
+import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -73,13 +74,19 @@ class TestAuditReply(unittest.TestCase):
             audit_reply("Hello", "Hello there.")
         self.assertIsNone(audit_mod.LAST_USAGE)
 
-    def test_default_audit_model_is_still_nano(self):
+    def test_default_audit_model_is_super_and_think_stays_nano(self):
+        from pipeline import think
+
+        self.assertEqual(think.DEFAULT_THINK_MODEL, "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
         client = _Client("SAFE: no issue")
         with patch("pipeline.audit.get_client", return_value=client), \
                 patch.dict("os.environ", {}, clear=False) as env:
             env.pop("AUDIT_MODEL", None)
             audit_reply("Hello", "Hello there.")
-        self.assertEqual(client.calls[0]["model"], "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+        self.assertEqual(client.calls[0]["model"], "nvidia/nemotron-3-super-120b-a12b")
+        env_example = open(os.path.join(os.path.dirname(__file__), "..", ".env.example")).read()
+        self.assertIn("\nAUDIT_MODEL=nvidia/nemotron-3-super-120b-a12b\n", env_example)
+        self.assertIn("\nTHINK_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B\n", env_example)
 
 
     def test_prompt_carries_crisis_examples_without_the_fixture_rows(self):

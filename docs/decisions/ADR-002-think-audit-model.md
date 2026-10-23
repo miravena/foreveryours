@@ -1,4 +1,4 @@
-# ADR-002: THINK and AUDIT run NVIDIA Nemotron Nano 30B on Nebius
+# ADR-002: THINK and AUDIT run NVIDIA Nemotron Nano 30B on Nebius (AUDIT amended by ADR-016: now Super)
 
 **Status:** Accepted
 **Date:** 2026-10-01 (live-verified 2026-10-02, PR #25)
@@ -17,13 +17,13 @@ double our cost.
 
 ## Decision
 
-**`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` for both THINK and AUDIT**, via Nebius Token Factory
+**`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` for both THINK and AUDIT** (amended 2026-10-23, ADR-016: THINK stays on Nano; AUDIT now defaults to `nvidia/nemotron-3-super-120b-a12b`), via Nebius Token Factory
 (`https://api.tokenfactory.nebius.com/v1`). Verified live (PR #25).
 
 ## Rationale
 
 A mixture-of-experts model fits the latency target, satisfies the sponsor requirement, and
-reusing it for AUDIT adds no extra model cost.
+reusing it for AUDIT added no extra model cost. (That held until ADR-010 and ADR-016 measured AUDIT separately.)
 
 ## Consequences
 

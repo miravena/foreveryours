@@ -978,12 +978,13 @@ class TestBuildDemoCss(unittest.TestCase):
             demo = webapp.build_demo()
         footers = [
             b for b in demo.blocks.values()
-            if "Reply and safety backstop:" in str(getattr(b, "value", ""))
+            if "Safety backstop:" in str(getattr(b, "value", "")) and "Hearing:" in str(getattr(b, "value", ""))
         ]
         self.assertEqual(len(footers), 1)
         text = footers[0].value
         self.assertTrue(footers[0].visible)
-        self.assertIn("NVIDIA Nemotron 3 Nano 30B on Nebius Token Factory", text)
+        self.assertIn("Reply: NVIDIA Nemotron 3 Nano 30B on Nebius Token Factory", text)
+        self.assertIn("Safety backstop: NVIDIA Nemotron 3 Super 120B on Nebius Token Factory", text)
         self.assertIn("Hearing: faster-whisper, on this app's server", text)
         self.assertIn("Voice: Piper, on this app's server", text)
         self.assertEqual(think.DEFAULT_THINK_MODEL, "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")

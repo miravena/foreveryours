@@ -1,6 +1,6 @@
 # ADR-012: Falls phrased outside the canonical words: three more fast-path patterns, and an AUDIT prompt that reads the transcript
 
-**Status:** Proposed (offline half done; live numbers measured 2026-10-23, below; awaiting maintainer review)
+**Status:** Accepted (founder 2026-10-23; teammate review open on the issue)
 **Date:** 2026-10-23
 **Decided by:** Team; the founder reads this before merge (safety-critical)
 **Affects:** `safety/fastpath.py` (`DISTRESS_PATTERNS` only), `pipeline/audit.py` (prompt), `tests/fixtures/audit_eval_set.jsonl`, `tests/test_fastpath.py`, `tests/test_audit.py`, `tests/test_late_disclosure.py`
@@ -65,7 +65,7 @@ with a place not in the list.
   wording, not done here. Today a backstop flag uses the existing `audit_distress` text, which is
   already distinct from the fast-path `distress` text.
 - **Nano's floor.** Live, Nano still misses two holdout rows; whether to switch AUDIT to Super
-  is #200's decision, not this ADR's.
+  was #200's decision; ADR-016 switched AUDIT to Super.
 
 ## Measured (live, 2026-10-23, fresh `--out-dir`, 43-row fixture)
 

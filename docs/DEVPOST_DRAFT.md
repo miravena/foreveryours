@@ -180,8 +180,8 @@ One pipeline, in Python, with the safety check in front of the model instead of 
    sentence at a time.
    <!-- README.md:32-33 stack wording; pipeline/speak.py:4-8 tier order, :24-27 warm Piper server;
    requirements.txt:3 on `e5d436e`. -->
-6. **Off the critical path.** After the reply is on its way, a background pass on the same
-   Nemotron model rereads the senior's words and the reply as a safety backstop (crisis, distress,
+6. **Off the critical path.** After the reply is on its way, a background pass on Nemotron 3 Super
+   rereads the senior's words and the reply as a safety backstop (crisis, distress,
    unsafe advice), and a second pass turns what was said into memory updates. If the backstop
    cannot reach a verdict, the turn is recorded as unknown, never as safe.
    <!-- README.md:40-42, :50-51 ("malformed or failed audit output is recorded as unknown rather
@@ -211,13 +211,14 @@ medical advice, and a set of written architecture decision records for the choic
 
 ## How we used NVIDIA Nemotron and Nebius Token Factory
 
-- **NVIDIA model:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (open weights) for every model call in
-  the product: the streamed companion reply, the background safety backstop, and memory
-  extraction. We picked the backstop's model with a 36-row labelled evaluation across the Nemotron
+- **NVIDIA models:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (open weights) for the streamed
+  companion reply and memory extraction, and `nvidia/nemotron-3-super-120b-a12b` for the
+  background safety backstop. We picked the backstop's model with a 36-row labelled evaluation across the Nemotron
   models Token Factory serves (Nano, Super and Ultra). None raised a false flag. Super caught every
   true event and Nano only 12 of 19, missing five of six falls, at about a fifth of Super's cost
-  per call; under the rule we fixed before running it, Nano stays for now, and moving the
-  backstop to Super is the open decision.
+  per call. Under the rule we fixed before running it Nano stayed at first; after a later
+  43-row run put Nano at 0.88 recall, below our 0.90 floor, against Super's 1.00, the backstop
+  moved to Super (ADR-016).
 - **Where Token Factory accelerated the work:** one OpenAI-compatible base URL and one key for all
   three calls, and streaming that let us start speaking the first sentence while the model was
   still writing the rest. Turning off Nemotron's reasoning tokens for the reply call was the single
@@ -228,7 +229,7 @@ medical advice, and a set of written architecture decision records for the choic
 
 <!-- Requirement 6 (docs/HACKATHON_RULES.md:42-43). THINK pipeline/think.py:191, AUDIT
 pipeline/audit.py:53; eval README.md "Which NVIDIA models run where" table and
-docs/decisions/ADR-010-audit-model-eval.md (Accepted: "AUDIT stays on Nano"); no NemoGuard or
+docs/decisions/ADR-010-audit-model-eval.md (amended by ADR-016: AUDIT on Super); no NemoGuard or
 speech model served VENDOR_DECISIONS.md:10-11,41-45; stack wording README.md:9-12,32-33. -->
 
 ## Feedback on Nebius Token Factory and NVIDIA models
@@ -241,11 +242,11 @@ real-time app (our first live turn took 4.22 s to first audio until we passed
 `enable_thinking: false`); and clearer guidance, or case-insensitive matching, for model-ID
 strings, which tripped us up at the start.
 
-**NVIDIA Nemotron 3 Nano.** What worked: it used the caregiver's briefing in a warm,
+**NVIDIA Nemotron 3 Nano and Super.** What worked: Nano used the caregiver's briefing in a warm,
 conversational way, and as a background safety backstop it raised no false flags in our
-labelled evaluation. What would help: as that backstop it caught only 12 of 19 true events and
-missed five of six falls, where the larger Nemotron 3 Super caught all of them, so the small model
-is not enough on its own for safety. Also, it is verbose by default, and a voice product for older
+labelled evaluation. What would help: as that backstop Nano caught only 12 of 19 true events
+(0.88 recall on a later, larger set) and missed falls, where the larger Nemotron 3 Super caught
+all of them, so we moved the backstop to Super; the small model is not enough on its own for safety. Also, it is verbose by default, and a voice product for older
 adults needs short, patient turns, which we had to prompt hard for. It also sometimes adds
 plausible detail that was never in the briefing, which our prompt now forbids explicitly.
 
@@ -336,8 +337,8 @@ Written down on purpose, so the judges and any family know where this stops.
 
 - A fall described in other words ("I'm on the floor and can't reach the phone") is not caught by
   the rules. It depends on the background backstop, which runs after the reply and, on Nemotron 3
-  Nano, caught 12 of 19 labelled events (five of six falls missed). Nemotron 3 Super caught all 19;
-  switching is an open decision.
+  Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
+  including falls). A small labelled set is not proof of coverage.
 - Some crisis paraphrases come back SAFE from the backstop; the rules catch the direct phrases.
 - On the hosted demo the alert stays on the caregiver's half of the screen. Nothing reaches a phone.
 - A flag is marked "Dad was told" once the spoken line is synthesised, not once it is heard; a

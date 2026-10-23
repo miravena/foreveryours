@@ -1,6 +1,6 @@
 # ADR-010: AUDIT model chosen by a labelled offline eval across served NVIDIA models
 
-**Status:** Accepted — AUDIT stays on Nano under the fixed rule (no candidate had fewer false flags); THINK unchanged
+**Status:** Accepted; amended by ADR-016 (2026-10-23: AUDIT default is now Super). As decided on 2026-10-22: AUDIT stays on Nano under the fixed rule (no candidate had fewer false flags); THINK unchanged
 **Date:** 2026-10-22
 **Decided by:** Team (fixed decision rule, no judgement call)
 **Affects:** `scripts/audit_eval.py`, `tests/fixtures/audit_eval_set.jsonl`, `pipeline/audit.py` (a `LAST_USAGE` token hook only; the `AUDIT_MODEL` default is unchanged)

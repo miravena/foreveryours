@@ -17,7 +17,7 @@ This feedback is provided for the Nebius x NVIDIA Global AI Hackathon (Requireme
 
 **What worked well:**
 - **Contextual Recall (THINK pass):** Nemotron Nano 30B excelled at seamlessly integrating retrieved personal context (from our JSON-backed MemoryStore) without sounding robotic. It successfully recalled specific biographical details (e.g., "Grandson Leo") in a warm, conversational tone.
-- **Safety Auditing (AUDIT pass):** The model proved capable of running secondary safety checks in the background asynchronously, ensuring responses adhered to our strict privacy and no-medical-claims policies without hallucinating false positives.
+- **Safety Auditing (AUDIT pass):** Nano ran secondary safety checks in the background asynchronously, ensuring responses adhered to our strict privacy and no-medical-claims policies without hallucinating false positives.
 
 **Areas for improvement:**
 - **Conversational Brevity:** The model tends to produce longer, more detailed responses by default. For a zero-screen, voice-first application aimed at older adults, we had to aggressively prompt it to maintain short, patient conversational pacing.
