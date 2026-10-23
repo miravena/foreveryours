@@ -11,6 +11,13 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Docs
+- Submission review against the judges' advice (`docs/plans/SUBMISSION-REVIEW-2026-10-23.md`) and
+  the changes it asked for (#216, #217): README opens with the scenario and the one-sentence
+  answer instead of a feature list, and its beat 2 no longer claims a per-turn retrieval panel; a
+  "Known limitations" section, identical in README and the Devpost draft; the Devpost draft names
+  the accessibility case, leads *What it does* with the out-loud disclosure moment, and records the
+  tagline-length fallbacks; `docs/VIDEO_SCRIPT.md` names which model does what, adds a
+  seven-second limitations line, uses the corrected #14 sentence, and runs 2:47.
 - [ADR-015](docs/decisions/ADR-015-judging-window-deploys.md) (#197): during judging only `v1.0.x`
   patches deploy, rollback is by tag; `HOW_TO_WORK_HERE.md` Releases gains the release lines and a
   "During judging" paragraph.

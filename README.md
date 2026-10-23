@@ -1,10 +1,17 @@
 # ForeverYours
 
-**ForeverYours is a purpose-built voice companion for older adults that combines life-context memory, proactive companionship, caregiver coordination, safety-aware escalation, and privacy-preserving family connection — designed to help seniors feel remembered without feeling monitored.**
+An older adult tells a general-purpose voice assistant "I fell earlier today and I'm scared." It
+answers with sympathy, the turn ends, and nobody in the family is told. The assistants that are good
+at conversation have no concept of the person who isn't in the room: the daughter who knows Dad
+loves jazz, that his grandson is Leo, that driving is a sore subject, and that she is dropping off
+groceries at 4 PM.
 
-We didn't want to build another generic chatbot that talks to seniors. ChatGPT already does that well. The question we asked was: *what happens when you design the entire AI system around one older adult's long-term life, relationships, autonomy, and wellbeing?*
+**ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
+there, and never reports anything to the family that it hasn't first said to him out loud.**
 
-ChatGPT is a general-purpose AI you talk to. ForeverYours is a relationship coordination system: a caregiver gives it context once (names, preferences, daily updates), and the senior gets a warm, low-friction voice conversation that actually uses that context — while the family stays connected without anyone being watched.
+It is a voice-first companion built for people who cannot or will not use a screen: no app to learn,
+no typing, no reading. The senior only talks. The caregiver briefs it once, sees what it knows and
+what it flagged, and the family stays connected without anyone being watched.
 
 Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackathon.devpost.com/)
 (Personal AI track, which permits either Nebius Token Factory or Nebius AI Cloud). This project
@@ -21,11 +28,28 @@ for up to about 70 minutes ([PRIVACY.md](docs/PRIVACY.md)).
 1. **Caregiver memo.** "Dad loves jazz, his grandson is Leo, avoid talking about driving. I'm
    dropping off groceries at 4 PM."
 2. **Senior conversation.** Dad talks to the companion; it recalls Leo, avoids driving, mentions
-   the 4 PM groceries — with a live memory panel showing exactly what was retrieved and what's new.
+   the 4 PM groceries — and the caregiver column shows what it was briefed and what it flagged,
+   each item labelled permanent or temporary.
 3. **A worrying remark.** If Dad says something that sounds like distress or confusion, the
    companion speaks an immediate, honest reassurance **and tells Dad so, in the conversation**
    ("I'm letting your family know right now") — never a silent report behind his back — then the
    conversation keeps going instead of dead-ending there.
+
+## Known limitations
+
+Written down on purpose: a judge or a family should know where this stops.
+
+- A fall described in other words ("I'm on the floor and can't reach the phone") is not caught by
+  the rules. It depends on the background backstop, which runs after the reply and, on Nemotron 3
+  Nano, caught 12 of 19 labelled events (five of six falls missed). Nemotron 3 Super caught all 19;
+  switching is an open decision ([ADR-010](docs/decisions/ADR-010-audit-model-eval.md)).
+- Some crisis paraphrases come back SAFE from the backstop; the rules catch the direct phrases.
+- On the hosted demo the alert stays on the caregiver's half of the screen. Nothing reaches a phone.
+- A flag is marked "Dad was told" once the spoken line is synthesised, not once it is heard; a
+  browser that blocks autoplay still shows it as told.
+- The browser plays one combined clip, so the hosted demo is slower to first sound than the command
+  line (about 0.9 s there; several seconds hosted). No hosted latency figure is claimed.
+- English only. Not a medical device, not a diagnosis, not an emergency dispatcher.
 
 ## Pipeline
 
