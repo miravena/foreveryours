@@ -608,8 +608,8 @@ def _session_recall_note(transcript: str, history: list[dict] | None) -> str | N
         return None
     last_user = " ".join(last_user.split())[:300]
     return (
-        "The senior is asking what he said earlier in this conversation. "
-        f'His previous message was: "{last_user}". Tell it back to him plainly; '
+        "The senior is asking what they said earlier in this conversation. "
+        f'Their previous message was: "{last_user}". Tell it back to them plainly; '
         "do not say you missed it."
     )
 
