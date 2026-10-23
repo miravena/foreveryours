@@ -53,7 +53,7 @@ v1.0.0 tag are the three artefacts a judge opens; everything else is SHOULD or A
 | gh#108 | SHOULD | fleet | Tech Impl: docs that disagree with the code mislead a judge reading the repo for two minutes |
 | gh#109 | SHOULD | fleet | Design: orchestrator/webapp nits a judge can see (repeated disclosure line, fake senior line) |
 | gh#114 | SHOULD | fleet | Tech Impl: record the piper-tts GPL licence decision in an MIT repo before judges read `requirements.txt` |
-| gh#126 | SHOULD | teammate | Tech Impl: the required Codex review runs on the fleet host today; section 4 proposes the install lines for his machine |
+| gh#126 | SHOULD | teammate | Tech Impl: the required Codex review already runs on fleet PRs; section 4 proposes the install lines for his machine |
 | gh#130 | SHOULD | teammate | Design: judge-facing circadian labels in `docs/DEMO_SCRIPT.md` and the UI; small cleanup, his call |
 | gh#133 | AFTER | teammate | Enhancement past the timebox; #132 is fixed and demo-safe |
 | gh#135 | SHOULD | fleet | Tech Impl: `docs/PRD.md` non-goal contradicts the shipped bounded session history; one-paragraph fix |
@@ -185,8 +185,8 @@ Proposals only; nothing below changes an issue he authored.
   (T18-T21), crisis (T16/T17) and listening honesty (T05/T06). Proposal: either close #48 as
   superseded by that suite, or run Benchmarks 2/4/6 once live with `scripts/with_key.sh` and paste
   the numbers, then close. The fleet can do the run if he comments "fleet, run it".
-- **#126 (SHOULD) Make the Codex review runnable.** On the fleet host `codex` is installed and
-  logged in, and `scripts/openai_review.sh` runs for every fleet PR. Proposal: add to
+- **#126 (SHOULD) Make the Codex review runnable.** `scripts/openai_review.sh` already runs on
+  every fleet PR (PR #182's Provenance block is one example). Proposal: add to
   `CONTRIBUTING.md` the two lines a contributor needs (`npm install -g @openai/codex`, then
   `codex login`, both outside the repo) and have the script print which prerequisite is missing;
   the fleet can land that doc change if he prefers.
