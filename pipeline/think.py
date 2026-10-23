@@ -169,6 +169,7 @@ def build_prompt(
     return messages
 
 
+DEFAULT_THINK_MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 THINK_ENABLE_REASONING = os.environ.get("THINK_ENABLE_REASONING", "false").lower() in ("true", "1", "yes")
 
 
@@ -188,7 +189,7 @@ def stream_reply(
     # <2s-to-first-audio budget than a dense 70B model. Exact casing/availability
     # from third-party aggregators, not Nebius's own docs -- verify against the
     # live Token Factory model list once a key is in hand (see IMPLEMENTATION_PLAN.md).
-    model = os.environ.get("THINK_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+    model = os.environ.get("THINK_MODEL", DEFAULT_THINK_MODEL)
     kwargs = {
         "model": model,
         "messages": build_prompt(
@@ -364,7 +365,7 @@ def extract_memory_llm(transcript: str, reply: str, active_facts: list[str] | No
     failed."""
     try:
         client = get_client()
-        model = os.environ.get("THINK_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+        model = os.environ.get("THINK_MODEL", DEFAULT_THINK_MODEL)
         
         facts_context = "\n".join(f"- {f}" for f in (active_facts or []))
         if facts_context:

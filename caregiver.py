@@ -406,6 +406,11 @@ class CaregiverFlag:
     # exception TYPE name only. Both stay out of the flag file while None.
     notified: bool | None = None
     notify_error: str | None = None
+    # Which layer raised the flag (#214): "fastpath" (safety rules, before the
+    # model), "audit" (the AUDIT model, after the reply) or "perseveration"
+    # (repeated-question check). None = unknown, e.g. a flag file written
+    # before this field existed. Display only; never read by disclosure logic.
+    source: str | None = None
 
 
 class CaregiverFlags:
@@ -461,19 +466,23 @@ class CaregiverFlags:
         record = dict(flag.__dict__)
         # Unset notification fields are not written, so with no channel
         # configured the flag file is byte-for-byte what it always was.
-        for key in ("notified", "notify_error"):
+        for key in ("notified", "notify_error", "source"):
             if record.get(key) is None:
                 record.pop(key, None)
         return record
 
-    def add(self, text: str, severity: str, disclosed_to_senior: bool) -> CaregiverFlag:
+    def add(
+        self, text: str, severity: str, disclosed_to_senior: bool, source: str | None = None
+    ) -> CaregiverFlag:
         """`disclosed_to_senior` must reflect reality, not a default: only
         True when the senior was actually told, in the conversation, that
         this flag was raised. See safety/fastpath.py (always discloses, part
         of the immediate reply) and pipeline/orchestrator.py's AUDIT path
         (discloses via a follow-up spoken line; False only if that fails)."""
         with self._transaction():
-            flag = CaregiverFlag(text=text, severity=severity, disclosed_to_senior=disclosed_to_senior)
+            flag = CaregiverFlag(
+                text=text, severity=severity, disclosed_to_senior=disclosed_to_senior, source=source
+            )
             self._flags.append(flag)
             self._flush()
             return flag

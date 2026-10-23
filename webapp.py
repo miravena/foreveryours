@@ -95,6 +95,8 @@ from caregiver import (
 from memory.store import CAREGIVER_SOURCES, MemoryScope, MemoryStore, PrivacyLevel
 import notify
 from pipeline import hear
+from pipeline.audit import DEFAULT_AUDIT_MODEL
+from pipeline.think import DEFAULT_THINK_MODEL
 from pipeline.orchestrator import run_turn
 from safety import fastpath
 from samples.generate_samples import SAMPLES as SAMPLE_SCRIPTS
@@ -1149,7 +1151,12 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     for flag in reversed(flag_items):  # newest first -- this is the thing a caregiver glances at
         disclosed = "✅ Dad was told" if flag.disclosed_to_senior else "⚠️ NOT yet disclosed to Dad"
         status = _notification_status(flag)
-        lines.append(f"- **({flag.severity})** {flag.text}\n  {disclosed}" + (f" · {status}" if status else ""))
+        origin = _flag_origin(flag)
+        lines.append(
+            f"- **({flag.severity})** {flag.text}\n  {disclosed}"
+            + (f" · {status}" if status else "")
+            + (f" · {origin}" if origin else "")
+        )
 
     now = time.time()
     sample_loaded = _sample_family_loaded(store, now)
@@ -2082,6 +2089,73 @@ def _build_line(path: Path = BUILD_INFO_PATH) -> str:
     return f"Build: `{sha[:7]}`"
 
 
+_FLAG_ORIGINS = {
+    "fastpath": "raised by: safety rules, before the model",
+    "perseveration": "raised by: repeated-question check",
+}
+
+_NEMOTRON_ID = re.compile(r"^NVIDIA-(Nemotron-.+?)(?:-A\d+B)?$")
+
+
+def _model_label(model_id: str) -> str:
+    """Readable name for a Token Factory model id: "NVIDIA Nemotron 3 Nano
+    30B" for the Nemotron ids, the bare id after the vendor prefix otherwise."""
+    name = model_id.rsplit("/", 1)[-1]
+    m = _NEMOTRON_ID.match(name)
+    return f"NVIDIA {m.group(1).replace('-', ' ')}" if m else name
+
+
+def _think_model() -> str:
+    return os.environ.get("THINK_MODEL", DEFAULT_THINK_MODEL)
+
+
+def _audit_model() -> str:
+    return os.environ.get("AUDIT_MODEL", DEFAULT_AUDIT_MODEL)
+
+
+def _flag_origin(flag) -> str:
+    """Which layer raised `flag` (#214); empty when unknown. Display only.
+    The backstop is named from AUDIT_MODEL, the same lookup pipeline/audit.py
+    makes, so an override never shows up as "Nemotron"."""
+    source = getattr(flag, "source", None) or ""
+    if source == "audit":
+        label = _model_label(_audit_model())
+        short = "Nemotron" if label.startswith("NVIDIA Nemotron") else label
+        return f"raised by: {short} backstop, after the reply"
+    return _FLAG_ORIGINS.get(source, "")
+
+
+def _model_footer(platform: str | None = None) -> str:
+    """One always-visible line saying which model does what (#214). Every part
+    reads the same setting the pipeline reads at call time (THINK_MODEL,
+    AUDIT_MODEL, ASR_BACKEND, TTS_BACKEND), so the footer names what runs."""
+    from pipeline import speak
+
+    think_label, audit_label = _model_label(_think_model()), _model_label(_audit_model())
+    if think_label == audit_label:
+        models = f"Reply and safety backstop: {think_label} on Nebius Token Factory"
+    else:
+        models = (
+            f"Reply: {think_label} on Nebius Token Factory · "
+            f"Safety backstop: {audit_label} on Nebius Token Factory"
+        )
+    if os.environ.get("ASR_BACKEND", "whisper_local") == "nebius":
+        asr = os.environ.get("ASR_NEBIUS_MODEL", "nvidia/parakeet-tdt-1.1b")
+        hearing = f"{_model_label(asr)} on Nebius Token Factory"
+    else:
+        hearing = "faster-whisper, on this app's server"
+    # Same order as pipeline/speak.py: Piper, Windows System.Speech, espeak, pyttsx3.
+    if speak._piper_available():
+        voice = "Piper"
+    elif (platform or sys.platform) == "win32":
+        voice = "Windows System.Speech"
+    elif speak._get_espeak_cli() is not None:
+        voice = "eSpeak NG"
+    else:
+        voice = "pyttsx3"
+    return f"{models} · Hearing: {hearing} · Voice: {voice}, on this app's server"
+
+
 def build_demo() -> gr.Blocks:
     _start_session_sweeper()
     with gr.Blocks(
@@ -2231,6 +2305,8 @@ def build_demo() -> gr.Blocks:
                 gr.Markdown("**Thinking & Safety Engine:** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nebius Token Factory)\n\n"
                             "**Audio Perception (HEAR):** `faster-whisper` (local CPU)\n\n"
                             "*Background memory extraction & safety audit run asynchronously via Nebius Token Factory.*")
+
+        gr.Markdown(_model_footer())
 
         # Every senior-turn producer (Send, Enter, the four proactive
         # buttons) shares concurrency_id "senior_turn" with a bounded limit

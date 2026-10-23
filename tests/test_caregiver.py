@@ -47,6 +47,26 @@ class TestCaregiverFlags(unittest.TestCase):
         self.assertEqual(loaded[0].severity, "distress")
         self.assertTrue(loaded[0].disclosed_to_senior)
 
+    def test_source_round_trips_and_defaults_to_none(self):
+        flags = CaregiverFlags(self.profile_id, self.data_dir)
+        flags.add("a", severity="crisis", disclosed_to_senior=True, source="fastpath")
+        flags.add("b", severity="audit", disclosed_to_senior=True, source="audit")
+        flags.add("c", severity="confusion", disclosed_to_senior=True, source="perseveration")
+        flags.add("d", severity="distress", disclosed_to_senior=True)
+        loaded = CaregiverFlags(self.profile_id, self.data_dir).all()
+        self.assertEqual([f.source for f in loaded], ["fastpath", "audit", "perseveration", None])
+
+    def test_flag_file_without_source_loads_as_none(self):
+        import json
+
+        flags = CaregiverFlags(self.profile_id, self.data_dir)
+        flags.path.write_text(json.dumps([
+            {"text": "old", "severity": "distress", "created_at": 1.0, "disclosed_to_senior": True}
+        ]))
+        loaded = CaregiverFlags(self.profile_id, self.data_dir).all()
+        self.assertEqual(len(loaded), 1)
+        self.assertIsNone(loaded[0].source)
+
 
 class TestInterviewQuestions(unittest.TestCase):
     def test_five_questions_with_the_required_fields(self):

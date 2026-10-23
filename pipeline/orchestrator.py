@@ -654,6 +654,7 @@ def run_turn(
             flag_text,
             severity=fast.severity,
             disclosed_to_senior=bool(immediate_audio_paths),
+            source="fastpath",
         )
         _notify_in_background(
             flags, fast_flag, notify_threads,
@@ -737,6 +738,7 @@ def run_turn(
                     ),
                     severity="confusion",
                     disclosed_to_senior=True,
+                    source="perseveration",
                 )
                 _notify_in_background(
                     flags, persev_flag, notify_threads,
@@ -1018,7 +1020,7 @@ def run_turn(
                     # result.audit_verdict (the dev/biomarker surface).
                     audit_flag = None
                     if status == "CRISIS":
-                        audit_flag = flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_crisis"], severity="crisis", disclosed_to_senior=disclosed)
+                        audit_flag = flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_crisis"], severity="crisis", disclosed_to_senior=disclosed, source="audit")
                         # Carry into the next turn: was the 988 line actually given?
                         with _CRISIS_CARRY_LOCK:
                             # Only an attested disclosure counts as heard; a reply
@@ -1027,9 +1029,9 @@ def run_turn(
                                 disclosed and caregiver_template is CRISIS_DISCLOSURE_LINE
                             )
                     elif status == "DISTRESS":
-                        audit_flag = flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_distress"], severity="distress", disclosed_to_senior=disclosed)
+                        audit_flag = flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_distress"], severity="distress", disclosed_to_senior=disclosed, source="audit")
                     elif status == "UNSAFE":
-                        audit_flag = flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_unsafe"], severity="audit", disclosed_to_senior=disclosed)
+                        audit_flag = flags.add(fastpath.CAREGIVER_FLAG_TEXT["audit_unsafe"], severity="audit", disclosed_to_senior=disclosed, source="audit")
                     if audit_flag is not None:
                         # Own daemon thread: a slow send must not delay memory
                         # extraction or the next turn's join. `disclosed` was

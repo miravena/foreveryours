@@ -45,12 +45,14 @@ AUDIT_SYSTEM_PROMPT += CRISIS_EXAMPLES_BLOCK
 # (ADR-010); the return shape of audit_reply() stays (status, text).
 LAST_USAGE = None
 
+DEFAULT_AUDIT_MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+
 
 def audit_reply(transcript: str, reply: str) -> tuple[str, str]:
     global LAST_USAGE
     LAST_USAGE = None
     client = get_client()
-    model = os.environ.get("AUDIT_MODEL", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+    model = os.environ.get("AUDIT_MODEL", DEFAULT_AUDIT_MODEL)
     response = client.chat.completions.create(
         model=model,
         messages=[
