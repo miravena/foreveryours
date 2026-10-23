@@ -35,7 +35,7 @@ v1.0.0 tag are the three artefacts a judge opens; everything else is SHOULD or A
 | Ref | Verdict | Owner | Reason |
 |---|---|---|---|
 | gh#5 | MUST | founder | Design + Impact: the <=3 min video is a submission requirement (rules item 7); founder records the narration ~2026-10-24 per the #5 phone-first checklist |
-| gh#11 | MUST | fleet | All four criteria score zero without the live Space through 2026-12-15; keep-awake plan, cap decision and hosted latency are still unrecorded (Office #17637) |
+| gh#11 | MUST | fleet | All four criteria score zero without the live Space through 2026-12-15; keep-awake is in ADR-003, but the cap decision and browser time-to-first-audio on the Space are still unrecorded (Office #17637) |
 | gh#14 | CLOSE | fleet | Decided 2026-10-07: the canonical ChatGPT sentence is recorded on #81/#14; the remaining work is #20's text, which must carry it |
 | gh#20 | MUST | fleet | Design + Idea: Devpost text due 2026-10-24 (M12); Office #23217 drafts it, both review it on the issue, the teammate pastes it |
 | gh#21 | CLOSE | fleet | Done: the split-screen disclosure scene is built, hosted and confirmed as the defining moment (2026-10-07); the remaining deliverable is #5's video |
@@ -66,7 +66,7 @@ v1.0.0 tag are the three artefacts a judge opens; everything else is SHOULD or A
 | gh#175 | SHOULD | fleet | Impact: `supersede()` can surface model-written text as attested; privacy fix if time, else an AFTER issue |
 | gh#183 | MUST | fleet | Coordination: the single thread that tells the teammate what only he can do and by when (M13); opened by this plan |
 | office#16086 | AFTER | fleet | Privacy firewall already fails closed on origin/main (#174); the explicit-permission flow is feature work past the timebox |
-| office#17637 | MUST | fleet | Criteria 1-4 all need a reachable demo through 2026-12-15 (#11): record keep-awake, cap and hosted latency in ADR-003 |
+| office#17637 | MUST | fleet | Criteria 1-4 all need a reachable demo through 2026-12-15 (#11): keep-awake is in ADR-003 already; record the cap decision and the browser time-to-first-audio measured on the Space |
 | office#21085 | AFTER | fleet | Winner study informs the next entry, not this submission |
 | office#23216 | MUST | fleet | Design + Impact: the video (#5) is recorded from this script ~2026-10-24 |
 | office#23217 | MUST | fleet | Design + Idea: Devpost text (#20) due 2026-10-24, carries the #14 answer; the teammate pastes it |
@@ -148,8 +148,8 @@ Humans own what only humans can do; every item has exactly one owner.
 - Devpost text draft on #20 + self-judging row (#23217) - 2026-10-24.
 - Judge-turn fixes: #23220, #23225, #23230, #23234, #23222, #23242, #23247, #23248 - landed and
   published by 2026-10-27.
-- Hosting record for #11 (#17637): keep-awake plan through 2026-12-15, cap decision, hosted
-  time-to-first-audio in ADR-003 - 2026-10-27.
+- Hosting record for #11 (#17637): cap decision and browser time-to-first-audio measured on the
+  Space, added to ADR-003 next to the keep-awake it already records - 2026-10-27.
 - v1.0.0 tag + Release + Release deploy (#23227) - 2026-10-29 after the freeze commit is named.
 - Final scorecard and known-failure list on #37 (#23249) - 2026-10-29.
 - Fleet-owned GitHub state: labels, milestones and the two CLOSE issues (#14, #21) - 2026-10-23.
