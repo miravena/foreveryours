@@ -683,6 +683,55 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIn("Answer them gently and concisely", call_args.args[0])
 
 
+class TestDrivingAlternative(unittest.TestCase):
+    """#192: a driving-intent reply always offers an alternative to driving."""
+
+    def _run(self, transcript, reply):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "audio").mkdir()
+            store = MemoryStore("p", d)
+            flags = CaregiverFlags("p", d)
+            with patch("pipeline.think.stream_reply", return_value=iter([reply])), \
+                 patch("pipeline.think.extract_new_memory", return_value=None):
+                res = run_turn(transcript, store, flags, d / "audio", caregiver_name="Sarah")
+                if res.background_thread:
+                    res.background_thread.join(timeout=10)
+            return res.reply_text
+
+    def test_declining_reply_gets_alternative_appended(self):
+        out = self._run("I think I'll drive down to the shop myself this afternoon.",
+                        "I'm glad you're feeling up to heading out. I can't drive for you, but Sarah mentioned it is best this way.")
+        self.assertRegex(out, orchestrator._DRIVING_ALTERNATIVE_RE)
+        self.assertIn("ask Sarah for a lift", out)
+
+    def test_reply_with_alternative_is_untouched(self):
+        reply = "Shall we ask Sarah for a lift instead?"
+        self.assertEqual(self._run("I'll drive to the shop.", reply), reply)
+
+    def test_non_driving_turn_is_untouched(self):
+        reply = "That sounds like a good plan."
+        self.assertEqual(self._run("Alright, I'll wait for Sarah then.", reply), reply)
+
+    def test_intent_regex(self):
+        for t in ("I think I'll drive down to the shop myself this afternoon.", "I'm going to drive to the bank"):
+            self.assertTrue(orchestrator._DRIVING_INTENT_RE.search(t), t)
+        for t in ("Alright, I'll wait for Sarah then.", "Dad used to drive a truck"):
+            self.assertFalse(orchestrator._DRIVING_INTENT_RE.search(t), t)
+
+    def test_declining_without_an_offer_still_gets_one(self):
+        # Codex review: "best not to drive" declines but offers no way there,
+        # and "pride" must not read as "ride".
+        for reply in ("It's best not to drive.", "I know you take pride in your independence.",
+                      "There is no bus service today, and I can't arrange transport."):
+            self.assertTrue(orchestrator._needs_driving_alternative("I'll drive to the shop.", reply), reply)
+
+    def test_past_or_negated_driving_is_untouched(self):
+        reply = "You must miss those days on the road."
+        for t in ("I used to drive a truck for forty years.", "I don't drive anymore, I gave it up."):
+            self.assertEqual(self._run(t, reply), reply, t)
+
+
 if __name__ == "__main__":
     unittest.main()
 

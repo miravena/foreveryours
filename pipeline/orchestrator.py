@@ -36,7 +36,7 @@ from memory.store import STOPWORDS, MemoryStore  # noqa: E402
 from safety import fastpath  # noqa: E402
 
 from . import audit, speak, think  # noqa: E402
-from .intent import Intent, detect_intent, is_topic_invitation  # noqa: E402
+from .intent import Intent, detect_intent, is_topic_invitation, is_visitor_question  # noqa: E402
 from .nebius_client import NebiusNotConfigured  # noqa: E402
 
 DISCLOSURE_LINE = "I want to let {caregiver} know about something I just said."
@@ -94,6 +94,43 @@ _NOT_HOTLINE_BEFORE_RE = re.compile(
     re.IGNORECASE,
 )
 _OTHER_EMERGENCY_RE = re.compile(r"\b(911|999|112|emergency|ambulance)\b", re.IGNORECASE)
+# Driving-intent guarantee (#192): when the senior says they will drive
+# themselves, the reply must offer a way to get there without driving. THINK
+# sometimes only declines ("I can't drive for you, but Sarah mentioned...");
+# the output-side check below appends a warm offer when no alternative is present.
+_DRIVING_INTENT_RE = re.compile(
+    r"\b(?:i|i'll|i will|i'm going to|i am going to|i'd like to|i think i'll|i'm gonna|gonna|let me)\b[^.!?]{0,40}\bdriv(?:e|ing)\b",
+    re.IGNORECASE,
+)
+# Past or negated driving ("I used to drive", "I don't drive anymore") is not a plan to drive.
+_DRIVING_NOT_INTENT_RE = re.compile(
+    r"\b(?:used to|can't|cannot|can not|don't|do not|won't|will not|never|stopped|gave up|no longer)\b[^.!?]{0,20}\bdriv",
+    re.IGNORECASE,
+)
+# Stricter than the judge's OFFERS_ALTERNATIVE on purpose: "best not to drive"
+# declines without offering a way there, and word boundaries keep "pride" from
+# reading as "ride".
+_DRIVING_ALTERNATIVE_RE = re.compile(
+    r"\b(lifts?|rides?|drive you|take you|pick you up|"
+    r"someone (?:can|could|to) (?:take|drive|bring)|"
+    r"(?:call|ask|phone|text|book|get) (?:sarah|your (?:family|daughter|son)|a taxi|a cab))\b",
+    re.IGNORECASE,
+)
+
+
+def _driving_alternative_sentence(caregiver_name: str) -> str:
+    return f"Would you like me to ask {caregiver_name} for a lift instead?"
+
+
+def _needs_driving_alternative(transcript: str, reply: str) -> bool:
+    return bool(
+        _DRIVING_INTENT_RE.search(transcript)
+        and not _DRIVING_NOT_INTENT_RE.search(transcript)
+        and reply.strip()
+        and not _DRIVING_ALTERNATIVE_RE.search(reply)
+    )
+
+
 _CRISIS_EMPTY_REPLY = "I'm here with you. How are you feeling right now?"
 
 # An apology in THINK's continuation of a fast-path crisis turn: the canned
@@ -268,6 +305,53 @@ def _sanitize_caregiver_update(text: str, caregiver_name: str) -> str:
     cleaned = re.sub(r"^(i'm|i am)\s+", f"{caregiver_name} is ", text, flags=re.IGNORECASE)
     cleaned = re.sub(r"^(i will|i'll)\s+", f"{caregiver_name} will ", cleaned, flags=re.IGNORECASE)
     return cleaned
+
+
+_VISIT_UPDATE_RE = re.compile(
+    r"\b(groceries|grocery|dropping\s+off|drop(ping)?\s+by|stopping\s+by|stop\s+by|coming|come|visit(ing|s)?|"
+    r"arriv\w*|bring(ing|s)?|pick(ing)?\s+you\s+up|taking\s+you)\b",
+    re.IGNORECASE,
+)
+
+
+# The read-out speaks caregiver text without THINK, so it must never carry
+# care instructions: a visit note that mentions medicine, dosing or health
+# advice sends the whole question back to THINK and its guardrails.
+_READOUT_UNSAFE_RE = re.compile(
+    r"\b(medicat\w*|medicine|meds|pills?|tablets?|doses?|dosage|mg|aspirin|insulin|inhaler|"
+    r"prescri\w*|take\s+(?:a|an|one|two|three|four|\d+|your|his|her|their)\b|don'?t\s+eat|"
+    r"blood\s+pressure|sugar|symptoms?|hospital|emergency)\b",
+    re.IGNORECASE,
+)
+# A visitor question about another day; the read-out only answers for today.
+_OTHER_DAY_RE = re.compile(
+    r"\b(tomorrow|yesterday|next\s+week|this\s+week(?:end)?|weekend|"
+    r"monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+    re.IGNORECASE,
+)
+
+
+def _visitor_answer(transcript: str, updates: list[str], caregiver_name: str) -> str | None:
+    """Deterministic answer to "Is anyone coming by today?" (#229): the visit
+    notes in today's caregiver updates, verbatim, naming who and when. None
+    (THINK answers as before) when the question is not a plain visitor question
+    about today, no note is a visit, or a visit note carries anything medical. The model never gets the chance to invent a visitor or drop the time."""
+    if not is_visitor_question(transcript) or _OTHER_DAY_RE.search(transcript):
+        return None
+    parts = []
+    for u in updates:
+        u = u.strip()
+        if not u or not _VISIT_UPDATE_RE.search(u):
+            continue
+        # The whole note is read (a time can sit in the next sentence), so the
+        # whole note must be free of care instructions.
+        if _READOUT_UNSAFE_RE.search(u):
+            return None
+        if caregiver_name.lower() not in u.lower():
+            keep_case = u[:2].isupper() or re.match(r"I\b", u)
+            u = f"{caregiver_name} mentioned: {u if keep_case else u[0].lower() + u[1:]}"
+        parts.append(u if u[-1] in ".!?" else u + ".")
+    return " ".join(parts) or None
 
 
 MATCH_IGNORE_WORDS = {
@@ -520,6 +604,37 @@ def _notify_in_background(flags: CaregiverFlags, flag, threads: list, told=None)
         threads.append(t)
     except Exception as exc:  # pragma: no cover - never into the turn path
         print(f"[orchestrator] notification not scheduled: {type(exc).__name__}", file=sys.stderr)
+
+
+# "What did I just tell you?" -- a question about the conversation itself, not
+# about stored memory (#230). The answer is in the session history, which
+# reaches THINK as chat turns; the note below points at it so the reply does not
+# fall back to "I missed that". It goes to THINK only, never to the caregiver
+# panel, flags or memory, so a private disclosure stays private.
+_SESSION_RECALL_RE = re.compile(
+    r"\b(what\s+(did|was|were)\s+(i|we)\s+(just\s+)?(say|said|tell|told|mention|mentioned|talk(ed)?\s+about)"
+    r"|what\s+(have\s+)?(i|we)\s+(just\s+)?(said|told|mentioned)"
+    r"|do\s+you\s+remember\s+what\s+i\s+(just\s+)?(said|told|mentioned)"
+    r"|what\s+i\s+just\s+(said|told|mentioned))\b",
+    re.IGNORECASE,
+)
+
+
+def _session_recall_note(transcript: str, history: list[dict] | None) -> str | None:
+    if not history or not _SESSION_RECALL_RE.search(transcript):
+        return None
+    last_user = next(
+        (m.get("content", "") for m in reversed(history) if m.get("role") == "user" and m.get("content")),
+        "",
+    )
+    if not last_user:
+        return None
+    last_user = " ".join(last_user.split())[:300]
+    return (
+        "The senior is asking what they said earlier in this conversation. "
+        f'Their previous message was: "{last_user}". Tell it back to them plainly; '
+        "do not say you missed it."
+    )
 
 
 def run_turn(
@@ -841,6 +956,9 @@ def run_turn(
     if pending_conflicts and allow_hosted_call:
         memory_store.mark_conflicts_asked()
 
+    recall_note = _session_recall_note(transcript, history)
+    if recall_note:
+        continuation_note = f"{continuation_note} {recall_note}" if continuation_note else recall_note
     think_input = transcript if not continuation_note else f"{transcript}\n\n[{continuation_note}]"
     reply_text = ""
     think_audio_paths: list[Path] = []
@@ -856,17 +974,23 @@ def run_turn(
         think_unavailable = True
     else:
         try:
-            token_stream = think.stream_reply(
-                think_input,
-                filtered_profile,
-                guardrails=guardrails,
-                history=history,
-                caregiver_updates=filtered_schedule,
-                intent=intent.value,
-                current_hour=simulated_hour,
-                is_proactive=is_proactive,
-                pending_conflicts=pending_conflicts,
-            )
+            visitor_answer = _visitor_answer(transcript, caregiver_updates, caregiver_name)
+            # Only a plain logistics question gets the read-out; an emotional
+            # "is anyone coming?" still goes to THINK for a warm reply.
+            if visitor_answer is not None and not fast.triggered and intent == Intent.LOGISTICAL:
+                token_stream = iter([visitor_answer])
+            else:
+                token_stream = think.stream_reply(
+                    think_input,
+                    filtered_profile,
+                    guardrails=guardrails,
+                    history=history,
+                    caregiver_updates=filtered_schedule,
+                    intent=intent.value,
+                    current_hour=simulated_hour,
+                    is_proactive=is_proactive,
+                    pending_conflicts=pending_conflicts,
+                )
             sentences = think.sentence_chunks(token_stream)
         
             physical_claim_pattern = re.compile(
@@ -941,6 +1065,15 @@ def run_turn(
                 think_audio_paths.extend(fallback_paths)
                 if first_audio_time is None:
                     first_audio_time = fallback_first_time
+
+    if not fast.triggered and not think_unavailable and not is_fallback and _needs_driving_alternative(transcript, reply_text):
+        extra_text, extra_paths, extra_first = _speak_turn(
+            iter([_driving_alternative_sentence(caregiver_name)]), audio_out_dir, on_chunk=on_chunk
+        )
+        reply_text = f"{reply_text} {extra_text}".strip()
+        think_audio_paths.extend(extra_paths)
+        if first_audio_time is None:
+            first_audio_time = extra_first
 
     # Zero-Silence Guarantee: If model returned an empty string or whitespace (token exhaustion)
     if not fast.triggered and not think_unavailable and not reply_text.strip() and not is_fallback:
