@@ -101,7 +101,7 @@ _OTHER_EMERGENCY_RE = re.compile(r"\b(911|999|112|emergency|ambulance)\b", re.IG
 # not reliable (THINK sometimes only declines, or praises "getting out"), so
 # this is enforced deterministically, output-side, before the text is spoken.
 _DRIVING_INTENT_RE = re.compile(
-    r"\bi\b[^.!?]{0,40}\bdriv(?:e|ing)\b",
+    r"\b(?:i|let me|gonna)\b[^.!?]{0,40}\bdriv(?:e|ing)\b",
     re.IGNORECASE,
 )
 # Past or negated driving ("I used to drive", "I don't drive anymore") is not a plan to drive.

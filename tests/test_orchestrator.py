@@ -795,7 +795,8 @@ class TestDrivingPlan(unittest.TestCase):
     def test_driving_plan_regex(self):
         for t in (self.T12, "I'm going to drive to the bank", "I will drive down to the shop",
                   "I plan to drive to the shop", "I want to drive to the shop",
-                  "I am driving to the shop this afternoon"):
+                  "I am driving to the shop this afternoon",
+                  "Let me drive to the shop.", "Gonna drive to the shop"):
             self.assertTrue(orchestrator.driving_plan(t), t)
         for t in (self.T13, "Dad used to drive a truck", "I don't drive anymore, I gave it up.",
                   "Is my grandson driving over today?",
