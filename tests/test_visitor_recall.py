@@ -111,3 +111,24 @@ class TestVisitorReviewFollowUp(unittest.TestCase):
         from pipeline.orchestrator import _visitor_answer
         out = _visitor_answer("Is anyone coming by today?", ["I'll drop off groceries at 4 PM."], "Sarah")
         self.assertEqual(out, "Sarah mentioned: I'll drop off groceries at 4 PM.")
+
+
+class TestVisitorReadOutSafety(unittest.TestCase):
+    """Codex review of the #229/#230/#192 publish."""
+
+    def test_medical_text_in_a_visit_update_goes_to_think(self):
+        from pipeline.orchestrator import _visitor_answer
+        self.assertIsNone(_visitor_answer(
+            "Is anyone coming by today?",
+            ["Sarah is visiting at 4 PM. Take three aspirin before she arrives."], "Sarah"))
+
+    def test_only_visit_sentences_are_read_out(self):
+        from pipeline.orchestrator import _visitor_answer
+        out = _visitor_answer("Is anyone coming by today?",
+                              ["The garden looks lovely. Sarah is dropping off groceries at 4 PM today."], "Sarah")
+        self.assertEqual(out, "Sarah is dropping off groceries at 4 PM today.")
+
+    def test_question_about_another_day_goes_to_think(self):
+        from pipeline.orchestrator import _visitor_answer
+        for q in ("Who is coming tomorrow?", "Is anyone visiting on Saturday?"):
+            self.assertIsNone(_visitor_answer(q, ["Sarah is dropping off groceries at 4 PM today."], "Sarah"), q)

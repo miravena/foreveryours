@@ -107,10 +107,13 @@ _DRIVING_NOT_INTENT_RE = re.compile(
     r"\b(?:used to|can't|cannot|can not|don't|do not|won't|will not|never|stopped|gave up|no longer)\b[^.!?]{0,20}\bdriv",
     re.IGNORECASE,
 )
+# Stricter than the judge's OFFERS_ALTERNATIVE on purpose: "best not to drive"
+# declines without offering a way there, and word boundaries keep "pride" from
+# reading as "ride".
 _DRIVING_ALTERNATIVE_RE = re.compile(
-    r"(lift|ride|drive you|take you|pick you up|instead of driving|rather than driving|"
-    r"not (to )?drive|avoid(ing)? driving|best not to drive|without driving|"
-    r"someone (can|could|to) (take|drive|bring)|call (sarah|your family)|ask (sarah|your family))",
+    r"\b(lifts?|rides?|drive you|take you|pick you up|"
+    r"someone (?:can|could|to) (?:take|drive|bring)|"
+    r"(?:call|ask|phone|text) (?:sarah|your (?:family|daughter|son)|a taxi|a cab)|taxi|cab|bus)\b",
     re.IGNORECASE,
 )
 
@@ -311,23 +314,44 @@ _VISIT_UPDATE_RE = re.compile(
 )
 
 
+# The read-out speaks caregiver text without THINK, so it must never carry
+# care instructions: a visit sentence that mentions medicine, dosing or health
+# advice sends the whole question back to THINK and its guardrails.
+_READOUT_UNSAFE_RE = re.compile(
+    r"\b(medicat\w*|medicine|meds|pills?|tablets?|doses?|dosage|mg|aspirin|insulin|inhaler|"
+    r"prescri\w*|take\s+(?:a|an|one|two|three|four|\d+|your|his|her|their)\b|don'?t\s+eat|"
+    r"blood\s+pressure|sugar|symptoms?|hospital|emergency)\b",
+    re.IGNORECASE,
+)
+# A visitor question about another day; the read-out only answers for today.
+_OTHER_DAY_RE = re.compile(
+    r"\b(tomorrow|yesterday|next\s+week|this\s+week(?:end)?|weekend|"
+    r"monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+    re.IGNORECASE,
+)
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
 def _visitor_answer(transcript: str, updates: list[str], caregiver_name: str) -> str | None:
-    """Deterministic answer to "Is anyone coming by today?" (#229): the visits
-    in today's caregiver updates, verbatim, naming who and when. None when the
-    question is not a visitor question or no update is a visit, so THINK
-    answers as before. The model never gets the chance to invent a visitor or
-    drop the time."""
-    if not is_visitor_question(transcript):
+    """Deterministic answer to "Is anyone coming by today?" (#229): the visit
+    sentences in today's caregiver updates, verbatim, naming who and when. None
+    (THINK answers as before) when the question is not a plain visitor question
+    about today, no sentence is a visit, or a visit sentence carries anything
+    medical. The model never gets the chance to invent a visitor or drop the time."""
+    if not is_visitor_question(transcript) or _OTHER_DAY_RE.search(transcript):
         return None
     parts = []
-    for u in updates:
-        u = u.strip()
-        if not u or not _VISIT_UPDATE_RE.search(u):
-            continue
-        if caregiver_name.lower() not in u.lower():
-            keep_case = u[:2].isupper() or re.match(r"I\b", u)
-            u = f"{caregiver_name} mentioned: {u if keep_case else u[0].lower() + u[1:]}"
-        parts.append(u if u[-1] in ".!?" else u + ".")
+    for update in updates:
+        for u in _SENTENCE_SPLIT_RE.split(update.strip()):
+            u = u.strip()
+            if not u or not _VISIT_UPDATE_RE.search(u):
+                continue
+            if _READOUT_UNSAFE_RE.search(u):
+                return None
+            if caregiver_name.lower() not in u.lower():
+                keep_case = u[:2].isupper() or re.match(r"I\b", u)
+                u = f"{caregiver_name} mentioned: {u if keep_case else u[0].lower() + u[1:]}"
+            parts.append(u if u[-1] in ".!?" else u + ".")
     return " ".join(parts) or None
 
 
