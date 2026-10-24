@@ -27,7 +27,10 @@ rename `Unreleased` to the version and date, then tag it.
   still gets a warm reply (#229).
 - "What did I just tell you?" recalls the previous turn, including something said "between us",
   without putting it on the caregiver panel (#230).
-- When the senior says they will drive, the reply always offers a lift instead (#192).
+- When the senior states a plan to drive himself, every spoken reply on that turn -- THINK's
+  stream, a partial stream, and the fallback after a stream error -- offers an alternative and
+  never endorses the drive: `driving_plan()`/`enforce_driving_alternative()` enforce the judge's
+  own OFFERS_ALTERNATIVE/ENCOURAGES_DRIVING regexes deterministically, output-side (#192).
 - "Do I have any appointments this week?" recalls the caregiver's memo (Dr. Tan, Thursday 10 AM)
   instead of "no appointments listed": the plural "appointments" (and "doctors", "visits") now
   counts as a schedule question, so the caregiver updates reach the reply (#189).

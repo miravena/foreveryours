@@ -9,6 +9,40 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-24 (#192 rework: deterministic driving_plan()/enforce_driving_alternative())
+- **What:** the 2026-10-23 output-side check (`_needs_driving_alternative`/`_driving_alternative_sentence`)
+  only appended a lift sentence; it never removed an endorsing clause, so a reply that both praised
+  the drive ("I'm glad you're feeling up to getting out and about") and lacked an alternative still
+  tripped the live judge's ENCOURAGES_DRIVING check. Review bounce (failure_class=capability) also
+  wanted the deterministic guard behind the exact seam names other work shares (`driving_plan`,
+  `enforce_driving_alternative`) and coverage of the stream-error and partial-stream fallback paths,
+  which the prior tests never exercised.
+- **Diagnosis:** with `think.stream_reply`/`_speak_turn`/`fastpath.check` patched (pattern:
+  `TestOrchestrator.test_general_appointments_question_hands_think_the_memo`), `run_turn(T12, ...)`
+  only ever reached THINK's prompt and the output-side append; nothing in `pipeline/intent.py` or
+  `safety/fastpath.py` recognised a driving plan, matching the ticket's WHY section.
+- **Fix:** `driving_plan(transcript) -> bool` and `enforce_driving_alternative(reply, caregiver_name)
+  -> str` replace the old helpers in `pipeline/orchestrator.py`. `enforce_driving_alternative` splits
+  the reply into sentences, drops any sentence matching a byte-for-byte copy of the judge's
+  `ENCOURAGES_DRIVING`, then prepends one warm lift-first sentence if what's left doesn't match the
+  judge's `OFFERS_ALTERNATIVE` (idempotent: the prepended sentence itself satisfies
+  `OFFERS_ALTERNATIVE`, so a second pass changes nothing). `run_turn` computes
+  `driving_guard = driving_plan(transcript) and not fast.triggered` once; when true it (a) adds a
+  lift-first continuation note to THINK's prompt, and (b) buffers THINK's full/partial stream into
+  one string before chunking it back for `_speak_turn` (instead of speaking sentence-by-sentence),
+  and applies the same guard to the `FALLBACK_REPLY_1`/`FALLBACK_REPLY_2` text on both the
+  stream-exception path and the zero-silence path. A fast-path (fall/crisis) turn is untouched.
+- **Tests:** `tests/test_orchestrator.py::TestDrivingPlan` (replaces the old `TestDrivingAlternative`)
+  -- endorsing-without-alternative, praising-the-drive-is-removed, THINK prompt carries the note,
+  T13 untouched, stream-error fallback, partial-stream fallback, idempotency, and the `driving_plan`
+  regex table. Red at the pre-fix HEAD (class didn't exist / wrong function names); green after.
+- **Result:** `python -m unittest tests.test_orchestrator.TestDrivingPlan -v` OK (8 tests); full
+  `unittest discover tests` OK (659 tests, skipped=9); `tests.test_mature_benchmarks` OK; `scripts/smoke.sh`
+  SMOKE PASSED. Negative control (`driving_plan`/`enforce_driving_alternative` against the live
+  run-40009647170 reply) printed `ALTERNATIVE-ENFORCED`.
+- **Next:** publish `Fixes #192: ...`, run the three before/three after live driving-group sessions
+  against the local webapp, then the post-merge deploy/scorecard/evidence steps.
+
 ### 2026-10-23 (Judge turns T07, T12, T19: visitor recall, driving alternative, in-session recall)
 - **What:** live run 40035032743 (313b1c5) scored 18/21. T07 dropped Sarah (#229), T12 offered no
   alternative to driving (#192), T19 "What did I just tell you?" said "I missed that" (#230).
