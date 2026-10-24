@@ -122,11 +122,11 @@ class TestVisitorReadOutSafety(unittest.TestCase):
             "Is anyone coming by today?",
             ["Sarah is visiting at 4 PM. Take three aspirin before she arrives."], "Sarah"))
 
-    def test_only_visit_sentences_are_read_out(self):
+    def test_time_in_the_next_sentence_is_kept(self):
         from pipeline.orchestrator import _visitor_answer
         out = _visitor_answer("Is anyone coming by today?",
-                              ["The garden looks lovely. Sarah is dropping off groceries at 4 PM today."], "Sarah")
-        self.assertEqual(out, "Sarah is dropping off groceries at 4 PM today.")
+                              ["Sarah is visiting today. She'll be here at 4 PM."], "Sarah")
+        self.assertEqual(out, "Sarah is visiting today. She'll be here at 4 PM.")
 
     def test_question_about_another_day_goes_to_think(self):
         from pipeline.orchestrator import _visitor_answer

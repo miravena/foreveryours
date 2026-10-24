@@ -722,7 +722,8 @@ class TestDrivingAlternative(unittest.TestCase):
     def test_declining_without_an_offer_still_gets_one(self):
         # Codex review: "best not to drive" declines but offers no way there,
         # and "pride" must not read as "ride".
-        for reply in ("It's best not to drive.", "I know you take pride in your independence."):
+        for reply in ("It's best not to drive.", "I know you take pride in your independence.",
+                      "There is no bus service today, and I can't arrange transport."):
             self.assertTrue(orchestrator._needs_driving_alternative("I'll drive to the shop.", reply), reply)
 
     def test_past_or_negated_driving_is_untouched(self):

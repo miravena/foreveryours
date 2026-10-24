@@ -113,7 +113,7 @@ _DRIVING_NOT_INTENT_RE = re.compile(
 _DRIVING_ALTERNATIVE_RE = re.compile(
     r"\b(lifts?|rides?|drive you|take you|pick you up|"
     r"someone (?:can|could|to) (?:take|drive|bring)|"
-    r"(?:call|ask|phone|text) (?:sarah|your (?:family|daughter|son)|a taxi|a cab)|taxi|cab|bus)\b",
+    r"(?:call|ask|phone|text|book|get) (?:sarah|your (?:family|daughter|son)|a taxi|a cab))\b",
     re.IGNORECASE,
 )
 
@@ -315,7 +315,7 @@ _VISIT_UPDATE_RE = re.compile(
 
 
 # The read-out speaks caregiver text without THINK, so it must never carry
-# care instructions: a visit sentence that mentions medicine, dosing or health
+# care instructions: a visit note that mentions medicine, dosing or health
 # advice sends the whole question back to THINK and its guardrails.
 _READOUT_UNSAFE_RE = re.compile(
     r"\b(medicat\w*|medicine|meds|pills?|tablets?|doses?|dosage|mg|aspirin|insulin|inhaler|"
@@ -329,29 +329,28 @@ _OTHER_DAY_RE = re.compile(
     r"monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
     re.IGNORECASE,
 )
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
 def _visitor_answer(transcript: str, updates: list[str], caregiver_name: str) -> str | None:
     """Deterministic answer to "Is anyone coming by today?" (#229): the visit
-    sentences in today's caregiver updates, verbatim, naming who and when. None
+    notes in today's caregiver updates, verbatim, naming who and when. None
     (THINK answers as before) when the question is not a plain visitor question
-    about today, no sentence is a visit, or a visit sentence carries anything
-    medical. The model never gets the chance to invent a visitor or drop the time."""
+    about today, no note is a visit, or a visit note carries anything medical. The model never gets the chance to invent a visitor or drop the time."""
     if not is_visitor_question(transcript) or _OTHER_DAY_RE.search(transcript):
         return None
     parts = []
-    for update in updates:
-        for u in _SENTENCE_SPLIT_RE.split(update.strip()):
-            u = u.strip()
-            if not u or not _VISIT_UPDATE_RE.search(u):
-                continue
-            if _READOUT_UNSAFE_RE.search(u):
-                return None
-            if caregiver_name.lower() not in u.lower():
-                keep_case = u[:2].isupper() or re.match(r"I\b", u)
-                u = f"{caregiver_name} mentioned: {u if keep_case else u[0].lower() + u[1:]}"
-            parts.append(u if u[-1] in ".!?" else u + ".")
+    for u in updates:
+        u = u.strip()
+        if not u or not _VISIT_UPDATE_RE.search(u):
+            continue
+        # The whole note is read (a time can sit in the next sentence), so the
+        # whole note must be free of care instructions.
+        if _READOUT_UNSAFE_RE.search(u):
+            return None
+        if caregiver_name.lower() not in u.lower():
+            keep_case = u[:2].isupper() or re.match(r"I\b", u)
+            u = f"{caregiver_name} mentioned: {u if keep_case else u[0].lower() + u[1:]}"
+        parts.append(u if u[-1] in ".!?" else u + ".")
     return " ".join(parts) or None
 
 
