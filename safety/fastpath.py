@@ -101,6 +101,48 @@ CRISIS_PHYSICAL_EMERGENCY_SENTENCE = (
     "Please also call 911 now, or ask someone near you to call."
 )
 
+# Down and unable to summon help (#242): the senior is on the floor or has
+# fallen AND cannot reach the phone, cannot call anyone, cannot get up, or has
+# been down for hours. That is a physical emergency (911 or the medical alert
+# button), never the 988 crisis line. Before this rule, "I'm on the floor and
+# can't reach the phone" matched nothing here and the model answered with 988.
+# A place word alone ("on the floor watching telly") and an unreachable phone
+# alone ("can't reach the phone charger from the sofa") stay near-misses; the
+# two together fire even in a benign-sounding sentence, because a needless flag
+# is cheap and a missed one is not.
+_DOWN_PLACE = (
+    r"\b(?:on\s+the\s+(?:floor|ground)|hit\s+the\s+floor|down\s+here"
+    r"|(?:had|took)\s+a\s+(?:bad\s+|little\s+|nasty\s+)?fall"
+    r"|fell" + _NOT_A_FALL + r"|fallen" + _NOT_A_FALL + r")\b"
+)
+_CANNOT_SUMMON_HELP = (
+    r"\bcan(?:'?t|not)\s+(?:"
+    # can't reach / get to / find the phone (not its charger, case, bill ...)
+    r"(?:reach|get\s+to|get\s+at|get\s+hold\s+of|find)\s+(?:the|my|a)\s+"
+    r"(?:tele|cell\s*|mobile\s*)?phone\b(?!\s+(?:charger|case|cover|bill|book|number)\b)"
+    # can't call anyone / for help / 911
+    r"|(?:call|ring|phone|reach)\s+(?:anyone|anybody|someone|somebody|for\s+help|911|an\s+ambulance)\b"
+    r"|get\s+up\b|move\b)"
+)
+_DOWN_FOR_LONG = (
+    r"\b(?:been|lying|lain|lay|stuck)\s+(?:\w+\s+){0,2}?(?:on\s+the\s+(?:floor|ground)|down\s+here)\b"
+    r".*\b(?:for\s+(?:hours|ages|a\s+long\s+time|(?:an?|one|two|three|four|five|six|several|a\s+few|many|\d+)\s+hours?)"
+    r"|all\s+(?:night|day|morning|afternoon)|since\s+(?:last\s+night|this\s+morning|yesterday|breakfast|lunch))\b"
+)
+DOWN_UNABLE_PATTERNS = [
+    _DOWN_PLACE + r".*" + _CANNOT_SUMMON_HELP,
+    _CANNOT_SUMMON_HELP + r".*" + _DOWN_PLACE,
+    _DOWN_FOR_LONG,
+]
+
+# The senior may be unable to reach a phone, so the reply offers the medical
+# alert button first, gives 911, and says the family is being told now: the
+# one thing that does not depend on him.
+DOWN_UNABLE_REPLY = (
+    "I hear you, and I'm getting help. If you can, press your medical alert button or call 911. "
+    "I'm letting your family know right now so someone can check on you."
+)
+
 CRISIS_PATTERNS = [
     r"\b(don'?t\s+want\s+to\s+be\s+here\s+anymore|do\s+not\s+want\s+to\s+live|want\s+to\s+die|wanna\s+die|everyone\s+would\s+be\s+better\s+off\s+without\s+me|wish\s+i\s+(was|were)\s+dead|better\s+off\s+dead|kill\s+myself|end\s+(my\s+life|it\s+all)|take\s+my\s+own\s+life|i('m| am)\s+suicidal|life\s+isn'?t\s+worth\s+living|suicide)\b",
     # Paraphrases of the same intent (#199, ADR-013). Each is an explicit
@@ -154,6 +196,12 @@ CAREGIVER_FLAG_TEXT = {
     ),
     "fall": (
         "URGENT: Dad reported a fall (physical distress). Please check on him now."
+    ),
+    # Severity stays "distress"; wording for a senior who is down and cannot
+    # get up or call for help (#242). Fixed text, no quote, like the others.
+    "down_unable": (
+        "URGENT: the senior may be on the floor and unable to get up or call for help "
+        "(physical distress). Please check on the senior now, and call 911 if you cannot reach them."
     ),
     "confusion": (
         "Possible confusion in conversation: the senior asked where they are "
@@ -221,13 +269,17 @@ class FastPathResult:
     immediate_reply: str | None   # spoken right away, before THINK runs
     continuation_note: str | None  # fed into THINK so the turn doesn't dead-end
     caregiver_flag: str | None
+    # The canned reply sent the senior to 911 for a physical emergency; THINK's
+    # continuation then gets no 988 budget (pipeline/orchestrator.py).
+    calls_911: bool = False
 
 
 def check(transcript: str) -> FastPathResult:
     text = _normalize(transcript)
     # Decided before the crisis loop so a mixed report ("I want to die and I
     # can't breathe") keeps the crisis handling AND gets the 911 sentence.
-    physical = any(re.search(p, text) for p in PHYSICAL_EMERGENCY_PATTERNS)
+    down_unable = any(re.search(p, text) for p in DOWN_UNABLE_PATTERNS)
+    physical = down_unable or any(re.search(p, text) for p in PHYSICAL_EMERGENCY_PATTERNS)
 
     clauses = re.split(r'[.!?;\n]+', text)
     for clause in clauses:
@@ -259,6 +311,25 @@ def check(transcript: str) -> FastPathResult:
                     caregiver_flag=CAREGIVER_FLAG_TEXT["crisis"],
                 )
 
+    # Down and unable to summon help (#242) comes first among the 911 replies:
+    # "I fell, I'm bleeding and can't reach the phone" needs the medical alert
+    # button as much as 911, and must not be asked whether he can get up.
+    if down_unable:
+        return FastPathResult(
+            triggered=True,
+            severity="distress",
+            immediate_reply=DOWN_UNABLE_REPLY,
+            continuation_note=(
+                f'The person may be on the floor and unable to get up or call for help: "{transcript.strip()}". '
+                "You already told them to press their medical alert button or call 911 if they can, and that "
+                "you're notifying their family -- don't repeat either. This is a physical emergency: never "
+                "mention 988 or a crisis line. Do not give medical instructions or a diagnosis (rule 7). "
+                "Stay with them, keep them talking, and gently ask whether they are hurt."
+            ),
+            caregiver_flag=CAREGIVER_FLAG_TEXT["down_unable"],
+            calls_911=True,
+        )
+
     # Before the fall and generic replies: "I fell and I'm bleeding" needs the
     # 911 instruction more than the get-up-safely question.
     if physical:
@@ -274,6 +345,7 @@ def check(transcript: str) -> FastPathResult:
                 "able to call."
             ),
             caregiver_flag=CAREGIVER_FLAG_TEXT["medical"],
+            calls_911=True,
         )
 
     # Checked on its own: a first-person fall report triggers even
