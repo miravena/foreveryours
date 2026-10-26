@@ -98,8 +98,8 @@ actually perceives). Time to first sound heard is measured from player construct
 of the first *successful* playback, and excludes speech-to-text (ASR happens before the player is
 constructed). On a box with no working audio player, the CLI reports **"No audio was played (no
 working audio player)"** and prints no number -- it never reports a fake near-zero reading for
-sound nobody heard ([#71](../../issues/71)). The browser demo still plays one combined clip;
-sentence-level browser streaming is tracked separately.
+sound nobody heard ([#71](../../issues/71)). The browser demo streams the reply too: each
+sentence's audio is sent to the page as soon as it is synthesized (`webapp.py`, `gr.Audio(streaming=True)`).
 
 ## Demo script
 
