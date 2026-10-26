@@ -535,6 +535,10 @@ class TestConsistency(unittest.TestCase):
         self.assertIn("contradicting time",
                       check("Your appointment with Dr. Tan is Thursday at 10 AM, but Sarah says it has moved to Friday at 3 PM.",
                             "", "") or "")
+        for joiner in (", and", ";"):
+            self.assertIn("contradicting time",
+                          check(f"Your appointment with Dr. Tan is Thursday at 10 AM{joiner} Sarah says it has moved to Friday at 3 PM.",
+                                "", "") or "")
         self.assertIsNone(check("Your appointment with Dr. Tan is not on Wednesday, but on Thursday at 10 AM.", "", ""))
 
     def test_times_are_parsed_with_their_meridiem(self):

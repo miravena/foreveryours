@@ -511,6 +511,11 @@ _SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?<!\bDr\.)(?<!\bMr\.)(?<!\bMrs\.)(?<!
 _CLAUSE_SPLIT_RE = re.compile(r";\s+|,\s+and\s+", re.IGNORECASE)
 
 
+# A clause that points back at the appointment ("it has moved", "instead") is
+# not purely about the other event, so it is kept and its times are checked.
+_REFERS_BACK_RE = re.compile(r"\b(it|that|this|moved|rescheduled|changed|instead|actually)\b", re.IGNORECASE)
+
+
 def _clauses(reply: str) -> list[str]:
     """Split the RAW reply (before _plain eats the period of "a.m.") into
     sentences, then into clauses at ";" and ", and" ("but" is a contrast that refers back, so it is not split); "Dr." and a
@@ -541,7 +546,8 @@ def reply_states_only(why: str, *, time: tuple[int, str] | None = None, day: str
         if other_rx:
             sentences = [_plain(c) for c in _clauses(reply)]  # kept clauses are re-joined whole: "not Friday, but Wednesday" stays one
             reply = " ".join(x for x in sentences
-                             if not (other_rx.search(x) and not (topic_rx and topic_rx.search(x))))
+                             if not (other_rx.search(x) and not (topic_rx and topic_rx.search(x))
+                                     and not _REFERS_BACK_RE.search(x)))
         problems = []
         if time:
             hour, meridiem = time
