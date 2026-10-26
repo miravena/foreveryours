@@ -529,6 +529,10 @@ class TestConsistency(unittest.TestCase):
         ]
         for reply in wrong:
             self.assertIn("contradicting time", check(reply, "", "") or "", reply)
+        self.assertIn("contradicting",
+                      check("Your appointment with Dr. Tan is Thursday at 10 AM, not Friday, but Wednesday at 3 PM.",
+                            "", "") or "")
+        self.assertIsNone(check("Your appointment with Dr. Tan is not on Wednesday, but on Thursday at 10 AM.", "", ""))
 
     def test_times_are_parsed_with_their_meridiem(self):
         cases = {

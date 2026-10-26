@@ -515,7 +515,14 @@ def _clauses(reply: str) -> list[str]:
     """Split the RAW reply (before _plain eats the period of "a.m.") into
     sentences, then into clauses at ";" and ", and"/", but"; "Dr." and a
     mid-sentence "10 a.m. on" are not sentence ends."""
-    return [c for s in _SENTENCE_END_RE.split(reply) for c in _CLAUSE_SPLIT_RE.split(s)]
+    out = []
+    for sentence in _SENTENCE_END_RE.split(reply):
+        pos = 0
+        for m in _CLAUSE_SPLIT_RE.finditer(sentence):
+            out.append(sentence[pos:m.end()])  # the joiner stays on its clause, so kept text reads as written
+            pos = m.end()
+        out.append(sentence[pos:])
+    return out
 
 
 def reply_states_only(why: str, *, time: tuple[int, str] | None = None, day: str | None = None,
@@ -532,7 +539,7 @@ def reply_states_only(why: str, *, time: tuple[int, str] | None = None, day: str
 
     def check(reply, _before, _after):
         if other_rx:
-            sentences = [_plain(c) for c in _clauses(reply)]
+            sentences = [_plain(c) for c in _clauses(reply)]  # kept clauses are re-joined whole: "not Friday, but Wednesday" stays one
             reply = " ".join(x for x in sentences
                              if not (other_rx.search(x) and not (topic_rx and topic_rx.search(x))))
         problems = []
