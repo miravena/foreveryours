@@ -333,6 +333,10 @@ def main():
 
     # Shot 3: the caregiver types the appointment memo and saves it; memory shows it added.
     s3, s4 = man["3_memo"], man["4_senior_line"]
+    if not s4.get("verified") or not s4.get("take") or not next(
+            (r["check"]["pass"] for r in s4.get("runs", []) if r["tag"] == s4["take"]), False):
+        sys.exit("shot 4 is not verified (every fresh-session run must pass, and the take must be a "
+                 "passing run); re-run the appt capture, see README.md")
     k3, k4 = s3["key_moments"], s4["key_moments"]
     A3, B3 = 2.4, k3["memo_hold_end"]
     start = tl.t
