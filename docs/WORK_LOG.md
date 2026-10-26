@@ -9,6 +9,23 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-26 (#173: perseveration disclosure docs vs code)
+- **What:** The CHANGELOG release-candidate entry, the 2026-10-18 and 2026-10-10 entries below, and
+  `plan.md` said the perseveration flag is marked disclosed only after disclosure audio is
+  delivered (and `plan.md` said to persist `disclosed_to_senior=False` on failed delivery). The
+  code does not do that: `pipeline/orchestrator.py` calls `flags.add(..., disclosed_to_senior=True)`
+  for this flag unconditionally, and `tests/test_perseveration_window.py` asserts it, including
+  the no-TTS-audio case. That was a deliberate choice in #159 (round 4, entry of 2026-10-21): the
+  disclosure sentence is always part of the returned text reply, so the senior is told whether or
+  not audio is produced. Entries below are history, annotated only with a pointer here; this entry is the
+  correction.
+- **Decision:** docs, not code. The flag does not claim a disclosure that never happened, since the
+  sentence reaches the senior as text and the notification's "told" line is attested separately
+  (ADR-014), so this is not a safety bug and the code is frozen except fixes.
+- **Changed:** `CHANGELOG.md`, `plan.md` (status note), this entry. No code or test changes.
+- **Known gap (unchanged, not part of this issue):** the flag is added before the THINK call, so if
+  THINK raises, the flag can be recorded although no reply reached the senior on that path.
+
 ### 2026-10-24 (#192 rework: deterministic driving_plan()/enforce_driving_alternative())
 - **What:** the 2026-10-23 output-side check (`_needs_driving_alternative`/`_driving_alternative_sentence`)
   only appended a lift sentence; it never removed an endorsing clause, so a reply that both praised
@@ -347,7 +364,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
 ### 2026-10-18 (Public-demo release candidate: #88, #152, #161, #162, #164, #169)
 - **What:** Implemented the agreed Step 1 release-candidate privacy, disclosure, retention, and
   shared-profile fixes. Added persisted disclosure attestation for senior-derived memories,
-  delivery-aware perseveration flags, shared-profile routing guards, and aligned browser/docs
+  perseveration flags (disclosure semantics corrected by the 2026-10-26 entry), shared-profile routing guards, and aligned browser/docs
   retention wording.
 - **Result:** Focused regressions passed. The full suite ran 242 tests with two Windows-only
   symlink-privilege errors (`WinError 1314`); all other tests passed, including the mature
@@ -714,7 +731,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
 - **Result:** Fast-path and mature safety tests passed: 31 tests, 8 expected live-model skips. Benchmark 2 remained 0.0% false-positive escalation.
 
 ### 2026-10-10 (Issue #117 - disclosure delivery contract)
-- **What:** Centralized late disclosure handling in `pipeline/orchestrator.py`. Fast-path and perseveration flags are persisted only after speech produces audio; AUDIT and lifestyle disclosures require a delivery callback, and proactive quiet-mode suppression runs before flagging.
+- **What:** Centralized late disclosure handling in `pipeline/orchestrator.py`. Fast-path flags are persisted only after speech produces audio (perseveration flags later changed, see the 2026-10-26 entry); AUDIT and lifestyle disclosures require a delivery callback, and proactive quiet-mode suppression runs before flagging.
 - **Why:** The browser could record "Dad was told" after its response had already been handed to Gradio, and quiet-mode turns could persist a disclosed perseveration flag with no reply audio.
 - **Result:** Added regression tests for silent fast-path, audit, lifestyle and quiet-mode paths. The focused suite passed 56 tests; the full suite passed 159 tests with 8 expected skips. README now documents the non-streaming disclosure boundary.
 
