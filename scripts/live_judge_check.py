@@ -513,7 +513,7 @@ _CLAUSE_SPLIT_RE = re.compile(r";\s+|,\s+and\s+", re.IGNORECASE)
 
 # A clause that points back at the appointment ("it has moved", "instead") is
 # not purely about the other event, so it is kept and its times are checked.
-_REFERS_BACK_RE = re.compile(r"\b(it|that|this|moved|rescheduled|changed|instead|actually)\b", re.IGNORECASE)
+_REFERS_BACK_RE = re.compile(r"\b(it|moved|rescheduled|changed|instead|actually)\b", re.IGNORECASE)
 
 
 def _clauses(reply: str) -> list[str]:

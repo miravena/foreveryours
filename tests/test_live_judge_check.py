@@ -535,6 +535,8 @@ class TestConsistency(unittest.TestCase):
         self.assertIn("contradicting time",
                       check("Your appointment with Dr. Tan is Thursday at 10 AM, but Sarah says it has moved to Friday at 3 PM.",
                             "", "") or "")
+        self.assertIsNone(check("Your appointment with Dr. Tan is Thursday at 10 AM. Sarah brings groceries at 4 PM this afternoon.",
+                                "", ""))
         for joiner in (", and", ";"):
             self.assertIn("contradicting time",
                           check(f"Your appointment with Dr. Tan is Thursday at 10 AM{joiner} Sarah says it has moved to Friday at 3 PM.",
