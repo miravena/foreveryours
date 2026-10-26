@@ -9,6 +9,35 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-26 (#5: demo video v2, VIDEO_SCRIPT appointment line check)
+
+- **What:** Rebuilt the demo video from live-Space captures with an AI narrator (Kokoro af_heart)
+  and a new shot 3-4 pair: the sample household is pre-briefed, so the old memo repeated the
+  groceries line, and no open senior line had passed (the model invents family facts, #245).
+  Shot 3 now saves "Dad has a check-up with Dr. Tan on Thursday at 10 AM."; shot 4 asks about it.
+  Capture, manifest and assembly scripts are in `video/v2/` (README there).
+- **VIDEO_SCRIPT appointment line check:** live Space at build `f768c65`, each run a fresh browser
+  session driven by `video/v2/capture/capture.mjs` (shot `appt`): memo typed and saved (the
+  briefed memory listed it as `[Temporary — expires in 23h 59m] Dad has a check-up with Dr. Tan on
+  Thursday at 10 AM`), then the line typed and sent. Pass: the reply names Dr. Tan, Thursday and
+  10 AM, no error toast, and nothing absent from the briefed memory. No "Could not parse server
+  response" toast (#246) appeared in any run.
+- **Line 1, FAILED 2/3:** "Do I have any appointments this week?"
+  - run 1 (pass): "You have a check-up with Dr. Tan on Thursday at 10 AM. Sarah is dropping off groceries at 4 PM today."
+  - run 2 (pass): "Dr. Tan will see you Thursday at 10 AM. Sarah is dropping off groceries today at 4 PM."
+  - run 3 (FAIL): "You’re all set this week—no appointments listed. Sarah is dropping off groceries at 4 PM today."
+- **Line 2, PASSED 3/3 (used):** "Do I have any doctor's appointments this week?"
+  - run 1 (pass): "You have a check-up with Dr. Tan on Thursday at 10 AM this week. Sarah is dropping off groceries at 4 PM today."
+  - run 2 (pass): "You have a check-up with Dr. Tan on Thursday at 10 am. Sarah is dropping off groceries at 4 pm today."
+  - run 3 (pass): "You have a check-up with Dr. Tan on Thursday at 10 AM. Sarah will be dropping off groceries at 4 PM today."
+  The 4 PM groceries are in the sample household's pre-brief, so no reply invents a fact. Run 3
+  is the take in the video. Live turns used: 6.
+- **Result:** 2:57, 1920x1080 30 fps H.264 + AAC 48 kHz, -16.1 LUFS, true peak -5.0 dBTP;
+  captions burned in plus an `.srt`. Checked by a frame at every shot's key moment and a
+  faster-whisper transcript of the final mix (every narrator and companion line intelligible, no
+  overlap). The day-2 terminal is re-rendered without its synthesis-time line, since no timing
+  may be shown. Shots 1, 2 and 5 are the earlier captures at build `ed85efc`.
+
 ### 2026-10-26 (#173: perseveration disclosure docs vs code)
 - **What:** The CHANGELOG release-candidate entry, the 2026-10-18 and 2026-10-10 entries below, and
   `plan.md` said the perseveration flag is marked disclosed only after disclosure audio is

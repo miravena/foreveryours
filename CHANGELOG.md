@@ -36,6 +36,7 @@ rename `Unreleased` to the version and date, then tag it.
   counts as a schedule question, so the caregiver updates reach the reply (#189).
 
 ### Docs
+- Demo video v2: shots 3-4 now brief and ask about a Dr. Tan appointment (verified 3/3 on the live Space), AI narration (Kokoro af_heart), and reproducible capture and assembly scripts in `video/v2/` (#5).
 - Final Devpost text in `docs/DEVPOST_DRAFT.md` (#20), re-checked on the live Space build `bb1a021`:
   the backstop on Nemotron 3 Super, flag origin, model footer, notification preview marked not sent,
   guided interview, sentence-by-sentence browser audio, testing steps that give the same answer on
