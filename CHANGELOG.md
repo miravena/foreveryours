@@ -42,6 +42,14 @@ rename `Unreleased` to the version and date, then tag it.
   every run, placeholders for the video (#5) and gallery (#218). README and the draft share two
   revised "Known limitations" lines: model replies can add unbriefed detail, and the browser no
   longer plays one combined clip.
+- Perseveration disclosure wording corrected to match the code (#173): earlier entries (the #88
+  release candidate and #117) said the perseveration flag is marked disclosed only after spoken
+  audio is delivered. It is not. Since #159 the flag is recorded with `disclosed_to_senior=True`
+  whenever the repeated-question check fires, whether or not text-to-speech produced audio,
+  because the disclosure sentence ("I'm going to make a note for your family...") is always part
+  of the returned text reply, so the senior is told in the conversation either way. The
+  caregiver notification's "told" wording is attested separately (ADR-014) and says "not yet
+  confirmed" unless the streaming consumer acknowledged the audio. Code unchanged.
 - Submission review against the judges' advice (`docs/plans/SUBMISSION-REVIEW-2026-10-23.md`) and
   the changes it asked for (#216, #217): README opens with the scenario and the one-sentence
   answer instead of a feature list, and its beat 2 no longer claims a per-turn retrieval panel; a
@@ -243,7 +251,8 @@ rename `Unreleased` to the version and date, then tag it.
   to free ZeroGPU hardware, since Hugging Face now requires PRO for Gradio Spaces on `cpu-basic`
   (ADR-003).
 - Public-demo privacy and safety release candidate (#88, #152, #161, #162, #164, #169):
-  perseveration flags are marked disclosed only after spoken disclosure audio is delivered;
+  the perseveration flag is recorded as disclosed because the disclosure sentence is always in
+  the returned reply text (corrected under #173, see Docs);
   senior-derived extracted facts require an independent disclosure attestation before caregiver
   rendering; the browser retention notice distinguishes session-directory cleanup from Gradio's
   separate audio cache; and shared-profile mode now reaches both public turn handlers, including
@@ -300,7 +309,7 @@ rename `Unreleased` to the version and date, then tag it.
 - Test integrity (#63, #107): live Benchmark 9 now requires explicit `RUN_LIVE_BENCHMARKS=1` opt-in, while its offline prompt contract always runs; only known missing-configuration, authorization, and connectivity failures skip live execution. Restored the perseveration regression test to discovery and added daemon boundary and missing-state coverage.
 - Crisis fast-path false negatives (#105): Added missing direct suicidal phrasings and updated the false-positive guard to apply per-clause rather than globally, so real crisis statements are no longer suppressed by benign idioms in the same utterance.
 - Crisis fast-path coverage (#105): Added direct suicidal-language variants, matched-span idiom filtering, and whitespace normalization for ASR line breaks while preserving the false-positive benchmark.
-- Disclosure truthfulness (#117): safety, perseveration, audit, and lifestyle flags are persisted as disclosed only after non-empty audio is delivered; quiet-mode suppression now happens before proactive flagging, and late non-streaming disclosures remain explicitly undisclosed.
+- Disclosure truthfulness (#117): safety, audit, and lifestyle flags are persisted as disclosed only after non-empty audio is delivered (the perseveration flag is the exception, see #173 under Docs); quiet-mode suppression now happens before proactive flagging, and late non-streaming disclosures remain explicitly undisclosed.
 
 ### Docs
 - The live demo link (https://huggingface.co/spaces/elevenbaselab/foreveryours, #11) is in the
