@@ -507,6 +507,17 @@ SARAH_VISIT_TOPIC = r"\bsarah\b|grocer|coming by|drop(ping)? (off|by)|visit"
 APPOINTMENT_TOPIC = r"\btan\b|appointment|check-?up|doctor"
 
 
+_SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?<!\bDr\.)(?<!\bMr\.)(?<!\bMrs\.)(?<!\bMs\.)\s+(?=[\"'(]?[A-Z])")
+_CLAUSE_SPLIT_RE = re.compile(r";\s+|,\s+(?:and|but)\s+", re.IGNORECASE)
+
+
+def _clauses(reply: str) -> list[str]:
+    """Split the RAW reply (before _plain eats the period of "a.m.") into
+    sentences, then into clauses at ";" and ", and"/", but"; "Dr." and a
+    mid-sentence "10 a.m. on" are not sentence ends."""
+    return [c for s in _SENTENCE_END_RE.split(reply) for c in _CLAUSE_SPLIT_RE.split(s)]
+
+
 def reply_states_only(why: str, *, time: tuple[int, str] | None = None, day: str | None = None,
                       need_time: bool = False, need_day: bool = False,
                       topic: str | None = None, other_topic: str | None = None) -> Check:
@@ -521,7 +532,7 @@ def reply_states_only(why: str, *, time: tuple[int, str] | None = None, day: str
 
     def check(reply, _before, _after):
         if other_rx:
-            sentences = re.split(r"(?<=[.!?])\s+", _plain(reply))
+            sentences = [_plain(c) for c in _clauses(reply)]
             reply = " ".join(x for x in sentences
                              if not (other_rx.search(x) and not (topic_rx and topic_rx.search(x))))
         problems = []

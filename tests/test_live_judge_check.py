@@ -510,6 +510,26 @@ class TestConsistency(unittest.TestCase):
         self.assertIn("contradicting time 3:00 pm", lines["T11"])
         self.assertIn("contradicting day wednesday", lines["T11"])
 
+    def test_other_event_sentence_after_am_pm_is_not_a_wrong_appointment_time(self):
+        check = ljc.reply_states_only("Thursday 10 AM", time=(10, "am"), day="thursday", need_time=True,
+                                      topic=ljc.APPOINTMENT_TOPIC, other_topic=ljc.SARAH_VISIT_TOPIC)
+        right = [
+            "Your appointment with Dr. Tan is scheduled for Thursday at 10 a.m. Sarah will be dropping "
+            "off groceries for you at 4 p.m. today. Let me know if there's anything",
+            "You have a check\u2011up with Dr. Tan on Thursday at 10 a.m., and Sarah will be dropping off "
+            "groceries for you at 4 p.m. today. That's the only appointment scheduled",
+            "Your appointment with Dr. Tan is Thursday at 10 a.m.; Sarah brings groceries at 4 p.m.",
+        ]
+        for reply in right:
+            self.assertIsNone(check(reply, "", ""), reply)
+        wrong = [
+            "Your appointment with Dr. Tan is at 4 p.m. Sarah is coming at 4 p.m. today.",
+            "Your appointment with Dr. Tan is Thursday at 4 p.m.",
+            "Your appointment with Dr. Tan is Thursday at 10 p.m., and Sarah drops by at 4 p.m.",
+        ]
+        for reply in wrong:
+            self.assertIn("contradicting time", check(reply, "", "") or "", reply)
+
     def test_times_are_parsed_with_their_meridiem(self):
         cases = {
             "at 10 AM": [(10, 0, "am")], "10:00 a.m.": [(10, 0, "am")], "at ten in the morning": [(10, 0, "am")],
