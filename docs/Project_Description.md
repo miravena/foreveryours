@@ -233,9 +233,8 @@ Rather than positioning this as medical diagnosis, ForeverYours uses the system 
 
 ### 6. SPEAK
 
-The response is converted into speech by a local text-to-speech engine. The browser demo plays
-the finished reply as one combined audio clip; sentence-level streaming to the browser is not
-yet built (tracked separately).
+The response is converted into speech by a local text-to-speech engine. The browser demo streams
+the reply as well: each sentence's audio is sent to the page as soon as it is synthesized.
 
 The architecture is designed with a target of **under two seconds to first audio**, because a voice conversation should feel conversational rather than like waiting for a conventional application request to complete.
 

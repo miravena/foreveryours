@@ -36,6 +36,12 @@ rename `Unreleased` to the version and date, then tag it.
   counts as a schedule question, so the caregiver updates reach the reply (#189).
 
 ### Docs
+- Final Devpost text in `docs/DEVPOST_DRAFT.md` (#20), re-checked on the live Space build `bb1a021`:
+  the backstop on Nemotron 3 Super, flag origin, model footer, notification preview marked not sent,
+  guided interview, sentence-by-sentence browser audio, testing steps that give the same answer on
+  every run, placeholders for the video (#5) and gallery (#218). README and the draft share two
+  revised "Known limitations" lines: model replies can add unbriefed detail, and the browser no
+  longer plays one combined clip.
 - Perseveration disclosure wording corrected to match the code (#173): earlier entries (the #88
   release candidate and #117) said the perseveration flag is marked disclosed only after spoken
   audio is delivered. It is not. Since #159 the flag is recorded with `disclosed_to_senior=True`

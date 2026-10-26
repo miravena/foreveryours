@@ -45,11 +45,13 @@ Written down on purpose: a judge or a family should know where this stops.
   including falls; [ADR-016](docs/decisions/ADR-016-audit-model-super.md)). A small labelled set is
   not proof of coverage.
 - Some crisis paraphrases come back SAFE from the backstop; the rules catch the direct phrases.
+- Replies the rules do not cover are written by the model. It is told to use only what the family
+  briefed, but it can still add a detail that was never there.
 - On the hosted demo the alert stays on the caregiver's half of the screen. Nothing reaches a phone.
 - A flag is marked "Dad was told" once the spoken line is synthesised, not once it is heard; a
   browser that blocks autoplay still shows it as told.
-- The browser plays one combined clip, so the hosted demo is slower to first sound than the command
-  line (about 0.9 s there; several seconds hosted). No hosted latency figure is claimed.
+- The hosted demo is slower than the command line (about 0.9 s to first audio there; a hosted turn
+  took several seconds in our checks). No hosted latency figure is claimed.
 - English only. Not a medical device, not a diagnosis, not an emergency dispatcher.
 
 ## Pipeline
@@ -96,8 +98,8 @@ actually perceives). Time to first sound heard is measured from player construct
 of the first *successful* playback, and excludes speech-to-text (ASR happens before the player is
 constructed). On a box with no working audio player, the CLI reports **"No audio was played (no
 working audio player)"** and prints no number -- it never reports a fake near-zero reading for
-sound nobody heard ([#71](../../issues/71)). The browser demo still plays one combined clip;
-sentence-level browser streaming is tracked separately.
+sound nobody heard ([#71](../../issues/71)). The browser demo streams the reply too: each
+sentence's audio is sent to the page as soon as it is synthesized (`webapp.py`, `gr.Audio(streaming=True)`).
 
 ## Demo script
 
