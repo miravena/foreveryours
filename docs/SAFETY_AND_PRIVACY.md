@@ -121,8 +121,10 @@ hours" gets its own fast-path reply: press the medical alert button or call 911
 if you can, and the family is being told right now (the senior may not be able
 to reach a phone, so the reply does not depend on it). The caregiver flag says
 the senior may be on the floor and unable to get up or call for help. On any
-911 fast-path turn THINK's reply has no 988 budget, so a model that reaches for
-the crisis line anyway has that number removed before it is spoken. Benign
+911 fast-path turn THINK's reply has no 988 budget: a sentence of its reply that
+names 988 or the crisis line is dropped before it is spoken (the canned reply
+already gave 911), unless a 988 line is still owed from a previous turn's
+crisis verdict. Benign
 floor talk ("on the floor watching telly", "can't reach the phone charger from
 the sofa") does not fire; a near-miss that names a fall or the floor together
 with an unreachable phone does, because a needless flag is cheap and a missed

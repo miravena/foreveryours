@@ -1301,6 +1301,20 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].severity, "distress")
 
+    def test_floor_turn_never_speaks_the_crisis_line_in_any_form(self):
+        # Review: "Call 988 or 911 now" must not become "Call the crisis line
+        # or 911 now"; the canned reply already gave 911.
+        for sentence in ["Call 988 or 911 now.", "Call 911 or 988 now.",
+                         "You could also reach the crisis line.", "The Suicide and Crisis Lifeline is there too."]:
+            with self.subTest(sentence=sentence):
+                self.spoken = []
+                r, _ = self._turn("I'm on the floor and can't reach the phone", [sentence, "I'm right here."])
+                self.assertNotIn("988", r.reply_text)
+                self.assertNotIn("crisis", r.reply_text.lower())
+                self.assertNotIn("lifeline", r.reply_text.lower())
+                self.assertIn("911", r.reply_text)
+                self.assertIn("I'm right here.", r.reply_text)
+
     def test_physical_emergency_turn_still_gives_an_owed_988(self):
         # A 988 line still owed from the previous turn's crisis verdict is not
         # taken away by a physical-emergency turn.
