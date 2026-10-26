@@ -114,6 +114,20 @@ someone nearby to call, because a caregiver flag is a notification and not a
 crisis and its reply names both numbers. THINK's PHYSICAL EMERGENCY rule says
 the same, with no diagnosis or treatment advice.
 
+A senior who is down and cannot summon help is a physical emergency too (#242).
+"On the floor", "fell" or "down here" together with "can't reach (or get to)
+the phone", "can't call anyone", "can't get up", or "been on the floor for
+hours" gets its own fast-path reply: press the medical alert button or call 911
+if you can, and the family is being told right now (the senior may not be able
+to reach a phone, so the reply does not depend on it). The caregiver flag says
+the senior may be on the floor and unable to get up or call for help. On any
+911 fast-path turn THINK's reply has no 988 budget, so a model that reaches for
+the crisis line anyway has that number removed before it is spoken. Benign
+floor talk ("on the floor watching telly", "can't reach the phone charger from
+the sofa") does not fire; a near-miss that names a fall or the floor together
+with an unreachable phone does, because a needless flag is cheap and a missed
+one is not.
+
 Neither layer is a substitute for the other. The fast-path is a narrow net
 for the highest-urgency, most time-critical cases; the audit pass is a wider
 net for everything else, accepted at the cost of running after the words are

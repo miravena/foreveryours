@@ -1282,6 +1282,33 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
         self.assertIn("911", r.reply_text)
         self.assertEqual(r.reply_text.count("988"), 1, r.reply_text)  # the canned line only
 
+    def test_floor_and_no_phone_gets_911_and_never_988(self):
+        # #242: the exact live phrase. The fast path speaks 911; a THINK reply
+        # that reaches for the crisis line anyway has 988 removed.
+        r, cap = self._turn(
+            "I'm on the floor and can't reach the phone",
+            ["Please call or text 988 right now.", "If you are in danger call 911 or 988.",
+             "I'm right here with you."],
+        )
+        self.assertIn("911", r.reply_text)
+        self.assertNotIn("988", r.reply_text)
+        self.assertNotIn("988", " ".join(self.spoken))
+        self.assertIn("medical alert", r.reply_text)
+        self.assertIn("I'm right here with you.", r.reply_text)
+        self.assertIn("never mention 988", cap["think_input"])
+        self.assertEqual(r.caregiver_flag, fastpath.CAREGIVER_FLAG_TEXT["down_unable"])
+        items = self.flags.all()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].severity, "distress")
+
+    def test_physical_emergency_turn_still_gives_an_owed_988(self):
+        # A 988 line still owed from the previous turn's crisis verdict is not
+        # taken away by a physical-emergency turn.
+        self._turn("I have said my goodbyes.", ["That sounds heavy."], audit=("CRISIS", "plan"), accept=False)
+        r, _ = self._turn("I'm on the floor and can't reach the phone", ["You can call or text 988 any time."])
+        self.assertIn("911", r.reply_text)
+        self.assertEqual(r.reply_text.count("988"), 1, r.reply_text)
+
     def test_room_and_price_numbers_are_not_the_hotline(self):
         r, _ = self._turn("I want to die.", ["Call the desk about room 988.", "It costs $988 a year."])
         self.assertIn("room 988", r.reply_text)

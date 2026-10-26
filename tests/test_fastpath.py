@@ -59,7 +59,7 @@ class TestFastPath(unittest.TestCase):
                 self.assertIn(
                     res.caregiver_flag,
                     (fastpath.CAREGIVER_FLAG_TEXT["distress"], fastpath.CAREGIVER_FLAG_TEXT["fall"],
-                     fastpath.CAREGIVER_FLAG_TEXT["medical"]),
+                     fastpath.CAREGIVER_FLAG_TEXT["medical"], fastpath.CAREGIVER_FLAG_TEXT["down_unable"]),
                 )
 
     def test_physical_emergency_reply_says_911_not_988(self):
@@ -366,6 +366,88 @@ class TestFallReply(unittest.TestCase):
                 self.assertNotIn("hurt", res.immediate_reply.lower())
                 self.assertNotIn("get up", res.immediate_reply.lower())
                 self.assertEqual(res.caregiver_flag, fastpath.CAREGIVER_FLAG_TEXT["distress"])
+
+
+class TestDownAndUnableToCall(unittest.TestCase):
+    """#242: a senior who is down and cannot summon help is a physical
+    emergency. The fast path answers it with the medical alert button and 911,
+    raises the caregiver flag, and never names 988."""
+
+    POSITIVES = [
+        "I'm on the floor and can't reach the phone",
+        "I’m on the floor and can’t reach the phone.",
+        "I fell and I can't get to the phone",
+        "I've been on the floor for hours",
+        "I've been lying on the floor since last night",
+        "I'm down here and I can't get up",
+        "I fell down and I can't get up",
+        "I hit the floor and can't get up",
+        "I'm on the floor and I can't move",
+        "I've fallen and I can't call anyone",
+        "I had a fall and I cannot reach my phone",
+        "I can't reach my phone, I'm on the floor",
+        "I'm on the ground in the garden and can't call for help",
+        "Help, I fell in the bathroom and I can't reach the telephone",
+    ]
+    NEGATIVES = [
+        "I'm on the floor watching telly",
+        "I'm sitting on the floor doing a puzzle",
+        "I can't reach the phone charger from the sofa",
+        "I can't reach the phone, it's on the top shelf",
+        "I dropped my phone on the floor and can't reach it",
+        "I fell asleep and can't find my phone",
+        "I spent hours on the floor doing a puzzle with Leo",
+    ]
+
+    def test_positives_get_the_911_reply_and_flag_and_never_988(self):
+        for phrase in self.POSITIVES:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered)
+                self.assertEqual(res.severity, "distress")
+                self.assertTrue(res.calls_911)
+                self.assertEqual(res.immediate_reply, fastpath.DOWN_UNABLE_REPLY)
+                self.assertIn("911", res.immediate_reply)
+                self.assertIn("medical alert", res.immediate_reply)
+                self.assertIn("letting your family know right now", res.immediate_reply)
+                self.assertNotIn("988", res.immediate_reply)
+                self.assertNotIn("get up safely", res.immediate_reply)
+                self.assertEqual(res.caregiver_flag, fastpath.CAREGIVER_FLAG_TEXT["down_unable"])
+                self.assertNotIn("988", res.caregiver_flag)
+                note = res.continuation_note
+                self.assertIn("never mention 988", note)
+                self.assertIn("don't repeat", note)
+
+    def test_exact_issue_phrase(self):
+        res = fastpath.check("I'm on the floor and can't reach the phone")
+        self.assertTrue(res.triggered)
+        self.assertIn("911", res.immediate_reply)
+        self.assertNotIn("988", res.immediate_reply + res.continuation_note.replace("never mention 988", ""))
+
+    def test_benign_near_misses_do_not_get_the_911_reply(self):
+        for phrase in self.NEGATIVES:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertFalse(res.calls_911)
+                self.assertNotEqual(res.immediate_reply, fastpath.DOWN_UNABLE_REPLY)
+                self.assertFalse(res.triggered, phrase)
+
+    def test_crisis_with_down_and_unable_keeps_988_and_adds_911(self):
+        res = fastpath.check("I'm on the floor and can't reach the phone and I want to die")
+        self.assertEqual(res.severity, "crisis")
+        self.assertIn("988", res.immediate_reply)
+        self.assertIn("911", res.immediate_reply)
+
+    def test_flag_is_fixed_text(self):
+        res = fastpath.check("I'm on the floor and can't reach the phone. My PIN is 1234")
+        self.assertEqual(res.caregiver_flag, fastpath.CAREGIVER_FLAG_TEXT["down_unable"])
+        self.assertNotIn("1234", res.caregiver_flag)
+
+    def test_other_911_replies_are_marked_and_other_distress_is_not(self):
+        self.assertTrue(fastpath.check("I have chest pain").calls_911)
+        self.assertFalse(fastpath.check("I fell down earlier and I'm scared").calls_911)
+        self.assertFalse(fastpath.check("I can't get up").calls_911)
+        self.assertFalse(fastpath.check("I want to die").calls_911)
 
 
 class TestCrisisContinuationNote(unittest.TestCase):

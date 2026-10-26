@@ -873,6 +873,14 @@ def run_turn(
         hotline_budget = 0 if carried_given else 1
         carry_note = CRISIS_CARRY_NOTE_GIVEN if carried_given else CRISIS_CARRY_NOTE_NOT_GIVEN
         continuation_note = f"{continuation_note} {carry_note}" if continuation_note else carry_note
+    if (fast.triggered and fast.severity != "crisis" and getattr(fast, "calls_911", False)
+            and carried_given is not False):
+        # A physical emergency the fast path sent to 911 (#242): THINK's
+        # continuation never adds the 988 crisis line. Any 988 sentence is
+        # dropped, or loses only the number when it also carries 911 advice.
+        # The one exception is a 988 line still owed from a previous turn's
+        # crisis verdict (carried_given False), which keeps its budget of 1.
+        hotline_budget = 0
 
     intent = detect_intent(transcript)
     
