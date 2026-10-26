@@ -93,6 +93,9 @@ _NOT_HOTLINE_BEFORE_RE = re.compile(
     r"\b(room|suite|apartment|apt|flat|unit|page|number\s+of|box|floor|in\s+the\s+year|year|since|circa)\s+$",
     re.IGNORECASE,
 )
+# The crisis line named in words, not digits ("the crisis line", "the
+# Suicide & Crisis Lifeline"): dropped on a physical-emergency turn (#242).
+_CRISIS_LINE_WORDS_RE = re.compile(r"\b(crisis\s+(?:line|lifeline|hotline|text\s+line)|lifeline|suicide\s+(?:hotline|line|prevention))\b", re.IGNORECASE)
 _OTHER_EMERGENCY_RE = re.compile(r"\b(911|999|112|emergency|ambulance)\b", re.IGNORECASE)
 # Driving-plan guarantee (#192): when the senior states a plan to drive
 # himself, every spoken reply on that turn -- THINK's full or partial stream,
@@ -863,6 +866,7 @@ def run_turn(
     with _CRISIS_CARRY_LOCK:
         carried_given = _CRISIS_CARRY.get(carry_key)  # consumed only after a spoken reply
     hotline_budget = 1
+    physical_911_turn = False
     if fast.triggered and fast.severity == "crisis" and immediate_audio_paths:
         # The canned line (with 988) was actually spoken.
         hotline_budget = 0
@@ -873,6 +877,15 @@ def run_turn(
         hotline_budget = 0 if carried_given else 1
         carry_note = CRISIS_CARRY_NOTE_GIVEN if carried_given else CRISIS_CARRY_NOTE_NOT_GIVEN
         continuation_note = f"{continuation_note} {carry_note}" if continuation_note else carry_note
+    if (fast.triggered and fast.severity != "crisis" and getattr(fast, "calls_911", False)
+            and carried_given is not False):
+        # A physical emergency the fast path sent to 911 (#242): THINK's
+        # continuation never adds the 988 crisis line. Any 988 sentence is
+        # dropped, or loses only the number when it also carries 911 advice.
+        # The one exception is a 988 line still owed from a previous turn's
+        # crisis verdict (carried_given False), which keeps its budget of 1.
+        hotline_budget = 0
+        physical_911_turn = True
 
     intent = detect_intent(transcript)
     
@@ -1100,6 +1113,13 @@ def run_turn(
                             continue
                         s = stripped
                     first = _hotline_match(s)
+                    if physical_911_turn and (first is not None or _CRISIS_LINE_WORDS_RE.search(s)):
+                        # #242: the canned reply already gave 911, so a THINK
+                        # sentence naming the crisis line is dropped whole --
+                        # stripping only the number would still speak "call
+                        # the crisis line or 911" for a physical emergency.
+                        dropped_hotline.append(s)
+                        continue
                     if first is not None:
                         # The 988 line is given once per episode (#191).
                         if budget <= 0:

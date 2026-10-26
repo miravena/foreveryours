@@ -22,6 +22,10 @@ rename `Unreleased` to the version and date, then tag it.
   "household was reset" note only after a real expiry, not on the first turn of a fresh page (#215).
 
 ### Fixed
+- "I'm on the floor and can't reach the phone" (and "I fell and can't get to the phone", "I've been
+  on the floor for hours", a fall plus "can't get up") now hits the safety rules before the model:
+  the reply says to press the medical alert or call 911 and that the family is being told, the
+  caregiver flag is raised, and the 988 crisis line is never spoken on that turn (#242).
 - "Is anyone coming by today?" is answered from the caregiver's visit updates (e.g. Sarah at 4 PM),
   so the companion can no longer invent a visitor or drop the time; an emotional "is anyone coming?"
   still gets a warm reply (#229).
