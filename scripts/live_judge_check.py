@@ -508,12 +508,12 @@ APPOINTMENT_TOPIC = r"\btan\b|appointment|check-?up|doctor"
 
 
 _SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?<!\bDr\.)(?<!\bMr\.)(?<!\bMrs\.)(?<!\bMs\.)\s+(?=[\"'(]?[A-Z])")
-_CLAUSE_SPLIT_RE = re.compile(r";\s+|,\s+(?:and|but)\s+", re.IGNORECASE)
+_CLAUSE_SPLIT_RE = re.compile(r";\s+|,\s+and\s+", re.IGNORECASE)
 
 
 def _clauses(reply: str) -> list[str]:
     """Split the RAW reply (before _plain eats the period of "a.m.") into
-    sentences, then into clauses at ";" and ", and"/", but"; "Dr." and a
+    sentences, then into clauses at ";" and ", and" ("but" is a contrast that refers back, so it is not split); "Dr." and a
     mid-sentence "10 a.m. on" are not sentence ends."""
     out = []
     for sentence in _SENTENCE_END_RE.split(reply):
