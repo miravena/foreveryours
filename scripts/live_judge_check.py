@@ -507,6 +507,29 @@ SARAH_VISIT_TOPIC = r"\bsarah\b|grocer|coming by|drop(ping)? (off|by)|visit"
 APPOINTMENT_TOPIC = r"\btan\b|appointment|check-?up|doctor"
 
 
+_SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?<!\bDr\.)(?<!\bMr\.)(?<!\bMrs\.)(?<!\bMs\.)\s+(?=[\"'(]?[A-Z])")
+_CLAUSE_SPLIT_RE = re.compile(r";\s+|,\s+and\s+", re.IGNORECASE)
+
+
+# A clause that points back at the appointment ("it has moved", "instead") is
+# not purely about the other event, so it is kept and its times are checked.
+_REFERS_BACK_RE = re.compile(r"\b(it|moved|rescheduled|changed|instead|actually)\b", re.IGNORECASE)
+
+
+def _clauses(reply: str) -> list[str]:
+    """Split the RAW reply (before _plain eats the period of "a.m.") into
+    sentences, then into clauses at ";" and ", and" ("but" is a contrast that refers back, so it is not split); "Dr." and a
+    mid-sentence "10 a.m. on" are not sentence ends."""
+    out = []
+    for sentence in _SENTENCE_END_RE.split(reply):
+        pos = 0
+        for m in _CLAUSE_SPLIT_RE.finditer(sentence):
+            out.append(sentence[pos:m.end()])  # the joiner stays on its clause, so kept text reads as written
+            pos = m.end()
+        out.append(sentence[pos:])
+    return out
+
+
 def reply_states_only(why: str, *, time: tuple[int, str] | None = None, day: str | None = None,
                       need_time: bool = False, need_day: bool = False,
                       topic: str | None = None, other_topic: str | None = None) -> Check:
@@ -521,9 +544,10 @@ def reply_states_only(why: str, *, time: tuple[int, str] | None = None, day: str
 
     def check(reply, _before, _after):
         if other_rx:
-            sentences = re.split(r"(?<=[.!?])\s+", _plain(reply))
+            sentences = [_plain(c) for c in _clauses(reply)]  # kept clauses are re-joined whole: "not Friday, but Wednesday" stays one
             reply = " ".join(x for x in sentences
-                             if not (other_rx.search(x) and not (topic_rx and topic_rx.search(x))))
+                             if not (other_rx.search(x) and not (topic_rx and topic_rx.search(x))
+                                     and not _REFERS_BACK_RE.search(x)))
         problems = []
         if time:
             hour, meridiem = time
