@@ -107,7 +107,7 @@ redeploy loses hardware". Disproven as a policy, as far as published evidence go
   ([ZeroGPU, "Hosting Limitations"](https://huggingface.co/docs/hub/spaces-zerogpu);
   [Spaces overview](https://huggingface.co/docs/hub/spaces-overview): "Free personal accounts in
   good standing can still host up to 2 Gradio Spaces running on ZeroGPU"). That wording came in
-  with the paid-plan change of 2026-07-21 (hub-docs #2624) and is unchanged in the latest edits
+  with the paid-plan change of 2026-07-21 ([hub-docs pull 2624](https://github.com/huggingface/hub-docs/pull/2624)) and is unchanged in the latest edits
   of these pages (2026-09-07 and 2026-10-22). This account qualifies (created 2026-05-23,
   verified, 1 Space).
 - The line "creating a new Space that runs on compute (Gradio or Docker) requires a paid plan"
