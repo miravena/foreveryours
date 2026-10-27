@@ -625,6 +625,14 @@ class TestDetailGuardInRunTurn(_TurnBase):
             self.assertTrue(orchestrator.invented_family_detail(s, g), s)
         self.assertFalse(orchestrator.invented_family_detail("Has Leo got a new puppy?", g))
 
+    def test_dad_stating_news_about_will_grounds_it(self):
+        for name in ("Will", "May"):
+            history = [{"role": "user", "content": f"{name} is recovering from surgery."}]
+            g = orchestrator.family_grounding([f"His grandchild is named {name}"], "What did I just tell you?",
+                                              history, "Sarah")
+            self.assertFalse(orchestrator.invented_family_detail(f"{name} is recovering from surgery.", g), name)
+        self.assertEqual(orchestrator._senior_statements("Will you call Leo"), "")
+
     def test_a_relative_keeping_news_quiet_is_still_news(self):
         g = orchestrator.family_grounding(["His grandson is named Leo"], "How is my grandson doing?", None, "Sarah")
         for s in ("Leo hasn't told anyone about his cancer.", "Your grandson didn't mention his surgery."):

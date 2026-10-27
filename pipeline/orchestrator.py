@@ -607,7 +607,15 @@ def _senior_statements(text: str) -> str:
     """What the senior stated, without his questions; a typed question with
     no "?" ("Does Leo have cancer") is a question too."""
     text = _SENIOR_QUESTION_RE.sub(" ", text)
-    return " ".join(p for p in re.split(r"(?<=[.!])\s+|\n+", text) if not _QUESTION_START_RE.match(p))
+    return " ".join(p for p in re.split(r"(?<=[.!])\s+|\n+", text)
+                    if not _QUESTION_START_RE.match(p) or _NAME_NOT_MODAL_RE.match(p))
+
+
+# "Will is recovering" is the grandson Will, not a question: the modal is
+# never followed by a verb like this.
+_NAME_NOT_MODAL_RE = re.compile(
+    r"\W*(?:will|may)(?:['\u2019]s|\s+(?:is|was|has|had|isn't|wasn't|hasn't|and|got|went|came|called)\b)",
+    re.IGNORECASE)
 # Capitalised words that are not a person: days, months, titles.
 _NOT_PERSON_WORDS = set("""
 monday tuesday wednesday thursday friday saturday sunday january february march april may june july august
