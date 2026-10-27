@@ -330,16 +330,21 @@ def household_corpus(memory_texts: list[str], transcript: str, history: list[dic
     caregiver = _name_key((caregiver_name or "").strip())
     names: set[str] = set(_ADDRESS_WORDS) | ({caregiver} if caregiver else set())
     kin: set[str] = set()
+    denied: set[str] = set()
     for t in texts:
         names.update(_name_key(n) for n in _NAME_RE.findall(str(t)))  # "named Will" stays a name
         text = _name_key(str(t))
         names.update(w for w in _LOWER_WORD_RE.findall(text) if w not in _NOT_NAME_WORDS)
-        # "I do not have a granddaughter" vouches for none.
+        # "I do not have a granddaughter (named Maya)" vouches for neither.
         for clause in re.split(r"[.!?;,:\u2014]|\bbut\b", text):
             for m in _WORD_RE.finditer(clause):
-                if m.group(0) in _KIN_FORMS and not _KIN_DENIED_RE.search(clause[:m.start()]):
+                if m.group(0) not in _KIN_FORMS:
+                    continue
+                if _KIN_DENIED_RE.search(clause[:m.start()]):
+                    denied.update(_LOWER_WORD_RE.findall(clause[m.end():]))
+                else:
                     kin.add(_KIN_FORMS[m.group(0)])
-    return names, kin, caregiver
+    return names - (denied - _NOT_NAME_WORDS - {caregiver}), kin, caregiver
 
 
 def _bound_to(sentence: str, m: re.Match, names: set[str]) -> bool:
