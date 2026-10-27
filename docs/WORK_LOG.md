@@ -65,9 +65,18 @@ Format: newest first. One entry per session: date, who, what, result, next.
     let through: the caregiver's safety-alert explanation in other words ("She only gets a message
     if there's a safety concern" failed T05 again live), a referral ("Sarah or your doctor can check
     that with you"), "How is Leo?" not read as a family question, caregiver surnames, and a pronoun
-    about the caregiver taken as answering about the asked relative. Each is a test. Final code,
-    same harness: 0/10, 0/10 and 0/10 on the T23 prompt (30 replies read by eye, not only the
-    keyword check), live judge check 23/23.
+    about the caregiver taken as answering about the asked relative. Each is a test.
+  - **Gotcha: the caregiver's sentences on safety turns.** Logging what the guard dropped during
+    repeated judge runs showed it cutting true sentences about Sarah on every turn type: rule 19's
+    privacy answer in new words each run ("She only sees brief safety alerts if something needs
+    attention", failing T05/T06), the fall follow-up ("She'll be in touch soon to check on you",
+    T15), and "Sarah mentioned you have an appointment with Dr. Tan" (T09/T11 lost their whole
+    answer: "appointment" is not the memo's "check-up"). Widening the word lists never caught up
+    with the model's wording. So the caregiver is now checked only when Dad asks about the family
+    or the day (where it invented visits and news), her relaying Dad's own plans ("Sarah mentioned
+    you have ...") is read as the memo, and a relative is checked on every turn. Trade-off: an
+    invented fact about the caregiver on some other turn ("Sarah has cancer but can't hear us") is
+    left to rule 25.
   - **Limit:** it compares words, not meaning. A true paraphrase in new words is dropped (costs
     warmth, not truth), and an invention made only of grounded words passes.
 

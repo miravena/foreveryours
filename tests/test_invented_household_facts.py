@@ -577,15 +577,16 @@ class TestDetailGuardInRunTurn(_TurnBase):
             res, _ = self.turn(q, reply)
             self.assertEqual(res.reply_text, reply)
 
-    def test_only_a_question_about_listening_in_is_a_privacy_turn(self):
-        for q in ("Is Sarah listening to us?", "Can Sarah hear what I tell you?", "Can she read our chats?",
-                  "Does anyone record this?"):
-            self.assertTrue(orchestrator._LISTENING_QUESTION_RE.search(q), q)
-        for q in ("Have you heard any news about my family?", "I was listening to jazz all morning.",
-                  "Did you hear about the storm?"):
-            self.assertFalse(orchestrator._LISTENING_QUESTION_RE.search(q), q)
-        res, _ = self.turn("Have you heard any news about my family?", "Sarah has cancer.")
-        self.assertNotIn("cancer", res.reply_text)
+    def test_the_caregiver_is_checked_when_dad_asks_about_the_family_or_the_day(self):
+        for q in ("Have you heard any news about my family?", "What's happening today?"):
+            res, _ = self.turn(q, "Sarah has cancer.")
+            self.assertNotIn("cancer", res.reply_text, q)
+
+    def test_the_fall_follow_up_about_the_caregiver_is_kept(self):
+        reply = ("I\u2019m sorry I can\u2019t reach Sarah directly, but I have let her know you fell and that "
+                 "you\u2019re feeling scared. She\u2019ll be in touch soon to check on you.")
+        res, _ = self.turn("Did you tell Sarah about my fall?", reply)
+        self.assertEqual(res.reply_text, reply)
 
     def test_live_replies_that_were_dropped_though_true(self):
         mem = ["Dad loves jazz", "His grandson is named Leo", "I'm dropping off groceries at 4 PM today",
@@ -624,12 +625,14 @@ class TestDetailGuardInRunTurn(_TurnBase):
         self.assertFalse(orchestrator.invented_family_detail(
             "I don't have any news about Leo, but I'd love to hear if you have.", g))
 
-    def test_news_about_the_caregiver_on_a_privacy_turn_is_still_checked(self):
-        res, _ = self.turn("Is Sarah listening to us?", "Sarah has cancer but cannot hear our conversation.")
-        self.assertNotIn("cancer", res.reply_text)
-        res, _ = self.turn("Is Sarah listening to us?", "Sarah can't hear us. She has cancer.")
-        self.assertNotIn("cancer", res.reply_text)
-        self.assertIn("Sarah can't hear us.", res.reply_text)
+    def test_the_privacy_answer_in_new_words_is_kept(self):
+        reply = "No, Sarah can't hear us. She only sees brief safety alerts if something needs attention."
+        res, _ = self.turn("Can Sarah hear what I tell you?", reply)
+        self.assertEqual(res.reply_text, reply)
+
+    def test_a_time_in_words_matches_the_memo(self):
+        res, _ = self.turn("What's happening today?", "Sarah is dropping off groceries at four\u202fp.m. today.")
+        self.assertIn("groceries", res.reply_text)
 
     def test_a_relative_on_a_privacy_turn_is_still_checked(self):
         res, _ = self.turn("Is Sarah listening to us?",
