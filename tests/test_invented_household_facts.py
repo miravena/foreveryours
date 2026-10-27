@@ -368,6 +368,16 @@ class TestInventedFamilyDetail(unittest.TestCase):
             with self.subTest(reply=reply):
                 self.assertEqual(self.reads(reply), [])
 
+    def test_the_companions_own_act_does_not_clear_a_family_claim(self):
+        for reply in ["Your grandson Leo has a soccer game on Saturday, so I'll let Sarah know you asked.",
+                      "Leo has a soccer game on Saturday so I\u2019ll tell Sarah."]:
+            with self.subTest(reply=reply):
+                self.assertEqual(self.reads(reply), [reply])
+        for reply in ["I let Sarah know, and she's making sure someone can check on you.",
+                      "I'll keep it just between us\u2014I won't tell Sarah about the biscuits."]:
+            with self.subTest(reply=reply):
+                self.assertEqual(self.reads(reply), [])
+
     def test_what_the_senior_said_grounds_it(self):
         reply = "Leo has a soccer game on Saturday\u2014how lovely."
         self.assertEqual(self.reads(reply), [reply])

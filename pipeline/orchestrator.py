@@ -463,7 +463,7 @@ heard hear hearing lately recently earlier before today now later soon family lo
 also still always think thought remember remembers wanted want wants asked ask asks share shared sharing chat
 chatting talk talking talked sound sounds like love loved would glad nice special thing things something anything
 everything nothing else more much help helping helps let lets way right definitely certainly course thanks thank
-kind sweet dear warm thoughtful get got make sure such lot time main only plan plans planned planning member members
+kind sweet dear warm thoughtful get got make making sure someone such lot time main only plan plans planned planning member members
 instead
 """.split())
 # What the product itself does, which THINK states from rule 19 ("She only sees
@@ -584,14 +584,18 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
     memory line and nothing the senior said contains. `follows_family` is
     whether the sentence before it was about the family, so a pronoun ("She'll
     also bring ...") refers back to them."""
-    if _COMPANION_ACT_RE.search(sentence.replace("\u2019", "'")):
-        return False
     statement = _question_cut(sentence)
     if not statement.strip():
         return False
     about = follows_family or _family_ref(statement, g)
     previous = False
     for clause in _DETAIL_CLAUSE_RE.split(statement):
+        # Only what comes before the companion's own act is checked: "I let
+        # Sarah know so she can check on you" passes, "Leo has a game on
+        # Saturday, so I'll let Sarah know" does not.
+        act = _COMPANION_ACT_RE.search(clause.replace("\u2019", "'"))
+        if act:
+            clause = clause[:act.start()]
         if not clause.strip():
             continue
         if _family_ref(clause, g):
