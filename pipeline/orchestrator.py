@@ -456,6 +456,15 @@ _COMPANION_ACT_RE = re.compile(
     r"say|saying|share|sharing|mention|mentioning|keep|keeping)\b",
     re.IGNORECASE,
 )
+# A suggestion to the senior is about what he could do, not news about the
+# family (rule 17: "Why don't you give her a call later?", "Please call Sarah
+# now", "Stay with your family until help arrives").
+_SUGGESTION_RE = re.compile(
+    r"\b(?:please|why\s+(?:don't|not)|how\s+about|you\s+(?:could|can|might|may|should))\b"
+    r"|^\W*(?:(?:oh|and|so|well|maybe|perhaps|dad|now|just)\W+)*"
+    r"(?:call|ring|phone|give|reach|stay|ask|try|text|tell|let|talk|spend|invite|keep)\b",
+    re.IGNORECASE,
+)
 # Words that carry no household fact.
 _CHAT_WORDS = set("""
 mention mentioned mentions said say says told tell telling note noted notes know knew known news update updates
@@ -463,7 +472,7 @@ heard hear hearing lately recently earlier before today now later soon family lo
 also still always think thought remember remembers wanted want wants asked ask asks share shared sharing chat
 chatting talk talking talked sound sounds like love loved would glad nice special thing things something anything
 everything nothing else more much help helping helps let lets way right definitely certainly course thanks thank
-kind sweet dear warm thoughtful get got make making sure someone such lot time main only plan plans planned planning member members
+kind sweet dear warm thoughtful get got make making sure someone such lot time voice too either main only plan plans planned planning member members
 instead
 """.split())
 # What the product itself does, which THINK states from rule 19 ("She only sees
@@ -665,7 +674,8 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         # news" is checked: "I hope he's doing well" and "I let Sarah know so
         # she can check on you" pass; "Leo has cancer and I hope he feels
         # better" and "Leo has a game on Saturday, so I'll let Sarah know" do not.
-        for cut in (_COMPANION_ACT_RE.search(clause.replace("\u2019", "'")), _HEDGE_RE.search(clause)):
+        plain = clause.replace("\u2019", "'")
+        for cut in (_COMPANION_ACT_RE.search(plain), _SUGGESTION_RE.search(plain), _HEDGE_RE.search(clause)):
             if cut:
                 clause = clause[:cut.start()]
         neg = _KIN_NEGATION_RE.search(clause)

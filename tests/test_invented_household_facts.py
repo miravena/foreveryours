@@ -409,6 +409,15 @@ class TestInventedFamilyDetail(unittest.TestCase):
         self.assertEqual(orchestrator.asked_relatives("How is my granddaughter doing?", g, "Sarah"), ["Maya"])
         self.assertEqual(orchestrator.asked_relatives("How is my grandson doing?", g, "Sarah"), ["Leo"])
 
+    def test_a_suggestion_to_call_the_family_is_kept(self):
+        for reply in ["Please call Sarah now.", "Stay with your family until help arrives.",
+                      "I know Sarah would love to hear your voice today too. Why don't you give her a call later?",
+                      "You could ring Sarah this evening."]:
+            with self.subTest(reply=reply):
+                self.assertEqual(self.reads(reply), [])
+        self.assertEqual(self.reads("Leo has a soccer game, so you could call him."),
+                         ["Leo has a soccer game, so you could call him."])
+
     def test_rule_19s_own_wording_is_kept(self):
         self.assertEqual(self.reads("Sarah cannot hear our conversation."), [])
 
