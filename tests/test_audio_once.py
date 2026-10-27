@@ -144,8 +144,8 @@ class TestAudioOnce(LateDisclosureHarness):
         writers = [f for f in demo.fns.values()
                    if any(o is player or getattr(o, "_id", None) == player._id
                           for o in f.outputs)]
-        # Send, Enter and the four proactive buttons.
-        self.assertEqual(len(writers), 6, [getattr(f, "name", f) for f in writers])
+        # Send, Enter, the four proactive buttons and the two example chips (#239).
+        self.assertEqual(len(writers), 8, [getattr(f, "name", f) for f in writers])
         for f in writers:
             self.assertTrue(inspect.isgeneratorfunction(f.fn),
                             f"{f.fn!r} writes the streaming player but is not a generator function")
