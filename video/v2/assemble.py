@@ -460,8 +460,9 @@ def main():
             fh.write(f"Dialogue: 0,{ts_ass(a)},{ts_ass(b)},{style},,0,0,0,,{text}\n")
         for a, b, style, x, y, text in tl.labels:
             fh.write(f"Dialogue: 1,{ts_ass(a)},{ts_ass(b)},{style},,0,0,0,,{{\\pos({x},{y})}}{text}\n")
+    srt = sorted(events + [(a, b, style, f"[{text}]") for a, b, style, _, _, text in tl.labels])
     with open(SRT, "w") as fh:
-        for i, (a, b, _, text) in enumerate(events, 1):
+        for i, (a, b, _, text) in enumerate(srt, 1):
             fh.write(f"{i}\n{ts_srt(a)} --> {ts_srt(b)}\n{text}\n\n")
 
     # ---- join, burn captions, mux
