@@ -174,6 +174,17 @@ class TestDeployWorkflow(unittest.TestCase):
         self.assertEqual(self.on["push"]["branches"], ["main"])
         self.assertEqual(self.on["release"]["types"], ["published"])
 
+    def test_docs_and_video_pushes_do_not_redeploy(self):
+        ignored = self.on["push"]["paths-ignore"]
+        for pattern in ("docs/**", "*.md", "**/*.md", "video/**"):
+            self.assertIn(pattern, ignored)
+        # Nothing the Space ships may be ignored, or a code fix would never reach judges.
+        for pattern in ignored:
+            for shipped in ("app.py", "webapp.py", "pipeline/", "safety/", "memory/",
+                            "requirements.txt", "packages.txt", "samples/", "scripts/"):
+                self.assertFalse(pattern.startswith(shipped) or pattern in ("**", "*"), pattern)
+        self.assertNotIn("paths-ignore", self.on["release"] or {})
+
     def test_deploy_needs_tests_and_one_at_a_time(self):
         self.assertEqual(self.wf["jobs"]["deploy"]["needs"], "tests")
         self.assertIn("group", self.wf["concurrency"])

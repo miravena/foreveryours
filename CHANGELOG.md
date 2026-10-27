@@ -16,6 +16,8 @@ rename `Unreleased` to the version and date, then tag it.
   `CaregiverFlag` gains a persisted `source` field, old flag files load as unknown (#214).
 
 ### Changed
+- A push to `main` that only changes `docs/**`, `*.md` or `video/**` no longer redeploys the
+  Space, so docs merges stop restarting it (#252).
 - AUDIT's default model is now `nvidia/nemotron-3-super-120b-a12b` (recall 1.00 vs Nano 0.88 on the 43-row eval, 0/17 false flags each); THINK stays on Nano. ADR-016 amends ADR-010 and ADR-002; ADR-012 to ADR-015 are Accepted (#200).
 - Hosted page puts the action first: a bold "Try this first" line with a one-click example that
   fills the type box, one-line AI notice with the privacy link, plain sample clip names, and the

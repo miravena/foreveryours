@@ -3,7 +3,8 @@
 # deployed commit sha on the Space (BUILD_INFO + BUILD_SHA, shown as "Build: <sha7>").
 #
 # When it runs:
-#   push to main        until the freeze (FREEZE_UTC below): tests -> deploy -> sha check
+#   push to main        (unless it only changes docs/**, *.md or video/**; see paths-ignore)
+#                       until the freeze (FREEZE_UTC below): tests -> deploy -> sha check
 #                       -> live judge check suite with a small call cap. After the freeze a
 #                       push to main only runs the tests; nothing deploys automatically.
 #   release published   deploys the tagged commit, then the sha check, API smoke and the
@@ -22,6 +23,13 @@ name: deploy-space
 on:
   push:
     branches: [main]
+    # A push that only touches these never redeploys: the Space does not ship them, and every
+    # redeploy sends the Space back into hardware scheduling (outage #252).
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "**/*.md"
+      - "video/**"
   release:
     types: [published]
   workflow_dispatch:
