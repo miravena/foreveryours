@@ -432,6 +432,15 @@ class TestInventedFamilyDetail(unittest.TestCase):
         reply = "Sarah is dropping off groceries at 4 PM. They have booked a holiday in Spain."
         self.assertEqual(self.reads(reply), ["They have booked a holiday in Spain."])
 
+    def test_how_the_caregiver_hears_about_safety_is_kept(self):
+        g = orchestrator.family_grounding(["His grandson is named Leo"], "Is Sarah listening to us?", None, "Sarah")
+        for s in ("She only gets a message if there's a safety concern.",
+                  "She only receives safety alerts, nothing else.",
+                  "Only safety flags reach her.",
+                  "She'll only be notified if there's a safety concern."):
+            self.assertFalse(orchestrator.invented_family_detail(s, g, follows_family=True), s)
+        self.assertTrue(orchestrator.invented_family_detail("Sarah has an emergency at work.", g))
+
     def test_how_is_a_name_is_a_family_question(self):
         for q in ("How is Leo?", "How\u2019s Leo?", "how's Leo"):
             self.assertTrue(orchestrator.asks_about_family(q), q)
@@ -539,6 +548,14 @@ class TestDetailGuardInRunTurn(_TurnBase):
                            "Today's schedule is light. Sarah is dropping off groceries at 4 PM. "
                            "I don't have any news about Leo.")
         self.assertTrue(res.reply_text.startswith("Today's schedule is light."))
+
+    def test_a_repeated_no_news_keeps_what_follows_its_but(self):
+        res, _ = self.turn("What's on for today? And how is my grandson doing?",
+                           "Leo has a soccer game on Saturday. I don't have any other news about Leo, "
+                           "but Sarah is dropping off groceries at 4 PM.")
+        self.assertNotIn("soccer", res.reply_text)
+        self.assertIn("Sarah is dropping off groceries at 4 PM.", res.reply_text)
+        self.assertEqual(res.reply_text.count("news about"), 1)
 
     def test_how_is_leo_drops_an_invented_reply(self):
         res, _ = self.turn("How is Leo?", "He's doing great at school and has a soccer game on Saturday.")

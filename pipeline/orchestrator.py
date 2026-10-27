@@ -500,8 +500,15 @@ _CANNOT_PERCEIVE_RE = re.compile(
     r"\b(?:listen|listens|listening|watch|watches|watching)\b"
     r"|\b(?:hear|hears|read|reads|see|sees|access|know)\b.*\b(?:us|we|you|your|conversations?|messages?|chats?|talk|say|tell)\b"
 )
+# How the caregiver hears from the companion at all is rule 19's other half,
+# also not news: "She only gets a message if there's a safety concern",
+# "Only safety alerts reach her", "She'll be notified if something's wrong".
+# A bare "emergency" is not enough: "Sarah has an emergency at work" is news.
+_ALERT_PATH_RE = re.compile(
+    r"\b(?:safety\s+\w+|alerts?|alerted|flag|flags|flagged|notif(?:y|ied|ication|ications))\b", re.IGNORECASE)
 _CONTRACTION_BITS = {"s", "t", "ll", "re", "ve", "d", "m"}
 _NO_NEWS_LINE = "I don't have any news about how {name} is doing, but I'd love to hear if you have."
+_NO_NEWS_BUT_RE = re.compile(r"[,;\u2014-]?\s*\bbut\b\s+(\S.*)", re.IGNORECASE)
 
 
 def _stem(word: str) -> str:
@@ -684,7 +691,7 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         else:
             is_family = previous and not _OWN_SUBJECT_RE.search(clause) and not _names_someone_else(clause, g)
         previous = is_family
-        if not is_family:
+        if not is_family or _ALERT_PATH_RE.search(clause):
             continue
         # Only what comes before the companion's own act, a hope, or a "no
         # news" is checked: "I hope he's doing well" and "I let Sarah know so
@@ -1762,7 +1769,17 @@ def run_turn(
                     no_news = not is_safety and "?" not in s and bool(_KIN_NEGATION_RE.search(s) and _NO_NEWS_RE.search(s))
                     pointed = people or ([last_person] if last_person and _THIRD_PERSON_RE.search(s) else [])
                     if no_news and pointed and pointed[0] in replaced_for:
-                        continue  # the no-news line already said it ("I don't have any other news about him.")
+                        # The no-news line already said it ("I don't have any
+                        # other news about him."), but what follows a "but" may
+                        # be the rest of the answer: "..., but Sarah is
+                        # dropping off groceries at 4 PM."
+                        rest = _NO_NEWS_BUT_RE.search(s)
+                        rest = rest.group(1) if rest else ""
+                        if (not rest or _THIRD_PERSON_RE.search(rest) or family_people_in(rest, family, caregiver_name)
+                                or invented_family_detail(rest, family, follows_family)):
+                            continue
+                        s = rest[0].upper() + rest[1:]
+                        people = []
                     follows_family, follows_relative = family_thread(
                         s, family, caregiver_name, follows_family, follows_relative)
                     if people:
