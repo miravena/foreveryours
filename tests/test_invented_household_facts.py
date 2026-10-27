@@ -587,6 +587,23 @@ class TestDetailGuardInRunTurn(_TurnBase):
         res, _ = self.turn("Have you heard any news about my family?", "Sarah has cancer.")
         self.assertNotIn("cancer", res.reply_text)
 
+    def test_live_replies_that_were_dropped_though_true(self):
+        mem = ["Dad loves jazz", "His grandson is named Leo", "I'm dropping off groceries at 4 PM today",
+               "Dad has a check-up with Dr. Tan on Thursday at 10 AM"]
+        for q, s in (("Do I have any appointments this week?",
+                      "You have a check\u2011up with Dr.\u202fTan on Thursday at 10\u202fa.m. Sarah is dropping off "
+                      "groceries for you today at 4\u202fp.m. Let me know if there\u2019s anything else you\u2019d like "
+                      "to talk about."),
+                     ("Alright, I'll wait for Sarah then.", "Great\u2014waiting for Sarah sounds like a good plan."),
+                     ("Did you tell Sarah about my fall?",
+                      "I\u2019ve let your family know what happened, and Sarah will be reaching out to you soon.")):
+            g = orchestrator.family_grounding(mem, q, None, "Sarah")
+            self.assertFalse(orchestrator.invented_family_detail(s, g), s)
+        g = orchestrator.family_grounding(mem, "", None, "Sarah")
+        for s in ("Leo is doing great at school.", "I've let Sarah know, and Leo has cancer.",
+                  "I told Sarah, and she has a new job."):
+            self.assertTrue(orchestrator.invented_family_detail(s, g), s)
+
     def test_what_follows_a_denial_is_still_checked(self):
         g = orchestrator.family_grounding(["His grandson is named Leo"], "", None, "Sarah")
         self.assertTrue(orchestrator.invented_family_detail("Sarah can't hear us and Leo has cancer.", g))

@@ -459,6 +459,15 @@ _COMPANION_ACT_RE = re.compile(
     r"say|saying|share|sharing|mention|mentioning|keep|keeping)\b",
     re.IGNORECASE,
 )
+# The companion's opinion of a plan is not news about the family: "Great --
+# waiting for Sarah sounds like a good plan." ("Leo is doing great" is not
+# one: only "sounds"/"seems" and an opening interjection are taken out.)
+_OPINION_RE = re.compile(
+    r"^\W*(?:great|good|wonderful|lovely|perfect|okay|ok|alright|sure|oh)\b"
+    r"|\b(?:sounds?|seems?)\s+(?:like\s+)?(?:a\s+|such\s+a\s+)?(?:really\s+|very\s+)?"
+    r"(?:good|great|nice|lovely|wonderful|fine|smart|sensible)(?:\s+(?:plan|idea|choice))?\b",
+    re.IGNORECASE,
+)
 # A suggestion to the senior is about what he could do, not news about the
 # family (rule 17: "Why don't you give her a call later?", "Please call Sarah
 # now", "Stay with your family until help arrives").
@@ -515,6 +524,7 @@ safety safe unsafe danger emergency fall hurt alert alerts alerted flag flags fl
 notification notifications concern concerns concerned worried worry
 get gets got receive receives received see sees reach reaches sent send sends message messages note notes
 learn learns told hear hears know knows shared share matter matters about like think
+reach reaching out check checking call calling contact contacting touch soon back help
 something anything wrong seems seem comes come happens happen if there else nothing issue issues problem problems
 """.split())
 # Sending the senior to a person for help is a referral, not news about
@@ -555,6 +565,7 @@ def _mentions_caregiver(text: str, caregiver_name: str) -> bool:
 def _plain(text: str) -> str:
     """Lowercased, straight apostrophes, "n't" spelled out ("isn't" -> "is not")."""
     text = text.lower().replace("\u2019", "'").replace("won't", "will not").replace("can't", "can not")
+    text = re.sub(r"\b([ap])\.m\b\.?", r"\1m", text)  # "10 a.m." is "10 am"
     return re.sub(r"n't\b", " not", text)
 
 
@@ -712,7 +723,10 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
     about = follows_family or _family_ref(statement, g)
     name_parts = _name_parts(g)
     previous = follows_relative
-    alert = bool(_ALERT_PATH_RE.search(statement))  # "..., like a fall" is still that answer
+    # "..., like a fall" is still that answer, and so is what the family does
+    # once the companion has told them: "I've let your family know, and Sarah
+    # will be reaching out soon." Every other word is still checked.
+    alert = bool(_ALERT_PATH_RE.search(statement) or _COMPANION_ACT_RE.search(statement.replace("\u2019", "'")))
     for clause in _DETAIL_CLAUSE_RE.split(statement):
         if not clause.strip():
             continue
@@ -729,6 +743,7 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         # news" is checked: "I hope he's doing well" and "I let Sarah know so
         # she can check on you" pass; "Leo has cancer and I hope he feels
         # better" and "Leo has a game on Saturday, so I'll let Sarah know" do not.
+        clause = _OPINION_RE.sub(" ", clause)
         plain = clause.replace("\u2019", "'")
         for cut in (_COMPANION_ACT_RE.search(plain), _SUGGESTION_RE.search(plain), _HEDGE_RE.search(clause),
                     _REFERRAL_RE.search(plain)):
