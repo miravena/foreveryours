@@ -443,6 +443,9 @@ _FAMILY_WORD_RE = re.compile(r"\b(?:family|families|folks)\b", re.IGNORECASE)
 # "They" and "them" are left out: they refer to things as often as to people
 # ("enjoy them when no one's looking").
 _THIRD_PERSON_RE = re.compile(r"\b(?:he|she|him|her|his|hers)\b", re.IGNORECASE)
+# ... except as the subject that opens a clause: "They have booked a holiday".
+_THEY_START_RE = re.compile(r"^\W*(?:(?:and|so|but|now|also)\s+)?(?:they|they're|they've|they'll|their)\b",
+                            re.IGNORECASE)
 # A clause with its own subject is not a continuation of the family clause
 # before it: "Sarah mentioned you love jazz, so maybe you'll enjoy some music".
 _OWN_SUBJECT_RE = re.compile(r"\b(?:you|your|i|we|it|that|this|there)\b", re.IGNORECASE)
@@ -573,14 +576,17 @@ def family_grounding(memory_texts: list[str], transcript: str, history: list[dic
             continue
         # (relation, name) pairs; "grandson is named Leo and granddaughter is
         # named Maya" binds each name to its own relation.
+        # A name bound to a relation is kept even when it is a common word
+        # ("named Will", "granddaughter May").
         pairs = [(_KIN_FORMS[(m.group(1) or m.group(5)).lower()], m.group(2) or m.group(3) or m.group(4))
                  for m in _KIN_BINDS_NAME_RE.finditer(line)]
+        not_names = _ADDRESS_WORDS | set(_KIN_FORMS) | STOPWORDS | _OPENER_WORDS  # "How is my grandson"
         if not pairs:  # no binding to read: one capitalised name in the line is its person
-            loose = [n for n in _NAME_RE.findall(line) if _name_key(n) not in _NOT_PERSON_WORDS
-                     | _NOT_NAME_WORDS | _OPENER_WORDS | _ADDRESS_WORDS | set(_KIN_FORMS)]
+            not_names |= _NOT_PERSON_WORDS | _NOT_NAME_WORDS | _OPENER_WORDS
+            loose = [n for n in _NAME_RE.findall(line) if _name_key(n) not in not_names]
             pairs = [(k, loose[0]) for k in kin] if len(loose) == 1 else []
         written = {_name_key(n): re.sub(r"['\u2019]s$", "", n) for _k, n in pairs}
-        names = set(written) - (_NOT_NAME_WORDS | _OPENER_WORDS | _ADDRESS_WORDS | _NOT_PERSON_WORDS | set(_KIN_FORMS))
+        names = set(written) - not_names
         for n in names:
             display.setdefault(n, written[n].capitalize() if written[n].islower() else written[n])
         people |= names
@@ -600,7 +606,8 @@ def _name_parts(g: FamilyGrounding) -> set[str]:
 
 
 def _family_ref(text: str, g: FamilyGrounding) -> bool:
-    words = set(_detail_words(text))
+    # A lowercase "will" or "may" is not the grandson Will or the granddaughter May.
+    words = set(_detail_words(text)) - _NOT_NAME_WORDS - _NOT_PERSON_WORDS
     names = {_name_key(n) for n in _NAME_RE.findall(text)}  # whole: "Jean-Luc", "O'Brien"
     return bool(names & g.people or words & g.people or words & set(_KIN_FORMS) or _FAMILY_WORD_RE.search(text))
 
@@ -663,7 +670,7 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
             continue
         if _family_ref(clause, g):
             is_family = True
-        elif _THIRD_PERSON_RE.search(clause):
+        elif _THIRD_PERSON_RE.search(clause) or _THEY_START_RE.match(clause.replace("\u2019", "'")):
             is_family = about
         else:
             is_family = previous and not _OWN_SUBJECT_RE.search(clause) and not _names_someone_else(clause, g)
@@ -706,9 +713,10 @@ def family_thread(sentence: str, g: FamilyGrounding, caregiver_name: str,
     lowered = sentence.lower()
     named = bool(family_people_in(sentence, g, caregiver_name)) or any(
         w in _KIN_FORMS for w in _WORD_RE.findall(lowered))
-    carried = bool(_THIRD_PERSON_RE.search(sentence)) or not _OWN_SUBJECT_RE.search(sentence)
+    pronoun = bool(_THIRD_PERSON_RE.search(sentence) or _THEY_START_RE.match(sentence.replace("\u2019", "'")))
+    carried = pronoun or not _OWN_SUBJECT_RE.search(sentence)
     relative = named or (follows_relative and carried and (caregiver_name or "\0").lower() not in lowered)
-    family = relative or _family_ref(sentence, g) or (follows_family and bool(_THIRD_PERSON_RE.search(sentence)))
+    family = relative or _family_ref(sentence, g) or (follows_family and pronoun)
     return family, relative
 
 
@@ -1699,9 +1707,10 @@ def run_turn(
                 budget = hotline_budget
                 follows_dropped = False
                 strangers: set[str] = set()
-                # The question is the sentence before the reply: "How is my
-                # grandson?" -> "He's doing great at school" is about Leo.
-                follows_family, follows_relative = bool(family_question), bool(asked)
+                # The question is the sentence before the reply, for a pronoun
+                # only: "How is my grandson?" -> "He's doing great at school" is
+                # about Leo, "Today's schedule is light." is not.
+                follows_family, follows_relative = bool(family_question), False
                 last_person = asked[0] if asked else None
                 for s in s_iter:
                     # Safety advice is never dropped for naming a relative, and

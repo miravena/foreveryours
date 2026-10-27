@@ -422,6 +422,16 @@ class TestInventedFamilyDetail(unittest.TestCase):
         self.assertEqual(self.reads("Leo has a soccer game, so you could call him."),
                          ["Leo has a soccer game, so you could call him."])
 
+    def test_a_common_word_bound_as_a_name_is_still_family(self):
+        g = orchestrator.family_grounding(["His grandson is named Will"], "", None, "Sarah")
+        self.assertTrue(orchestrator.invented_family_detail("Will has cancer.", g))
+        self.assertFalse(orchestrator.invented_family_detail("I will play some jazz for you.", g))
+        self.assertEqual(orchestrator.asked_relatives("How is my grandson doing?", g, "Sarah"), ["Will"])
+
+    def test_they_opening_a_sentence_after_the_family_is_the_family(self):
+        reply = "Sarah is dropping off groceries at 4 PM. They have booked a holiday in Spain."
+        self.assertEqual(self.reads(reply), ["They have booked a holiday in Spain."])
+
     def test_rule_19s_own_wording_is_kept(self):
         self.assertEqual(self.reads("Sarah cannot hear our conversation."), [])
 
@@ -515,6 +525,10 @@ class TestDetailGuardInRunTurn(_TurnBase):
         self.store.add("Leo is recovering from surgery", source="caregiver_memo", supersede=False)
         res, _ = self.turn("How is my grandson doing?", "He's recovering from surgery.")
         self.assertEqual(res.reply_text, "He's recovering from surgery.")
+        res, _ = self.turn("What's on for today? And how is my grandson doing?",
+                           "Today's schedule is light. Sarah is dropping off groceries at 4 PM. "
+                           "I don't have any news about Leo.")
+        self.assertTrue(res.reply_text.startswith("Today's schedule is light."))
 
     def test_family_question_reaches_think_with_the_relative_and_the_note(self):
         _res, stream = self.turn("How is my grandson doing?",
