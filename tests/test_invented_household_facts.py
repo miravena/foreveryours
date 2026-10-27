@@ -432,6 +432,11 @@ class TestInventedFamilyDetail(unittest.TestCase):
         reply = "Sarah is dropping off groceries at 4 PM. They have booked a holiday in Spain."
         self.assertEqual(self.reads(reply), ["They have booked a holiday in Spain."])
 
+    def test_a_caregiver_with_a_surname_is_family(self):
+        g = orchestrator.family_grounding(["His grandson is named Leo"], "", None, "Sarah Jones")
+        self.assertTrue(orchestrator.invented_family_detail("Sarah Jones has cancer.", g))
+        self.assertEqual(orchestrator.family_people_in("Sarah Jones and Leo", g, "Sarah Jones"), ["Leo"])
+
     def test_rule_19s_own_wording_is_kept(self):
         self.assertEqual(self.reads("Sarah cannot hear our conversation."), [])
 
@@ -529,6 +534,10 @@ class TestDetailGuardInRunTurn(_TurnBase):
                            "Today's schedule is light. Sarah is dropping off groceries at 4 PM. "
                            "I don't have any news about Leo.")
         self.assertTrue(res.reply_text.startswith("Today's schedule is light."))
+
+    def test_a_pronoun_about_the_caregiver_does_not_answer_for_the_relative(self):
+        res, _ = self.turn("How is my grandson doing?", "Sarah said she is dropping off groceries at 4 PM.")
+        self.assertTrue(res.reply_text.endswith(orchestrator._NO_NEWS_LINE.format(name="Leo")))
 
     def test_family_question_reaches_think_with_the_relative_and_the_note(self):
         _res, stream = self.turn("How is my grandson doing?",

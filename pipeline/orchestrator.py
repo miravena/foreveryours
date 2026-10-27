@@ -516,6 +516,15 @@ def _stem(word: str) -> str:
     return word
 
 
+def _caregiver_parts(caregiver_name: str) -> set[str]:
+    """The caregiver's name, word by word ("Sarah Jones" -> {"sarah", "jones"})."""
+    return {_name_key(p) for p in (caregiver_name or "").split()}
+
+
+def _mentions_caregiver(text: str, caregiver_name: str) -> bool:
+    return bool(_caregiver_parts(caregiver_name) & {_name_key(n) for n in _NAME_RE.findall(text)})
+
+
 def _plain(text: str) -> str:
     """Lowercased, straight apostrophes, "n't" spelled out ("isn't" -> "is not")."""
     text = text.lower().replace("\u2019", "'").replace("won't", "will not").replace("can't", "can not")
@@ -562,7 +571,7 @@ def family_grounding(memory_texts: list[str], transcript: str, history: list[dic
     senior = [transcript or ""] + [m.get("content", "") for m in (history or []) if m.get("role") == "user"]
     senior = [_ASKS_WHO_I_HAVE_RE.sub(" ", str(t)) for t in senior]
     caregiver = _name_key((caregiver_name or "").strip())
-    people: set[str] = {caregiver} if caregiver else set()
+    people: set[str] = ({caregiver} | _caregiver_parts(caregiver_name)) if caregiver else set()
     relatives: dict[str, set[str]] = {}
     display = {caregiver: caregiver_name.strip()} if caregiver else {}
     stems = {_stem(w) for w in _PRODUCT_WORDS}
@@ -715,7 +724,7 @@ def family_thread(sentence: str, g: FamilyGrounding, caregiver_name: str,
         w in _KIN_FORMS for w in _WORD_RE.findall(lowered))
     pronoun = bool(_THIRD_PERSON_RE.search(sentence) or _THEY_START_RE.match(sentence.replace("\u2019", "'")))
     carried = pronoun or not _OWN_SUBJECT_RE.search(sentence)
-    relative = named or (follows_relative and carried and (caregiver_name or "\0").lower() not in lowered)
+    relative = named or (follows_relative and carried and not _mentions_caregiver(sentence, caregiver_name))
     family = relative or _family_ref(sentence, g) or (follows_family and pronoun)
     return family, relative
 
@@ -723,11 +732,11 @@ def family_thread(sentence: str, g: FamilyGrounding, caregiver_name: str,
 def family_people_in(text: str, g: FamilyGrounding, caregiver_name: str) -> list[str]:
     """Family names in `text` other than the caregiver's, in order, as written
     in it ("Leo")."""
-    caregiver = _name_key(caregiver_name or "")
+    caregiver = _caregiver_parts(caregiver_name)
     out = []
     for n in _NAME_RE.findall(text):
         key = _name_key(n)
-        if key in g.people and key != caregiver and n not in out:
+        if key in g.people and key not in caregiver and n not in out:
             out.append(re.sub(r"['\u2019]s$", "", n))
     return out
 
@@ -757,12 +766,12 @@ def asked_relatives(transcript: str, g: FamilyGrounding, caregiver_name: str) ->
     my grandson doing?" -> ["Leo"] when a memo says so."""
     if not asks_about_family(transcript):
         return []
-    caregiver = _name_key(caregiver_name or "")
+    caregiver = _caregiver_parts(caregiver_name)
     names = [_name_key(n) for n in family_people_in(transcript, g, caregiver_name)]
     for w in _WORD_RE.findall(transcript.lower()):
         if w in _KIN_FORMS:
             names += sorted(g.relatives.get(_KIN_FORMS[w], ()))
-    return [g.display.get(n, n) for n in dict.fromkeys(names) if n != caregiver]
+    return [g.display.get(n, n) for n in dict.fromkeys(names) if n not in caregiver]
 
 # An apology in THINK's continuation of a fast-path crisis turn: the canned
 # fast-path line already apologised, so a second "sorry" is removed before it
@@ -1739,7 +1748,7 @@ def run_turn(
                             s, family, caregiver_name, follows_family, follows_relative)
                         # Who it was about: a relative it names, else the one a
                         # pronoun points back to. Said in its place, once, warmly.
-                        if not people and caregiver_name.lower() not in s.lower() and last_person:
+                        if not people and not _mentions_caregiver(s, caregiver_name) and last_person:
                             people = [last_person]
                         if people:
                             last_person = people[-1]
@@ -1747,7 +1756,7 @@ def run_turn(
                                 no_news_for.append(people[0])
                                 replaced_for.append(people[0])
                                 yield _NO_NEWS_LINE.format(name=people[0])
-                        elif caregiver_name.lower() in s.lower():
+                        elif _mentions_caregiver(s, caregiver_name):
                             last_person = None
                         continue
                     no_news = not is_safety and "?" not in s and bool(_KIN_NEGATION_RE.search(s) and _NO_NEWS_RE.search(s))
@@ -1760,7 +1769,7 @@ def run_turn(
                         last_person = people[-1]
                         if no_news:
                             no_news_for.extend(people)  # it already said so
-                    elif caregiver_name and caregiver_name.lower() in s.lower():
+                    elif _mentions_caregiver(s, caregiver_name):
                         last_person = None
                     if drop_apology and _APOLOGY_RE.search(s):
                         stripped = _strip_apology(s)
@@ -1816,7 +1825,11 @@ def run_turn(
             # "Your grandson is ..." answers "How is my grandson?" as well as
             # his name does.
             kin_said = {_KIN_FORMS[w] for w in _WORD_RE.findall(reply_text.lower()) if w in _KIN_FORMS}
-            answered = bool(kin_said & kin_asked) or bool(_THIRD_PERSON_RE.search(reply_text))  # "He's ..."
+            # ... and so does a pronoun not about the caregiver ("He's ...",
+            # not "Sarah said she is dropping off groceries").
+            answered = bool(kin_said & kin_asked) or any(
+                _THIRD_PERSON_RE.search(x) and not _mentions_caregiver(x, caregiver_name)
+                for x in _SENTENCE_SPLIT_RE.split(reply_text))
             missing = [] if answered else [n for n in asked if n.lower() not in reply_text.lower()]
             if missing and reply_text.strip() and not dropped_hotline and not driving_guard:
                 # Asked how a briefed relative is and the reply never named
