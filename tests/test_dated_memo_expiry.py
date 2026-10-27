@@ -80,6 +80,12 @@ class DatedExpiryRule(unittest.TestCase):
         self.assertEqual(self.expiry("Eye test on 30 October 2027 at 2 PM"), end_of(2027, 10, 30))
         self.assertEqual(self.expiry("Eye test on October 30, 2027 at 2 PM"), end_of(2027, 10, 30))
 
+    def test_a_past_date_elsewhere_does_not_hide_the_weekday(self):
+        self.assertEqual(
+            self.expiry("Check-up moved from October 20 to Thursday at 10 AM"), end_of(2026, 10, 29)
+        )
+        self.assertIsNone(self.expiry("Check-up was on the 20th at 2 PM"))
+
     def test_year_after_a_comma_without_a_space(self):
         self.assertEqual(self.expiry("Check-up on October 30,2027 at 10 AM"), end_of(2027, 10, 30))
 

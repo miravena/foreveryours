@@ -46,6 +46,9 @@ _WEEKDAY_RE = "|".join(list(_WEEKDAYS) + list(_WEEKDAY_ALIASES))
 _ORD = r"(?:st|nd|rd|th)?"
 _PAST_WORDING = re.compile(r"\b(?:was|were|had|went|saw|ago|yesterday|last|earlier)\b")
 
+_DATE_AFTER_WEEKDAY = re.compile(
+    rf"\s*,?\s*(?:the\s+)?(?:\d{{1,2}}{_ORD}\s+(?:of\s+)?(?:{_MONTH_RE})\b|(?:{_MONTH_RE})\b\.?\s+\d|\d{{4}}-)"
+)
 _RECURRING = re.compile(r"\b(?:every|each|all|most)\s+(?:other\s+)?$")
 _WEEKDAY = re.compile(rf"\b(?:(next|last|this|coming|past)\s+)?({_WEEKDAY_RE})\b")
 _TOMORROW = re.compile(r"\b(day\s+after\s+)?tomorrow\b")
@@ -93,7 +96,7 @@ def _named_dates(text: str, today: dt.date) -> list[dt.date]:
             out.append(d)
     # "the 20th of October" is one date, not also a bare "the 20th"
     text = _DAY_MONTH.sub(" ", _MONTH_DAY.sub(" ", text))
-    for m in _BARE_ORDINAL.finditer(text):
+    for m in ([] if _PAST_WORDING.search(text) else _BARE_ORDINAL.finditer(text)):  # "was on the 20th" is past
         day = int(m[1])
         year, month = today.year, today.month
         for _ in range(13):  # the next month that has that day (skips a 31st in a 30-day month)
@@ -114,12 +117,13 @@ def future_days(text: str, today: dt.date) -> list[dt.date]:
     for m in _IN_DAYS.finditer(t):
         days.append(today + dt.timedelta(days=int(m[1])))
     named = _named_dates(t, today)
-    # "Thursday 22 October" is one date: a past explicit date is not revived by
-    # the weekday word beside it.
-    past_date_only = _has_explicit_date(t) and not named
-    for m in ([] if past_date_only else _WEEKDAY.finditer(t)):
+    for m in _WEEKDAY.finditer(t):
         qualifier, name = m[1], m[2]
         if qualifier in ("last", "past") or _RECURRING.search(t[: m.start()]):
+            continue
+        # "Thursday 22 October" is one date: when it is past, the weekday word
+        # beside it must not revive it. A weekday elsewhere in the text stands.
+        if not named and _DATE_AFTER_WEEKDAY.match(t, m.end()):
             continue
         target = _WEEKDAYS.index(name) if name in _WEEKDAYS else _WEEKDAY_ALIASES[name]
         if qualifier == "next":  # that weekday of NEXT calendar week (Mon-Sun)
