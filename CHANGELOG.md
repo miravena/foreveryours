@@ -10,6 +10,10 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Docs
+- Added an anonymized synthesis of three caregiver conversations to the README and the Devpost
+  Inspiration draft (#219).
+
 ### Fixed
 - Public-demo privacy and safety release candidate (#88, #152, #161, #162, #164, #169):
   perseveration flags are marked disclosed only after spoken disclosure audio is delivered;

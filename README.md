@@ -11,6 +11,17 @@ Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackat
 runs on Nebius Token Factory with open-weight NVIDIA Nemotron models; it does not use Nebius AI
 Cloud.
 
+## What three caregivers told us
+
+We spoke with three caregivers supporting older adults from a distance, while balancing work,
+children, and daily responsibilities. They consistently wanted context-aware companionship and
+high-confidence safety support, but rejected anything that felt like surveillance: one wanted
+non-urgent updates batched into a caregiver digest, another stressed that the tool should bridge
+quiet hours rather than replace family contact, and another said it must feel like the older
+adult's companion first, not a monitoring device. These conversations changed our direction:
+ForeverYours should clearly disclose when an alert is sent, keep ordinary private conversations
+private, and let families configure what non-safety information is shared.
+
 ## The three-beat demo
 
 1. **Caregiver memo.** "Dad loves jazz, his grandson is Leo, avoid talking about driving. I'm

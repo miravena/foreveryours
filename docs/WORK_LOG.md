@@ -9,6 +9,14 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-27 (Caregiver research synthesis: #219)
+- **What:** Synthesized anonymized notes from three real caregiver conversations for the README
+  and Devpost Inspiration draft. The conversations covered long-distance caregiving, sandwich
+  generation caregiving, and co-residing care.
+- **Result:** The shared finding is that caregivers want context and high-confidence safety help
+  without turning the companion into surveillance. The resulting copy emphasizes disclosure,
+  private ordinary conversation, and configurable non-safety sharing.
+
 ### 2026-10-18 (Public-demo release candidate: #88, #152, #161, #162, #164, #169)
 - **What:** Implemented the agreed Step 1 release-candidate privacy, disclosure, retention, and
   shared-profile fixes. Added persisted disclosure attestation for senior-derived memories,
