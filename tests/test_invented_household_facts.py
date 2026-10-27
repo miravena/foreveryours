@@ -569,6 +569,31 @@ class TestDetailGuardInRunTurn(_TurnBase):
         self.assertIn("Sarah is dropping off groceries at 4 PM.", res.reply_text)
         self.assertEqual(res.reply_text.count("news about"), 1)
 
+    def test_the_privacy_answer_about_the_caregiver_is_kept_in_any_words(self):
+        for q, reply in (("Is Sarah listening to us?",
+                          "Sarah can't hear our conversation. She'd only be contacted if your wellbeing was at risk."),
+                         ("Can Sarah hear what I tell you?",
+                          "She can't hear our chat. She only gets word if something urgent comes up.")):
+            res, _ = self.turn(q, reply)
+            self.assertEqual(res.reply_text, reply)
+
+    def test_a_relative_on_a_privacy_turn_is_still_checked(self):
+        res, _ = self.turn("Is Sarah listening to us?",
+                           "Sarah can't hear us. Leo has a soccer game on Saturday.")
+        self.assertNotIn("soccer", res.reply_text)
+
+    def test_a_relative_the_senior_denies_is_not_family(self):
+        history = [{"role": "user", "content": "I don't have a granddaughter named Maya."},
+                   {"role": "assistant", "content": "Thanks for telling me."}]
+        res, _ = self.turn("How is my granddaughter doing?", "I'm not sure, tell me about her!", history=history)
+        self.assertNotIn("Maya", res.reply_text)
+
+    def test_a_fact_the_senior_told_answers_the_question(self):
+        history = [{"role": "user", "content": "Leo is recovering from surgery."},
+                   {"role": "assistant", "content": "I'm sorry to hear that."}]
+        res, _ = self.turn("How is my grandson doing?", "Recovering from surgery, as you told me.", history=history)
+        self.assertNotIn("don't have any news", res.reply_text)
+
     def test_a_briefed_fact_with_no_name_answers_the_question(self):
         self.store.add("Leo is recovering from surgery", source="caregiver_memo", supersede=False)
         res, _ = self.turn("How is my grandson doing?", "Recovering from surgery, according to the notes.")

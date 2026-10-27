@@ -586,6 +586,11 @@ _KIN_BINDS_NAME_RE = re.compile(
 )
 
 
+_DENIED_KIN_RE = re.compile(
+    r"\b(?:no|never|don't|do not|doesn't|does not|haven't|have not|hasn't|didn't|did not)\b"
+    r"(?:\s+\w+){0,3}?\s+(" + _KIN_ALT + r")\b", re.IGNORECASE)
+
+
 def family_grounding(memory_texts: list[str], transcript: str, history: list[dict] | None,
                      caregiver_name: str) -> FamilyGrounding:
     """Family names and grounded words from every active memory line and the
@@ -615,6 +620,12 @@ def family_grounding(memory_texts: list[str], transcript: str, history: list[dic
         # ("named Will", "granddaughter May").
         pairs = [(_KIN_FORMS[(m.group(1) or m.group(5)).lower()], m.group(2) or m.group(3) or m.group(4))
                  for m in _KIN_BINDS_NAME_RE.finditer(line)]
+        # "I don't have a granddaughter named Maya" binds no one.
+        denied = {_KIN_FORMS[m.group(1).lower()] for m in _DENIED_KIN_RE.finditer(line)}
+        kin -= denied
+        pairs = [(k, n) for k, n in pairs if k not in denied]
+        if not kin:
+            continue
         not_names = _ADDRESS_WORDS | set(_KIN_FORMS) | STOPWORDS | _OPENER_WORDS  # "How is my grandson"
         if not pairs:  # no binding to read: one capitalised name in the line is its person
             not_names |= _NOT_PERSON_WORDS | _NOT_NAME_WORDS | _OPENER_WORDS
@@ -791,6 +802,14 @@ _FAMILY_QUESTION_RE = re.compile(
     r"|everyone|everybody|(?-i:[A-Z][a-z]+)(?:\s+(?:doing|getting|keeping|been)\b|\s*(?:[?!.,]|$)))"
     r"|\b(?:hear|news|heard|updates?)\b[^.?!]{0,40}\b(?:family|" + _KIN_ALT + r")\b"
     r"|\bwhat(?:'s|\s+is|\s+has)\s+(?:my\s+" + _KIN_ALT + r"|(?-i:[A-Z][a-z]+))\s+(?:been\s+)?up\s+to\b",
+    re.IGNORECASE,
+)
+# The senior asks whether the family can hear them. The answer about the
+# caregiver is rule 19's (she cannot hear; she only sees safety flags), in
+# whatever words the model picks, so it is not checked as news about her.
+_LISTENING_QUESTION_RE = re.compile(
+    r"\b(?:listen\w*|hear\w*|overhear\w*|watch\w*|read\w*|record\w*|monitor\w*|spy\w*|eavesdrop\w*)\b"
+    r"(?=[^.!]*\?|.*\b(?:us|me|i|my|this|our|conversations?|chats?)\b)",
     re.IGNORECASE,
 )
 _FAMILY_QUESTION_NOTE = (
@@ -1744,6 +1763,8 @@ def run_turn(
             speakable = [i.text for i in memory_store.all() if i.is_active(t_now)
                          and i.privacy != PrivacyLevel.CAREGIVER_ONLY.value]
             family = family_grounding(speakable, transcript, history, caregiver_name)
+            listening_question = bool(_LISTENING_QUESTION_RE.search(transcript or ""))
+            said_by_senior = [str(m.get("content", "")) for m in (history or []) if m.get("role") == "user"]
             asked = asked_relatives(transcript, family, caregiver_name) if family_question else []
             no_news_for: list[str] = []  # relatives the reply already said it has no news of
             replaced_for: list[str] = []  # ... because the guard said so in place of a dropped sentence
@@ -1784,7 +1805,8 @@ def run_turn(
                     follows_dropped = False
                     people = family_people_in(s, family, caregiver_name)
                     lift_offer = driving_guard and _REAL_ALTERNATIVE_RE.search(s)
-                    if (not readout and not is_safety and not lift_offer
+                    privacy_answer = listening_question and not people and not follows_relative
+                    if (not readout and not is_safety and not lift_offer and not privacy_answer
                             and invented_family_detail(s, family, follows_family, follows_relative)):
                         dropped_detail.append(s)
                         follows_family, follows_relative = family_thread(
@@ -1885,7 +1907,7 @@ def run_turn(
             answered = bool(kin_said & kin_asked) or any(
                 _THIRD_PERSON_RE.search(x) and not _mentions_caregiver(x, caregiver_name)
                 for x in _SENTENCE_SPLIT_RE.split(reply_text)) or bool(
-                relative_fact_stems(speakable, asked) & {_stem(w) for w in _detail_words(reply_text)})
+                relative_fact_stems(speakable + said_by_senior, asked) & {_stem(w) for w in _detail_words(reply_text)})
             missing = [] if answered else [n for n in asked if n.lower() not in reply_text.lower()]
             if missing and reply_text.strip() and not dropped_hotline and not driving_guard:
                 # Asked how a briefed relative is and the reply never named
