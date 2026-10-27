@@ -46,6 +46,16 @@ class FakeGH(u.GitHub):
         return True
 
 
+class OpenOutageTests(unittest.TestCase):
+    def test_paginated_comments_with_bracket_text(self):
+        issues = json.dumps([{"number": 5, "body": "", "createdAt": "2026-10-27T00:00:00Z"}])
+        page1 = json.dumps([{"created_at": "2026-10-27T01:00:00Z", "body": "[Space][demo]"}])
+        page2 = json.dumps([{"created_at": "2026-10-27T02:00:00Z", "body": u.MARKER + " x"}])
+        gh = u.GitHub("o/r")
+        gh._gh = lambda *a: issues if a[0] == "issue" else page1 + "\n" + page2
+        self.assertEqual(gh.open_outage()["last_comment"], "2026-10-27T02:00:00Z")
+
+
 class ProbeTests(unittest.TestCase):
     def test_up(self):
         self.assertTrue(u.probe(fake_get())["up"])

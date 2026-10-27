@@ -130,9 +130,13 @@ class GitHub:
         issue = items[0]
         raw = self._gh("api", f"repos/{self.repo}/issues/{issue['number']}/comments",
                        "--paginate")
-        # --paginate emits one JSON array per page; concatenate them.
-        comments = [c for page in re.split(r"(?<=\])(?=\[)", raw.strip() or "[]")
-                    for c in json.loads(page)]
+        # --paginate emits one JSON array per page, back to back; decode them in turn.
+        comments, dec, i, raw = [], json.JSONDecoder(), 0, raw.strip()
+        while i < len(raw):
+            page, i = dec.raw_decode(raw, i)
+            comments += page
+            while i < len(raw) and raw[i].isspace():
+                i += 1
         ours = [c["created_at"] for c in comments if MARKER in (c.get("body") or "")]
         issue["last_comment"] = max(ours) if ours else None
         return issue
