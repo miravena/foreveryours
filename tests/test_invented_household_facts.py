@@ -140,6 +140,12 @@ class TestUnbriefedRelative(unittest.TestCase):
         corpus = household_corpus(["His grandson is named Will"], "Hello", None, "Sarah")
         self.assertFalse(unbriefed_relative("Your grandson Will is named in the notes.", corpus))
 
+    def test_possessive_names_match(self):
+        corpus = _judge_corpus()
+        self.assertFalse(unbriefed_relative("Your grandson Leo's name is in my notes.", corpus))
+        self.assertFalse(unbriefed_relative("Your grandson Leo\u2019s stories are lovely.", corpus))
+        self.assertTrue(unbriefed_relative("Your granddaughter Maya's lunch is at noon.", corpus))
+
     def test_addressing_the_senior_is_not_naming_a_relative(self):
         self.assertFalse(unbriefed_relative("Your grandson, Dad, sounds lovely.", _judge_corpus()))
 

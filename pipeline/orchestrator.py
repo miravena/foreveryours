@@ -270,7 +270,9 @@ _QUESTION_START_RE = re.compile(
 
 
 def _name_key(name: str) -> str:
-    return name.lower().replace("\u2019", "'")
+    """Lowercased, curly apostrophe straightened, possessive dropped
+    ("Leo's" -> "leo"; "O'Brien" is kept whole)."""
+    return re.sub(r"'s\b", "", name.lower().replace("\u2019", "'"))
 
 
 # Lowercase words that never vouch for a name ("Sarah will bring groceries"
