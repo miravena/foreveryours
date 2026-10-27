@@ -515,13 +515,17 @@ class FamilyGrounding:
     stems: frozenset[str]  # stems of every grounded word
 
 
+_SENIOR_QUESTION_RE = re.compile(r"[^.!?]*\?")
+
+
 def family_grounding(memory_texts: list[str], transcript: str, history: list[dict] | None,
                      caregiver_name: str) -> FamilyGrounding:
     """Family names and grounded words from every active memory line and the
     senior's own words this session (the companion's turns never vouch for
     themselves). A name counts as family when it is the caregiver's or sits in
     a line with a relation word ("His grandson is named Leo"); Dr. Tan does
-    not."""
+    not. A question the senior asks names people but grounds no detail:
+    "Does Leo have cancer?" must not let "Leo has cancer." through."""
     senior = [transcript or ""] + [m.get("content", "") for m in (history or []) if m.get("role") == "user"]
     senior = [_ASKS_WHO_I_HAVE_RE.sub(" ", str(t)) for t in senior]
     caregiver = _name_key((caregiver_name or "").strip())
@@ -529,9 +533,8 @@ def family_grounding(memory_texts: list[str], transcript: str, history: list[dic
     relatives: dict[str, set[str]] = {}
     display = {caregiver: caregiver_name.strip()} if caregiver else {}
     stems = {_stem(w) for w in _PRODUCT_WORDS}
-    for line in list(memory_texts) + senior:
-        line = str(line)
-        words = _detail_words(line)
+    for line, asked in [(str(t), False) for t in memory_texts] + [(t, True) for t in senior]:
+        words = _detail_words(_SENIOR_QUESTION_RE.sub(" ", line) if asked else line)
         stems.update(_stem(w) for w in words)
         for w in words:
             stems.update(_stem(s) for s in DOMAIN_SYNONYMS.get(w, ()))

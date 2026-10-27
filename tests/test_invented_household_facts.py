@@ -392,6 +392,11 @@ class TestInventedFamilyDetail(unittest.TestCase):
                    {"role": "assistant", "content": "How lovely."}]
         self.assertEqual(self.reads(reply, "What's on today?", history), [])
 
+    def test_a_question_the_senior_asks_grounds_nothing(self):
+        self.assertEqual(self.reads("Leo has cancer.", "Does Leo have cancer?"), ["Leo has cancer."])
+        self.assertEqual(self.reads("Leo has a soccer game on Saturday.",
+                                    "Is that right? Leo has a soccer game on Saturday."), [])
+
     def test_the_companion_never_grounds_itself(self):
         reply = "Leo has a soccer game on Saturday."
         history = [{"role": "assistant", "content": reply}]
