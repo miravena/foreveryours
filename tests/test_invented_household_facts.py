@@ -670,6 +670,13 @@ class TestDetailGuardInRunTurn(_TurnBase):
         res, _ = self.turn("How is my grandson doing?", "Recovering from surgery, according to the notes.")
         self.assertNotIn("don't have any news", res.reply_text)
 
+    def test_a_question_without_a_question_mark_grounds_nothing(self):
+        for q in ("Does Leo have cancer", "does leo have cancer", "Leo is fine. Does he have cancer"):
+            g = orchestrator.family_grounding(["His grandson is named Leo"], q, None, "Sarah")
+            self.assertTrue(orchestrator.invented_family_detail("Leo has cancer.", g), q)
+        g = orchestrator.family_grounding(["His grandson is named Leo"], "Leo has a cold.", None, "Sarah")
+        self.assertFalse(orchestrator.invented_family_detail("Leo has a cold.", g))
+
     def test_is_sarah_okay_is_a_family_question(self):
         for q in ("Is Sarah okay?", "Is my grandson feeling better?", "Has Leo been well?"):
             self.assertTrue(orchestrator.asks_about_family(q), q)

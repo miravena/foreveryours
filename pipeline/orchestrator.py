@@ -595,6 +595,13 @@ class FamilyGrounding:
 
 
 _SENIOR_QUESTION_RE = re.compile(r"[^.!?]*\?")
+
+
+def _senior_statements(text: str) -> str:
+    """What the senior stated, without his questions; a typed question with
+    no "?" ("Does Leo have cancer") is a question too."""
+    text = _SENIOR_QUESTION_RE.sub(" ", text)
+    return " ".join(p for p in re.split(r"(?<=[.!])\s+|\n+", text) if not _QUESTION_START_RE.match(p))
 # Capitalised words that are not a person: days, months, titles.
 _NOT_PERSON_WORDS = set("""
 monday tuesday wednesday thursday friday saturday sunday january february march april may june july august
@@ -631,7 +638,7 @@ def family_grounding(memory_texts: list[str], transcript: str, history: list[dic
     display = {caregiver: caregiver_name.strip()} if caregiver else {}
     stems = {_stem(w) for w in _PRODUCT_WORDS}
     for line, asked in [(str(t), False) for t in memory_texts] + [(t, True) for t in senior]:
-        words = _detail_words(_SENIOR_QUESTION_RE.sub(" ", line) if asked else line)
+        words = _detail_words(_senior_statements(line) if asked else line)
         stems.update(_stem(w) for w in words)
         for w in words:
             stems.update(_stem(s) for s in DOMAIN_SYNONYMS.get(w, ()))
