@@ -1104,9 +1104,9 @@ class TestTurnConcurrency(_TurnHarness, unittest.TestCase):
     def test_turn_listeners_share_bounded_concurrency(self):
         demo = webapp.build_demo()
         # Every senior-turn producer has the same 8-output turn tuple:
-        # run_btn.click, text_in.submit and the four proactive buttons.
+        # run_btn.click, text_in.submit, the four proactive buttons and the two example chips (#239).
         turn_fns = [f for f in demo.fns.values() if len(f.outputs) == 8]
-        self.assertEqual(len(turn_fns), 6, [getattr(f.fn, "__name__", f.fn) for f in turn_fns])
+        self.assertEqual(len(turn_fns), 8, [getattr(f.fn, "__name__", f.fn) for f in turn_fns])
         for f in turn_fns:
             with self.subTest(fn=getattr(f.fn, "__name__", f.fn)):
                 self.assertIsInstance(f.concurrency_limit, int)
