@@ -451,6 +451,7 @@ def reply_states_none(pattern: str, why: str, about: str | None = None, other: s
     other_rx = _rx(other) if other else None
 
     def check(reply, _before, _after):
+        reply = reply.translate(_CURLY)  # "haven\u2019t" negates like "haven't"
         for sentence in _SENTENCE_END_RE.split(reply):
             if sentence.rstrip().rstrip("\"')").endswith("?"):
                 # Only the question proper is exempt: "Leo is doing well in

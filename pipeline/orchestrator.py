@@ -370,6 +370,15 @@ def _bound_to(sentence: str, m: re.Match, names: set[str]) -> bool:
     return any(x is not None and _name_key(x.group(1)) in names for x in (after, before))
 
 
+def stranger_names(sentence: str, corpus: tuple[set[str], set[str], str]) -> set[str]:
+    """Names `sentence` binds to a relation word that nothing known contains
+    ("your granddaughter Maya" -> {"maya"}), lowercased."""
+    names = corpus[0]
+    found = {_name_key(m.group(1)) for m in _KIN_THEN_NAME_RE.finditer(sentence)}
+    found |= {_name_key(m.group(1)) for m in _NAME_THEN_KIN_RE.finditer(sentence)} - _OPENER_WORDS - _NOT_NAME_WORDS
+    return found - names
+
+
 def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) -> bool:
     """True when `sentence` introduces a relative nobody briefed: "your
     granddaughter Maya" (a name bound to a relation word, and the name is in
@@ -382,13 +391,8 @@ def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) ->
     relative, even in a question. Not parsed: whose relation a memo states,
     so "your granddaughter Leo" for a briefed grandson Leo passes."""
     names, kin, _caregiver = corpus
-    for m in _KIN_THEN_NAME_RE.finditer(sentence):
-        if _name_key(m.group(1)) not in names:
-            return True
-    for m in _NAME_THEN_KIN_RE.finditer(sentence):  # "Well, your grandson ..." is no name
-        key = _name_key(m.group(1))
-        if key not in names and key not in _OPENER_WORDS and key not in _NOT_NAME_WORDS:
-            return True
+    if stranger_names(sentence, corpus):
+        return True
     if sentence.rstrip().rstrip("\"')\u201d\u2019").endswith("?") and _QUESTION_START_RE.match(sentence):
         return False
     for m in _YOUR_KIN_RE.finditer(sentence):
@@ -1322,14 +1326,18 @@ def run_turn(
             def filter_sentences(s_iter):
                 budget = hotline_budget
                 follows_dropped = False
+                strangers: set[str] = set()
                 for s in s_iter:
                     # Safety advice is never dropped for naming a relative. A
-                    # sentence right after a dropped one that opens with a
-                    # pronoun ("She is bringing soup.") is about the same
-                    # invented person, so it goes too.
+                    # later sentence about the same invented person goes too:
+                    # one that names them again ("Maya is bringing soup."), or
+                    # one right after the drop that opens with a pronoun
+                    # ("She is bringing soup.").
                     is_safety = _hotline_match(s) is not None or _OTHER_EMERGENCY_RE.search(s)
-                    if not is_safety and (unbriefed_relative(s, known_household)
+                    mentions_stranger = bool(strangers & {_name_key(n) for n in _NAME_RE.findall(s)})
+                    if not is_safety and (unbriefed_relative(s, known_household) or mentions_stranger
                                           or (follows_dropped and _PRONOUN_START_RE.match(s))):
+                        strangers |= stranger_names(s, known_household)
                         dropped_unbriefed.append(s)
                         follows_dropped = True
                         continue

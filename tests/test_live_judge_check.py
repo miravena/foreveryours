@@ -414,6 +414,7 @@ class TestAssertionProbes(unittest.TestCase):
                       "Sarah mentioned your grandson Leo. I don't have news about him. "
                       "Sarah is coming by with groceries at 4 PM.",
                       "I hope Leo is doing well. Sarah didn't say, so how has he been?",
+                      "Sarah mentioned your grandson Leo. I haven\u2019t heard any news about his school.",
                       "Is Leo still busy with school, or has he got a new hobby?"]:
             with self.subTest(reply=reply):
                 self.assertEqual(_reply_failures("T23", reply), [], reply)

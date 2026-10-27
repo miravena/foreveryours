@@ -249,6 +249,12 @@ class TestGuardInRunTurn(_TurnBase):
                            "Sarah is dropping off groceries at 4 PM.")
         self.assertEqual(res.reply_text, "Sarah is dropping off groceries at 4 PM.")
 
+    def test_a_dropped_stranger_named_again_goes_too(self):
+        res, _ = self.turn("Tell me some family news.",
+                           "Your granddaughter Maya is visiting today. Sarah is dropping off groceries at 4 PM. "
+                           "Maya is bringing soup for lunch.")
+        self.assertEqual(res.reply_text, "Sarah is dropping off groceries at 4 PM.")
+
     def test_briefed_relative_is_spoken(self):
         reply = "Sarah told me about your grandson Leo, but I don't have any news about how he's doing."
         res, _ = self.turn("How is my grandson doing?", reply)
