@@ -684,7 +684,8 @@ def _family_ref(text: str, g: FamilyGrounding) -> bool:
 
 
 _TAG_QUESTION_RE = re.compile(
-    r",\s*(?:isn't|aren't|wasn't|weren't|doesn't|don't|didn't|hasn't|haven't|won't|wouldn't|can't|right|no)\b[^,]*\?\W*$",
+    r",\s*(?:isn't|aren't|wasn't|weren't|doesn't|don't|didn't|hasn't|haven't|won't|wouldn't|can't|right|no|"
+    r"remember|okay|ok|yes|yeah|huh|eh|you\s+know|see|true|correct)\b[^,]*\?\W*$",
     re.IGNORECASE,
 )
 _QUESTION_BREAK_RE = re.compile(r"[,;:\u2014\u2013]|\u2026|\.\.\.")
@@ -719,7 +720,9 @@ def _question_cut(sentence: str) -> str:
         return ""
     segments = _QUESTION_BREAK_RE.split(sentence)
     opens = [i for i, seg in enumerate(segments) if _QUESTION_START_RE.match(seg)]
-    return " ".join(segments[:opens[0]]) if opens else ""
+    # No question word anywhere: the last piece is the asking ("Leo has
+    # cancer, you see?"), what comes before it is still a statement.
+    return " ".join(segments[:opens[0] if opens else -1])
 
 
 def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bool = False,

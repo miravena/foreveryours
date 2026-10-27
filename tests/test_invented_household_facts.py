@@ -618,6 +618,13 @@ class TestDetailGuardInRunTurn(_TurnBase):
                   "Sarah mentioned she has a new job."):
             self.assertTrue(orchestrator.invented_family_detail(s, g), s)
 
+    def test_a_statement_with_any_tag_is_still_checked(self):
+        g = orchestrator.family_grounding(["His grandson is named Leo"], "", None, "Sarah")
+        for s in ("Leo has a soccer game on Saturday, remember?", "Leo has cancer, okay?",
+                  "Leo has cancer, you see?", "Leo has a new puppy, as you know?"):
+            self.assertTrue(orchestrator.invented_family_detail(s, g), s)
+        self.assertFalse(orchestrator.invented_family_detail("Has Leo got a new puppy?", g))
+
     def test_what_follows_a_denial_is_still_checked(self):
         g = orchestrator.family_grounding(["His grandson is named Leo"], "", None, "Sarah")
         self.assertTrue(orchestrator.invented_family_detail("Sarah can't hear us and Leo has cancer.", g))
