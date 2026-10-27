@@ -34,6 +34,10 @@ aspirational. **If a rule isn't true of the code, fix the code or this file in t
   (`AGENTS.md`). There are no bare `except:` clauses anywhere; `except Exception` appears only at
   boundaries that must keep a demo alive (one turn, memory extraction), and those degrade to a
   *visible* fallback (`TurnResult.is_fallback`, `consecutive_errors`) instead of silence.
+- **When the host, not the app, fails, the page says so once.** If a Gradio API request gets an
+  HTML error page back (proxy throttling, a restart, a gateway error), the page shows one banner,
+  "The companion is busy, please try again in a moment.", and hides the per-request parse-error
+  toasts it explains, including when the reply audio fails to load (`webapp.BUSY_NOTICE_HEAD`, #246).
 
 ## API shapes
 
