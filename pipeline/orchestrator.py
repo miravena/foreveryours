@@ -839,6 +839,12 @@ _LISTENING_QUESTION_RE = re.compile(
 _DAY_QUESTION_RE = re.compile(
     r"\b(?:today|tonight|tomorrow|this\s+(?:morning|afternoon|evening|week)|schedule|plans?|happening|on\s+for)\b",
     re.IGNORECASE)
+# ... and only a sentence that explains it: "She only gets word if something
+# urgent comes up", not "She has cancer."
+_PRIVACY_EXPLAINED_RE = re.compile(
+    r"\b(?:hear|hears|listen\w*|watch\w*|read|reads|see|sees|private|privacy|between\s+us|safety|safe|unsafe|"
+    r"alert\w*|flag\w*|notif\w*|urgent|emergenc\w*|danger|risk|wellbeing|well-being|worried|concern\w*|"
+    r"contact\w*|word|message\w*|fall|hurt)\b")
 _FAMILY_QUESTION_NOTE = (
     "The senior is asking about the family. Say only what the profile facts and caregiver updates "
     "say about them, then say warmly that you have no other news and ask the senior. Add nothing else "
@@ -1837,7 +1843,8 @@ def run_turn(
                     follows_dropped = False
                     people = family_people_in(s, family, caregiver_name)
                     lift_offer = driving_guard and _REAL_ALTERNATIVE_RE.search(s)
-                    privacy_answer = listening_question and not people and not follows_relative
+                    privacy_answer = (listening_question and not people and not follows_relative
+                                      and bool(_PRIVACY_EXPLAINED_RE.search(_plain(s))))
                     if (not readout and not is_safety and not lift_offer and not privacy_answer
                             and invented_family_detail(s, family, follows_family, follows_relative)):
                         dropped_detail.append(s)

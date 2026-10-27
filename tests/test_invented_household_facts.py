@@ -611,6 +611,11 @@ class TestDetailGuardInRunTurn(_TurnBase):
         self.assertFalse(orchestrator.invented_family_detail(
             "I don't have any news about Leo, but I'd love to hear if you have.", g))
 
+    def test_news_about_the_caregiver_on_a_privacy_turn_is_still_checked(self):
+        res, _ = self.turn("Is Sarah listening to us?", "Sarah can't hear us. She has cancer.")
+        self.assertNotIn("cancer", res.reply_text)
+        self.assertIn("Sarah can't hear us.", res.reply_text)
+
     def test_a_relative_on_a_privacy_turn_is_still_checked(self):
         res, _ = self.turn("Is Sarah listening to us?",
                            "Sarah can't hear us. Leo has a soccer game on Saturday.")
