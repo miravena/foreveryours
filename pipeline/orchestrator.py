@@ -1344,9 +1344,12 @@ def run_turn(
                       file=sys.stderr)
             if dropped_unbriefed and not dropped_hotline and not reply_text.strip():
                 # Every sentence named someone nobody briefed: say so honestly
-                # instead of the "thoughts drifted" fallback.
+                # instead of the "thoughts drifted" fallback. A driving-plan
+                # turn still gets its lift-first line (#192), not family news.
+                empty_line = (enforce_driving_alternative("I'm here with you.", caregiver_name)
+                              if driving_guard else _UNBRIEFED_EMPTY_REPLY)
                 reply_text, empty_paths, empty_first = _speak_turn(
-                    iter([_UNBRIEFED_EMPTY_REPLY]), audio_out_dir, on_chunk=on_chunk
+                    iter([empty_line]), audio_out_dir, on_chunk=on_chunk
                 )
                 think_audio_paths.extend(empty_paths)
                 if first_audio_time is None:

@@ -399,7 +399,8 @@ class TestAssertionProbes(unittest.TestCase):
                       "Leo is doing well in school, isn't he?",
                       "Leo has soccer practice tomorrow, doesn't he?",
                       "Leo is fine.",
-                      "Your grandson Leo is healthy and happy."]:
+                      "Your grandson Leo is healthy and happy.",
+                      "Leo is your grandson. Soccer practice is on Saturday."]:
             with self.subTest(reply=reply):
                 self.assertTrue(_reply_failures("T23", reply), f"false PASS: {reply!r}")
         for reply in ["Sarah told me about your grandson Leo, but I don't have any news about how he's doing. "

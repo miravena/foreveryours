@@ -235,6 +235,14 @@ class TestGuardInRunTurn(_TurnBase):
         self.assertIn("911", res.reply_text)
 
 
+    def test_driving_plan_turn_keeps_its_lift_offer_when_all_was_dropped(self):
+        res, _ = self.turn("I think I'll drive down to the shop myself this afternoon.",
+                           "Your son can drive you instead.")
+        self.assertNotIn("son", res.reply_text.lower().split())
+        self.assertIn("lift", res.reply_text)
+        self.assertNotIn("family news", res.reply_text)
+
+
 class TestGrounding(_TurnBase):
     def test_schedule_question_about_the_grandson_hands_think_his_fact(self):
         _res, stream = self.turn("What's on for today? And how is my grandson doing?",
