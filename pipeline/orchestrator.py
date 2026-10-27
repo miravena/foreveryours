@@ -537,6 +537,10 @@ _REFERRAL_RE = re.compile(
 )
 _CONTRACTION_BITS = {"s", "t", "ll", "re", "ve", "d", "m"}
 _NO_NEWS_LINE = "I don't have any news about how {name} is doing, but I'd love to hear if you have."
+_REPORTED_TO_YOU_RE = re.compile(
+    r"^\W*(?:(?:yes|so|well|oh|and|also)\W+)*(?:according\s+to\s+)?(?:your\s+\w+\s+)?[A-Z][\w'-]*"
+    r"(?:\s+(?:also\s+)?(?:mentioned|noted|said|says|told\s+me|let\s+me\s+know|wrote|shared|reminded\s+me))?"
+    r"\W*(?:that\s+)?(?=(?:you|your)\b)", re.IGNORECASE)
 _AFTER_DENIAL_RE = re.compile(r"\b(?:and|but|so|while|though|although|because)\b\s+(\S.*)", re.IGNORECASE)
 _NO_NEWS_BUT_RE = re.compile(r"[,;\u2014-]?\s*\bbut\b\s+(\S.*)", re.IGNORECASE)
 
@@ -566,6 +570,7 @@ def _plain(text: str) -> str:
     """Lowercased, straight apostrophes, "n't" spelled out ("isn't" -> "is not")."""
     text = text.lower().replace("\u2019", "'").replace("won't", "will not").replace("can't", "can not")
     text = re.sub(r"\b([ap])\.m\b\.?", r"\1m", text)  # "10 a.m." is "10 am"
+    text = re.sub(r"\b(\d{1,2}):00\b", r"\1", text)  # "10:00" is "10"
     return re.sub(r"n't\b", " not", text)
 
 
@@ -580,6 +585,7 @@ class FamilyGrounding:
     relatives: dict  # canonical relation -> names written in the same line ("grandson" -> {"leo"})
     display: dict  # lowercased name -> as written ("leo" -> "Leo")
     stems: frozenset[str]  # stems of every grounded word
+    caregiver: frozenset[str] = frozenset()  # the caregiver's name, word by word
 
 
 _SENIOR_QUESTION_RE = re.compile(r"[^.!?]*\?")
@@ -655,7 +661,8 @@ def family_grounding(memory_texts: list[str], transcript: str, history: list[dic
         group_stems = {_stem(w) for w in group}
         if stems & group_stems:
             stems |= group_stems
-    return FamilyGrounding(frozenset(people), relatives, display, frozenset(stems))
+    return FamilyGrounding(frozenset(people), relatives, display, frozenset(stems),
+                           frozenset(_caregiver_parts(caregiver_name)))
 
 
 def _name_parts(g: FamilyGrounding) -> set[str]:
@@ -710,7 +717,7 @@ def _question_cut(sentence: str) -> str:
 
 
 def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bool = False,
-                           follows_relative: bool = False) -> bool:
+                           follows_relative: bool = False, privacy: bool = False) -> bool:
     """True when `sentence` states something about a family member that no
     memory line and nothing the senior said contains. `follows_family` and
     `follows_relative` say what the sentence before it was about (see
@@ -718,6 +725,15 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
     points back to them; after a relative, so does a sentence with no subject
     of its own ("Leo is your grandson. Soccer practice is on Saturday.")."""
     statement = _question_cut(sentence)
+    # The caregiver passing on the senior's own plans is the memo, not news
+    # about her: "Sarah mentioned you have an appointment with Dr. Tan" is
+    # checked as "you have an appointment ...", where only a family member it
+    # names is held to the notes ("... you and Leo are going fishing" is).
+    reported = _REPORTED_TO_YOU_RE.match(statement)
+    if reported and g.caregiver & {_name_key(n) for n in _NAME_RE.findall(reported.group(0))}:
+        statement = statement[reported.end():]
+        if not _family_ref(statement, g):
+            return False
     if not statement.strip():
         return False
     about = follows_family or _family_ref(statement, g)
@@ -726,7 +742,7 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
     # "..., like a fall" is still that answer, and so is what the family does
     # once the companion has told them: "I've let your family know, and Sarah
     # will be reaching out soon." Every other word is still checked.
-    alert = bool(_ALERT_PATH_RE.search(statement) or _COMPANION_ACT_RE.search(statement.replace("\u2019", "'")))
+    alert = privacy or bool(_ALERT_PATH_RE.search(statement) or _COMPANION_ACT_RE.search(statement.replace("\u2019", "'")))
     for clause in _DETAIL_CLAUSE_RE.split(statement):
         if not clause.strip():
             continue
@@ -765,7 +781,7 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
             if (w in STOPWORDS or w in _NOT_NAME_WORDS or w in _CHAT_WORDS or w in _CONTRACTION_BITS
                     or w in _ADDRESS_WORDS or w in name_parts or w in _KIN_FORMS
                     or _THIRD_PERSON_RE.fullmatch(w) or _FAMILY_WORD_RE.fullmatch(w)
-                    or (alert and w in _ALERT_WORDS)):
+                    or (alert and w in _ALERT_WORDS) or (privacy and w in _PRIVACY_WORDS)):
                 continue
             if _stem(w) not in g.stems:
                 return True
@@ -845,6 +861,11 @@ _PRIVACY_EXPLAINED_RE = re.compile(
     r"\b(?:hear|hears|listen\w*|watch\w*|read|reads|see|sees|private|privacy|between\s+us|safety|safe|unsafe|"
     r"alert\w*|flag\w*|notif\w*|urgent|emergenc\w*|danger|risk|wellbeing|well-being|worried|concern\w*|"
     r"contact\w*|word|message\w*|fall|hurt)\b")
+_PRIVACY_WORDS = set("""
+hear hears listen listens listening watch watching read reads see sees private privacy between us our conversation
+conversations chat chats talk talks say tell contact contacted contacting urgent wellbeing well being risk worried word
+important share anything everything stays stay always only unless except
+""".split())
 _FAMILY_QUESTION_NOTE = (
     "The senior is asking about the family. Say only what the profile facts and caregiver updates "
     "say about them, then say warmly that you have no other news and ask the senior. Add nothing else "
@@ -1845,8 +1866,9 @@ def run_turn(
                     lift_offer = driving_guard and _REAL_ALTERNATIVE_RE.search(s)
                     privacy_answer = (listening_question and not people and not follows_relative
                                       and bool(_PRIVACY_EXPLAINED_RE.search(_plain(s))))
-                    if (not readout and not is_safety and not lift_offer and not privacy_answer
-                            and invented_family_detail(s, family, follows_family, follows_relative)):
+                    if (not readout and not is_safety and not lift_offer
+                            and invented_family_detail(s, family, follows_family, follows_relative,
+                                                       privacy=privacy_answer)):
                         dropped_detail.append(s)
                         follows_family, follows_relative = family_thread(
                             s, family, caregiver_name, follows_family, follows_relative)

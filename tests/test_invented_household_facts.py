@@ -604,6 +604,19 @@ class TestDetailGuardInRunTurn(_TurnBase):
                   "I told Sarah, and she has a new job."):
             self.assertTrue(orchestrator.invented_family_detail(s, g), s)
 
+    def test_the_caregiver_passing_on_the_seniors_plans_is_kept(self):
+        mem = ["His grandson is named Leo", "Dad has a check-up with Dr. Tan on Thursday at 10 AM"]
+        g = orchestrator.family_grounding(mem, "Do I have any appointments this week?", None, "Sarah")
+        for s in ("Sarah mentioned you have an appointment with Dr.", "Sarah noted that you're scheduled to see Dr.",
+                  "According to Sarah, you have a doctor's appointment with Dr.",
+                  "Your daughter Sarah mentioned you've got a check-up with Dr Tan on Thursday at 10:00 a.m.",
+                  "Yes, Sarah let me know you have a check-up booked with Dr."):
+            self.assertFalse(orchestrator.invented_family_detail(s, g), s)
+        self.assertFalse(orchestrator.invented_family_detail("Tan is on Thursday at 10:00 a.m.", g, True, False))
+        for s in ("Sarah mentioned you and Leo are going fishing.", "Leo said you are his hero.",
+                  "Sarah mentioned she has a new job."):
+            self.assertTrue(orchestrator.invented_family_detail(s, g), s)
+
     def test_what_follows_a_denial_is_still_checked(self):
         g = orchestrator.family_grounding(["His grandson is named Leo"], "", None, "Sarah")
         self.assertTrue(orchestrator.invented_family_detail("Sarah can't hear us and Leo has cancer.", g))
@@ -612,6 +625,8 @@ class TestDetailGuardInRunTurn(_TurnBase):
             "I don't have any news about Leo, but I'd love to hear if you have.", g))
 
     def test_news_about_the_caregiver_on_a_privacy_turn_is_still_checked(self):
+        res, _ = self.turn("Is Sarah listening to us?", "Sarah has cancer but cannot hear our conversation.")
+        self.assertNotIn("cancer", res.reply_text)
         res, _ = self.turn("Is Sarah listening to us?", "Sarah can't hear us. She has cancer.")
         self.assertNotIn("cancer", res.reply_text)
         self.assertIn("Sarah can't hear us.", res.reply_text)
