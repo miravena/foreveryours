@@ -587,6 +587,13 @@ class TestDetailGuardInRunTurn(_TurnBase):
         res, _ = self.turn("Have you heard any news about my family?", "Sarah has cancer.")
         self.assertNotIn("cancer", res.reply_text)
 
+    def test_what_follows_a_denial_is_still_checked(self):
+        g = orchestrator.family_grounding(["His grandson is named Leo"], "", None, "Sarah")
+        self.assertTrue(orchestrator.invented_family_detail("Sarah can't hear us and Leo has cancer.", g))
+        self.assertFalse(orchestrator.invented_family_detail("Sarah can't hear us, and I'm always here.", g))
+        self.assertFalse(orchestrator.invented_family_detail(
+            "I don't have any news about Leo, but I'd love to hear if you have.", g))
+
     def test_a_relative_on_a_privacy_turn_is_still_checked(self):
         res, _ = self.turn("Is Sarah listening to us?",
                            "Sarah can't hear us. Leo has a soccer game on Saturday.")

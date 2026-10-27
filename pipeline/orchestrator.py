@@ -527,6 +527,7 @@ _REFERRAL_RE = re.compile(
 )
 _CONTRACTION_BITS = {"s", "t", "ll", "re", "ve", "d", "m"}
 _NO_NEWS_LINE = "I don't have any news about how {name} is doing, but I'd love to hear if you have."
+_AFTER_DENIAL_RE = re.compile(r"\b(?:and|but|so|while|though|although|because)\b\s+(\S.*)", re.IGNORECASE)
 _NO_NEWS_BUT_RE = re.compile(r"[,;\u2014-]?\s*\bbut\b\s+(\S.*)", re.IGNORECASE)
 
 
@@ -739,6 +740,11 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
             while at and clause[at - 1].isalpha():  # the whole word: "can't", not "n't"
                 at -= 1
             if _NO_NEWS_RE.search(clause, at) or _CANNOT_PERCEIVE_RE.search(_plain(clause[at:])):
+                # Only the denial itself is let through: "Sarah can't hear
+                # us and Leo has cancer" still checks "Leo has cancer".
+                rest = _AFTER_DENIAL_RE.search(clause, at)
+                if rest and invented_family_detail(rest.group(1), g, about, False):
+                    return True
                 clause = clause[:at]
         for w in _detail_words(clause):
             if (w in STOPWORDS or w in _NOT_NAME_WORDS or w in _CHAT_WORDS or w in _CONTRACTION_BITS
