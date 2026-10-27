@@ -745,7 +745,7 @@ def family_people_in(text: str, g: FamilyGrounding, caregiver_name: str) -> list
 # companion then gets that relative's briefed facts and a no-news instruction.
 _FAMILY_QUESTION_RE = re.compile(
     r"\bhow(?:'s|\s+is|\s+are|\s+has|\s+have)\s+(?:(?:my|our|the)\s+(?:\w+\s+)?(?:" + _KIN_ALT + r"|family)\b(?!')"
-    r"|everyone|everybody|(?-i:[A-Z][a-z]+)\s+(?:doing|getting|keeping|been)\b)"
+    r"|everyone|everybody|(?-i:[A-Z][a-z]+)(?:\s+(?:doing|getting|keeping|been)\b|\s*(?:[?!.,]|$)))"
     r"|\b(?:hear|news|heard|updates?)\b[^.?!]{0,40}\b(?:family|" + _KIN_ALT + r")\b"
     r"|\bwhat(?:'s|\s+is|\s+has)\s+(?:my\s+" + _KIN_ALT + r"|(?-i:[A-Z][a-z]+))\s+(?:been\s+)?up\s+to\b",
     re.IGNORECASE,

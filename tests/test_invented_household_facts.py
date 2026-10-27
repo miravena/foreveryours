@@ -432,6 +432,11 @@ class TestInventedFamilyDetail(unittest.TestCase):
         reply = "Sarah is dropping off groceries at 4 PM. They have booked a holiday in Spain."
         self.assertEqual(self.reads(reply), ["They have booked a holiday in Spain."])
 
+    def test_how_is_a_name_is_a_family_question(self):
+        for q in ("How is Leo?", "How\u2019s Leo?", "how's Leo"):
+            self.assertTrue(orchestrator.asks_about_family(q), q)
+        self.assertFalse(orchestrator.asks_about_family("How is Monday looking for the doctor?"))
+
     def test_a_caregiver_with_a_surname_is_family(self):
         g = orchestrator.family_grounding(["His grandson is named Leo"], "", None, "Sarah Jones")
         self.assertTrue(orchestrator.invented_family_detail("Sarah Jones has cancer.", g))
@@ -534,6 +539,10 @@ class TestDetailGuardInRunTurn(_TurnBase):
                            "Today's schedule is light. Sarah is dropping off groceries at 4 PM. "
                            "I don't have any news about Leo.")
         self.assertTrue(res.reply_text.startswith("Today's schedule is light."))
+
+    def test_how_is_leo_drops_an_invented_reply(self):
+        res, _ = self.turn("How is Leo?", "He's doing great at school and has a soccer game on Saturday.")
+        self.assertNotIn("soccer", res.reply_text)
 
     def test_a_pronoun_about_the_caregiver_does_not_answer_for_the_relative(self):
         res, _ = self.turn("How is my grandson doing?", "Sarah said she is dropping off groceries at 4 PM.")
