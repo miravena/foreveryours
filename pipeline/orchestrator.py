@@ -1685,7 +1685,9 @@ def run_turn(
                 budget = hotline_budget
                 follows_dropped = False
                 strangers: set[str] = set()
-                follows_family = follows_relative = False
+                # The question is the sentence before the reply: "How is my
+                # grandson?" -> "He's doing great at school" is about Leo.
+                follows_family, follows_relative = bool(family_question), bool(asked)
                 last_person = asked[0] if asked else None
                 for s in s_iter:
                     # Safety advice is never dropped for naming a relative. A
@@ -1788,7 +1790,8 @@ def run_turn(
             # "Your grandson is ..." answers "How is my grandson?" as well as
             # his name does.
             kin_said = {_KIN_FORMS[w] for w in _WORD_RE.findall(reply_text.lower()) if w in _KIN_FORMS}
-            missing = [] if kin_said & kin_asked else [n for n in asked if n.lower() not in reply_text.lower()]
+            answered = bool(kin_said & kin_asked) or bool(_THIRD_PERSON_RE.search(reply_text))  # "He's ..."
+            missing = [] if answered else [n for n in asked if n.lower() not in reply_text.lower()]
             if missing and reply_text.strip() and not dropped_hotline and not driving_guard:
                 # Asked how a briefed relative is and the reply never named
                 # them: answer the question honestly (T23).

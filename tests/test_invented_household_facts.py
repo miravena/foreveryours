@@ -487,6 +487,13 @@ class TestDetailGuardInRunTurn(_TurnBase):
         res, _ = self.turn("How is my grandson doing?", "Your grandson is recovering from surgery.")
         self.assertEqual(res.reply_text, "Your grandson is recovering from surgery.")
 
+    def test_a_pronoun_answer_is_about_the_asked_relative(self):
+        res, _ = self.turn("How is my grandson doing?", "He's doing great at school and has a soccer game on Saturday.")
+        self.assertEqual(res.reply_text, orchestrator._NO_NEWS_LINE.format(name="Leo"))
+        self.store.add("Leo is recovering from surgery", source="caregiver_memo", supersede=False)
+        res, _ = self.turn("How is my grandson doing?", "He's recovering from surgery.")
+        self.assertEqual(res.reply_text, "He's recovering from surgery.")
+
     def test_family_question_reaches_think_with_the_relative_and_the_note(self):
         _res, stream = self.turn("How is my grandson doing?",
                                  "Sarah mentioned your grandson Leo, but I don't have any news about how he's doing.")
