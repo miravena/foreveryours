@@ -206,6 +206,91 @@ def enforce_driving_alternative(reply: str, caregiver_name: str) -> str:
 
 _CRISIS_EMPTY_REPLY = "I'm here with you. How are you feeling right now?"
 
+# Invented relatives (#245). THINK rule 25 tells the model to state household
+# facts only from the briefed memory or this conversation, but the live model
+# still introduced people who do not exist ("your granddaughter Maya will bring
+# lunch"). An invented relative is the most harmful kind of invented fact for
+# someone with memory loss, and the one a deterministic check can see: a
+# relation word after "your" (or a name bound to one) that nothing the family
+# briefed and nothing the senior said contains. Narrow on purpose -- invented
+# school, sport or visit detail about a KNOWN person is left to rule 25,
+# because no keyword check can tell it from a briefed fact without also
+# cutting ordinary small talk.
+_GRANDCHILD = ("grandson", "granddaughter", "grandchild", "grandkid")
+_CHILD = ("son", "daughter", "child", "kid")
+# Canonical relation -> the canonical relations that vouch for it.
+_KIN_ACCEPTS = {
+    "son": ("son",), "daughter": ("daughter",),
+    "grandson": ("grandson",), "granddaughter": ("granddaughter",),
+    "grandchild": _GRANDCHILD, "grandkid": _GRANDCHILD, "child": _CHILD, "kid": _CHILD,
+    "wife": ("wife",), "husband": ("husband",), "brother": ("brother",), "sister": ("sister",),
+    "nephew": ("nephew",), "niece": ("niece",), "cousin": ("cousin",), "aunt": ("aunt",),
+    "uncle": ("uncle",), "mother": ("mother",), "father": ("father",),
+    "son-in-law": ("son-in-law",), "daughter-in-law": ("daughter-in-law",),
+}
+# Every spoken form -> its canonical relation.
+_KIN_FORMS = {
+    **{k: k for k in _KIN_ACCEPTS},
+    "sons": "son", "daughters": "daughter", "grandsons": "grandson", "granddaughters": "granddaughter",
+    "grandchildren": "grandchild", "grandkids": "grandkid", "children": "child", "kids": "kid",
+    "wives": "wife", "husbands": "husband", "brothers": "brother", "sisters": "sister",
+    "nephews": "nephew", "nieces": "niece", "cousins": "cousin", "aunts": "aunt", "uncles": "uncle",
+    "mum": "mother", "mom": "mother", "sons-in-law": "son-in-law", "daughters-in-law": "daughter-in-law",
+}
+_KIN_ALT = "|".join(sorted((re.escape(f) for f in _KIN_FORMS), key=len, reverse=True))
+_KIN_ADJ = r"(?:(?:late|dear|little|eldest|oldest|youngest|younger|older|lovely|sweet)\s+)?"
+_YOUR_KIN_RE = re.compile(r"\byour\s+" + _KIN_ADJ + r"(" + _KIN_ALT + r")\b(?!-)", re.IGNORECASE)
+# The name half is case-sensitive: a name is capitalised mid-sentence.
+_KIN_THEN_NAME_RE = re.compile(
+    r"\b(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r"),?\s+([A-Z][a-z]+)\b"
+)
+_NAME_THEN_KIN_RE = re.compile(r"\b([A-Z][a-z]+),\s+(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r")\b")
+_WORD_RE = re.compile(r"[a-z]+(?:-[a-z]+)*")
+
+
+def household_corpus(memory_texts: list[str], transcript: str, history: list[dict] | None,
+                     caregiver_name: str) -> tuple[set[str], set[str]]:
+    """(known words, known canonical relations) for unbriefed_relative():
+    every active memory line, the senior's own words this session (his turns
+    in `history` plus this transcript; the companion's turns never vouch for
+    themselves) and the caregiver's name. The caregiver calls the senior
+    "Dad" (rule 11), so a son or daughter is known whenever a caregiver is."""
+    texts = list(memory_texts) + [transcript or ""] + [
+        m.get("content", "") for m in (history or []) if m.get("role") == "user"
+    ]
+    if caregiver_name and caregiver_name.strip():
+        texts.append(caregiver_name)
+    words: set[str] = set()
+    for t in texts:
+        words.update(_WORD_RE.findall(str(t).lower()))
+    kin = {_KIN_FORMS[w] for w in words if w in _KIN_FORMS}
+    if caregiver_name and caregiver_name.strip():
+        kin.update(_CHILD)
+    return words, kin
+
+
+def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str]]) -> bool:
+    """True when `sentence` introduces a relative nobody briefed: "your
+    granddaughter Maya" (a name bound to a relation word, and the name is in
+    nothing known), or "your granddaughter will bring lunch" (a relation the
+    briefing and the senior never mention). A question may ask about an
+    unknown relation ("Do you have a granddaughter?") but never name a
+    stranger as one."""
+    words, kin = corpus
+    for rx in (_KIN_THEN_NAME_RE, _NAME_THEN_KIN_RE):
+        for m in rx.finditer(sentence):
+            if m.group(1).lower() not in words:
+                return True
+    if sentence.rstrip().rstrip("\"')”’").endswith("?"):
+        return False
+    for m in _YOUR_KIN_RE.finditer(sentence):
+        if not any(k in kin for k in _KIN_ACCEPTS[_KIN_FORMS[m.group(1).lower()]]):
+            return True
+    return False
+
+
+_UNBRIEFED_EMPTY_REPLY = "I don't have that noted down. Would you tell me a little about it?"
+
 # An apology in THINK's continuation of a fast-path crisis turn: the canned
 # fast-path line already apologised, so a second "sorry" is removed before it
 # is spoken (output-side check; the prompt rule alone was ignored). It fails
@@ -1009,9 +1094,12 @@ def run_turn(
         filtered_schedule = []
         filtered_profile = profile_facts[:1]  # At most 1 gentle anchor
     elif intent == Intent.LOGISTICAL:
-        # Prioritize caregiver schedule updates; suppress unrelated profile facts/hobbies
+        # Prioritize caregiver schedule updates; suppress unrelated profile facts/hobbies.
+        # A fact the question itself names stays (#245): "What's on today? And how
+        # is my grandson doing?" must reach THINK with the grandson's briefed
+        # facts, or the model is left to guess who he is and what he does.
         filtered_schedule = caregiver_updates
-        filtered_profile = []
+        filtered_profile = _find_matching_facts(transcript, profile_facts)[:2]
     elif intent == Intent.MEMORY_REQUEST:
         # Explicit user request for memories: permit multiple
         filtered_schedule = []
@@ -1095,6 +1183,15 @@ def run_turn(
             )
         
             dropped_hotline = []
+            dropped_unbriefed = []
+            # #245: what the family briefed (any active memory line, any
+            # privacy: a name the caregiver wrote is not invented) and what the
+            # senior said this session; a sentence naming a relative outside it
+            # is dropped before it is spoken.
+            known_household = household_corpus(
+                [i.text for i in memory_store.all() if i.is_active(t_now)],
+                transcript, history, caregiver_name,
+            )
             # Fast-path crisis turn: the canned line already apologised, so
             # THINK's continuation never apologises again (it is shown as
             # text even when its audio failed); only the apology clause is
@@ -1106,6 +1203,11 @@ def run_turn(
             def filter_sentences(s_iter):
                 budget = hotline_budget
                 for s in s_iter:
+                    # Safety advice is never dropped for naming a relative.
+                    if (unbriefed_relative(s, known_household) and _hotline_match(s) is None
+                            and not _OTHER_EMERGENCY_RE.search(s)):
+                        dropped_unbriefed.append(s)
+                        continue
                     if drop_apology and _APOLOGY_RE.search(s):
                         stripped = _strip_apology(s)
                         if not stripped:
@@ -1151,6 +1253,18 @@ def run_turn(
                 reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir, on_chunk=think_tracker)
             if first_audio_time is None:
                 first_audio_time = think_first_audio_time
+            if dropped_unbriefed:
+                print(f"[orchestrator] dropped {len(dropped_unbriefed)} sentence(s) naming an unbriefed relative (#245)",
+                      file=sys.stderr)
+            if dropped_unbriefed and not dropped_hotline and not reply_text.strip():
+                # Every sentence named someone nobody briefed: say so honestly
+                # instead of the "thoughts drifted" fallback.
+                reply_text, empty_paths, empty_first = _speak_turn(
+                    iter([_UNBRIEFED_EMPTY_REPLY]), audio_out_dir, on_chunk=on_chunk
+                )
+                think_audio_paths.extend(empty_paths)
+                if first_audio_time is None:
+                    first_audio_time = empty_first
             if dropped_hotline and not reply_text.strip():
                 # THINK said only the repeated line: speak a crisis-aware one
                 # instead of the generic "thoughts drifted" fallback.

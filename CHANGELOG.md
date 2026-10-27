@@ -22,6 +22,12 @@ rename `Unreleased` to the version and date, then tag it.
   "household was reset" note only after a real expiry, not on the first turn of a fresh page (#215).
 
 ### Fixed
+- The companion no longer makes up family news. A new reply rule says facts about family and the
+  household (how someone is doing, school, sport, visits, meals, lifts) come only from what the family
+  briefed or what Dad said in this conversation, and otherwise it says it has no news and asks. A
+  sentence that introduces a relative nobody briefed ("your granddaughter Maya") is dropped before it
+  is spoken, and a schedule question that also asks about a relative now reaches the model with that
+  relative's briefed facts. The live judge check gains T23, "How is my grandson doing?" (#245).
 - "I'm on the floor and can't reach the phone" (and "I fell and can't get to the phone", "I've been
   on the floor for hours", a fall plus "can't get up") now hits the safety rules before the model:
   the reply says to press the medical alert or call 911 and that the family is being told, the

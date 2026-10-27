@@ -9,6 +9,33 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-27 (#245: no invented household facts)
+
+- **What:** THINK rule 25 (household facts only from the briefing or this conversation, with a
+  right/wrong example), rule 11 no longer names a son "John" that no household has, the LOGISTICAL
+  guidance no longer says "family updates", a schedule question that names a relative now reaches
+  THINK with that relative's briefed facts (it used to get none), and an output guard drops a
+  sentence that introduces a relative nobody briefed. Live judge check gains T23.
+- **Guard choice:** a general "unknown capitalised name" check was rejected: it would cut ordinary
+  small talk (Ella Fitzgerald, Miles Davis, place names). The guard only looks at a relation word
+  after "your", or a name bound to one, so its false positives need the model to claim a relative
+  absent from every memo and from everything Dad said. Invented detail about a briefed person
+  ("Leo is doing well in school") is left to rule 25.
+- **Before/after, local pipeline** (`orchestrator.run_turn`, pre-brief + sample household seeded,
+  TTS, AUDIT and extraction stubbed so THINK is the only live call; 3 fresh sessions per prompt):
+  - "What's happening today? I'd love to hear about the family." before 0/3 replies with an
+    invented fact; after 1/3 ("he's looking forward to visiting you").
+  - "What's on for today? And how is my grandson doing?" before 2/3 ("Leo is looking forward to
+    visiting you"; "Leo is doing well and looking forward to seeing you"); after 0/3 clear
+    inventions, two hedged ("I'm sure he'll enjoy catching up soon"; "next Saturday" for
+    "Saturday"). After the fix every reply carried Leo's briefed fact and two said they had no news.
+  - Rule 25 then gained "or feeling, what they look forward to"; with the final prompt,
+    on the judge-check pre-brief alone: "How is my grandson doing?" -> "Sarah mentioned your
+    grandson Leo, but I don't have any news about how he's doing. Have you heard from him lately?"
+    (passes T23); the family prompt -> the groceries line only. Live THINK calls used: 14.
+- **Not reproduced locally:** school, soccer, "Maya" and soup did not appear in these 12 runs, so
+  the counts are small-sample and the guard's live effect is shown by its tests, not by a run.
+
 ### 2026-10-26 (#5: demo video v2, VIDEO_SCRIPT appointment line check)
 
 - **What:** Rebuilt the demo video from live-Space captures with an AI narrator (Kokoro af_heart)

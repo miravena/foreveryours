@@ -46,7 +46,9 @@ Written down on purpose: a judge or a family should know where this stops.
   not proof of coverage.
 - Some crisis paraphrases come back SAFE from the backstop; the rules catch the direct phrases.
 - Replies the rules do not cover are written by the model. It is told to use only what the family
-  briefed, but it can still add a detail that was never there.
+  briefed or what Dad said, and a sentence that names a relative nobody briefed is dropped before it
+  is spoken. It can still add a small detail about someone the family did mention (that Leo is
+  "looking forward" to a visit, say): no rule can tell that from a briefed fact.
 - On the hosted demo the alert stays on the caregiver's half of the screen. Nothing reaches a phone.
 - A flag is marked "Dad was told" once the spoken line is synthesised, not once it is heard; a
   browser that blocks autoplay still shows it as told.
