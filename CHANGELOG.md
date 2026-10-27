@@ -22,6 +22,7 @@ rename `Unreleased` to the version and date, then tag it.
   "household was reset" note only after a real expiry, not on the first turn of a fresh page (#215).
 
 ### Fixed
+- Clicking the "Try this first" chip or a sample-clip chip now runs the turn like Send, instead of only filling the input (#239).
 - "I'm on the floor and can't reach the phone" (and "I fell and can't get to the phone", "I've been
   on the floor for hours", a fall plus "can't get up") now hits the safety rules before the model:
   the reply says to press the medical alert or call 911 and that the family is being told, the
