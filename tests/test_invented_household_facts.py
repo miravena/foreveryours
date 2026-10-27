@@ -683,6 +683,13 @@ class TestDetailGuardInRunTurn(_TurnBase):
         self.assertFalse(orchestrator.invented_family_detail("You asked about Leo needing chemotherapy.", g))
         self.assertTrue(orchestrator.invented_family_detail("Leo needs chemotherapy.", g))
 
+    def test_recalling_a_question_about_an_unbriefed_relative_is_kept(self):
+        history = [{"role": "user", "content": "Do I have a granddaughter named Maya?"},
+                   {"role": "assistant", "content": "I don't have a granddaughter in my notes."}]
+        reply = "You asked whether your granddaughter is named Maya."
+        res, _ = self.turn("What did I just ask you?", reply, history=history)
+        self.assertEqual(res.reply_text, reply)
+
     def test_a_question_without_a_question_mark_grounds_nothing(self):
         for q in ("Does Leo have cancer", "does leo have cancer", "Leo is fine. Does he have cancer"):
             g = orchestrator.family_grounding(["His grandson is named Leo"], q, None, "Sarah")

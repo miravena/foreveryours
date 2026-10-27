@@ -1872,8 +1872,9 @@ def run_turn(
                     detail_safety = (fast.triggered or _hotline_match(s) is not None
                                      or _EMERGENCY_ADVICE_RE.search(s))
                     mentions_stranger = bool(strangers & {_name_key(n) for n in _NAME_RE.findall(s)})
-                    if not is_safety and (unbriefed_relative(s, known_household) or mentions_stranger
-                                          or (follows_dropped and _PRONOUN_START_RE.match(s))):
+                    recalled = bool(_RECALLED_QUESTION_RE.search(s.replace("\u2019", "'")))  # rule 24
+                    if not is_safety and not recalled and (unbriefed_relative(s, known_household) or mentions_stranger
+                                                           or (follows_dropped and _PRONOUN_START_RE.match(s))):
                         strangers |= stranger_names(s, known_household)
                         dropped_unbriefed.append(s)
                         follows_dropped = True

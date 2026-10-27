@@ -34,7 +34,9 @@ rename `Unreleased` to the version and date, then tag it.
   is spoken, and a schedule question that also asks about a relative now reaches the model with that
   relative's briefed facts. A statement about a family member the family did brief ("Leo is doing
   great at school") is spoken only when a memo or Dad's own words contain what it says; otherwise
-  the companion says it has no news about them and would love to hear. A question about the family
+  the companion says it has no news about them and would love to hear. Sentences about the caregiver
+  herself are held to the notes only when Dad asks about the family or the day, so her privacy and
+  fall-alert answers are never cut. A question about the family
   now reaches the model with the relative's briefed facts and a no-news instruction. The live judge
   check gains T23, "How is my grandson doing?" (#245).
 - A memo about a named future day ("Dr. Tan on Thursday at 10 AM", "tomorrow", "on the 30th") now

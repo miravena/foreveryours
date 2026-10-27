@@ -77,6 +77,11 @@ Format: newest first. One entry per session: date, who, what, result, next.
     you have ...") is read as the memo, and a relative is checked on every turn. Trade-off: an
     invented fact about the caregiver on some other turn ("Sarah has cancer but can't hear us") is
     left to rule 25.
+  - **Final measurement** (same harness, final code): family prompt 0/10, grandson prompt 0/10,
+    "How is my grandson doing?" 0/10 invented, 10/10 naming Leo with no news (30 replies read by
+    eye). Live judge check 23/23 in the last 10 runs. Misses in earlier runs where the guard dropped
+    nothing were the model leaving out "only safety flags" (T05/T06) and the check reading the
+    4 PM groceries in a correct T11 reply as a second appointment time, not the guard.
   - **Limit:** it compares words, not meaning. A true paraphrase in new words is dropped (costs
     warmth, not truth), and an invention made only of grounded words passes.
 
