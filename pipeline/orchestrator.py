@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import notify  # noqa: E402
 from caregiver import CaregiverFlags  # noqa: E402
-from memory.store import STOPWORDS, MemoryStore  # noqa: E402
+from memory.store import DOMAIN_SYNONYMS, STOPWORDS, MemoryStore  # noqa: E402
 from safety import fastpath  # noqa: E402
 
 from . import audit, speak, think  # noqa: E402
@@ -422,6 +422,242 @@ def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) ->
 
 _PRONOUN_START_RE = re.compile(r"^\W*(?:she|he|they|her|his|their|them|him)\b", re.IGNORECASE)
 _UNBRIEFED_EMPTY_REPLY = "I don't have any family news noted down. Have you heard from anyone lately?"
+
+
+# Invented detail about a briefed person (#245). unbriefed_relative() above
+# catches a relative nobody briefed; the live model also gave a briefed one a
+# life the notes never mention ("Leo is doing great at school and has a soccer
+# game on Saturday", "She'll also bring your favorite jazz record"). A
+# statement about a family member is spoken only when every content word in
+# it is grounded: written in an active memory line or said by the senior this
+# session (stemmed, with a few synonym groups so "Sarah is stopping by" still
+# grounds "dropping off"). Conversational words ("mentioned", "news", "lovely")
+# never need grounding. Not checked: questions ("Does he play any sport?"),
+# a clause saying there is no news ("I don't have any news about his
+# school"), a hope or a wonder ("I hope he's doing well"), clauses about the
+# senior or the companion ("you", "I"), and anyone outside the family (Dr.
+# Tan, Ella Fitzgerald). Biased to dropping: a dropped true sentence costs a
+# little warmth, an invented one tells a man with memory loss news that is
+# not true.
+_FAMILY_WORD_RE = re.compile(r"\b(?:family|families|folks)\b", re.IGNORECASE)
+# "They" and "them" are left out: they refer to things as often as to people
+# ("enjoy them when no one's looking").
+_THIRD_PERSON_RE = re.compile(r"\b(?:he|she|him|her|his|hers)\b", re.IGNORECASE)
+# A clause with its own subject is not a continuation of the family clause
+# before it: "Sarah mentioned you love jazz, so maybe you'll enjoy some music".
+_OWN_SUBJECT_RE = re.compile(r"\b(?:you|your|i|we|it|that|this|there)\b", re.IGNORECASE)
+_HEDGE_RE = re.compile(r"\b(?:hope|hoping|wonder|wondering|whether|if|wish)\b", re.IGNORECASE)
+_DETAIL_CLAUSE_RE = re.compile(r"[,;:\u2014\u2013]|\s-\s|\b(?:but|though|although)\b", re.IGNORECASE)
+# The companion reporting what it did or will do ("I let Sarah know", "I won't
+# tell Sarah"): disclosure, not family news (rules 19 and 20).
+_COMPANION_ACT_RE = re.compile(
+    r"\bi(?:'m|'ve|'ll|\s+am|\s+have|\s+will|\s+won't|\s+will\s+not|\s+can't|\s+cannot)?(?:\s+\w+){0,2}?\s+"
+    r"(?:let|letting|told|tell|telling|informed|alerted|alerting|notified|notifying|sent|sending|flagged|"
+    r"say|saying|share|sharing|mention|mentioning|keep|keeping)\b",
+    re.IGNORECASE,
+)
+# Words that carry no household fact.
+_CHAT_WORDS = set("""
+mention mentioned mentions said say says told tell telling note noted notes know knew known news update updates
+heard hear hearing lately recently earlier before today now later soon family lovely wonderful sure really just
+also still always think thought remember remembers wanted want wants asked ask asks share shared sharing chat
+chatting talk talking talked sound sounds like love loved would glad nice special thing things something anything
+everything nothing else more much help helping helps let lets way right definitely certainly course thanks thank
+kind sweet dear warm thoughtful get got make sure such lot time main only plan plans planned planning member members
+instead
+""".split())
+# What the product itself does, which THINK states from rule 19 ("She only sees
+# safety flags"), never from a memo.
+_PRODUCT_WORDS = set("""
+safety flag flags alert alerts sees see conversation conversations listen listening hear read transcript private
+secret between us check checks wellbeing lift lifts ride rides give arrange
+""".split())
+# A grounded word grounds its group: one visit is "dropping off", "stopping by"
+# or "coming over"; "4 PM" is this afternoon.
+_DETAIL_GROUPS = (
+    set("visit visiting visits come coming comes came drop dropping dropped stop stopping pop popping swing "
+        "swinging bring bringing brings brought deliver delivering over by round".split()),
+    {"pm", "afternoon", "evening"},
+    {"am", "morning"},
+)
+_CONTRACTION_BITS = {"s", "t", "ll", "re", "ve", "d", "m"}
+_NO_NEWS_LINE = "I don't have any news about how {name} is doing, but I'd love to hear if you have."
+
+
+def _stem(word: str) -> str:
+    """Crude suffix strip, the same on both sides of a comparison:
+    "dropping" ~ "drop-off", "groceries" ~ "grocery", "loves" ~ "love"."""
+    for suffix in ("ies", "ing", "ed", "es", "s", "y", "e"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            word = word[:-len(suffix)]
+            break
+    if len(word) > 3 and word[-1] == word[-2] and word[-1] not in "aeiou":
+        word = word[:-1]
+    return word
+
+
+def _plain(text: str) -> str:
+    """Lowercased, straight apostrophes, "n't" spelled out ("isn't" -> "is not")."""
+    text = text.lower().replace("\u2019", "'").replace("won't", "will not").replace("can't", "can not")
+    return re.sub(r"n't\b", " not", text)
+
+
+def _detail_words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", _plain(text))
+
+
+@dataclass(frozen=True)
+class FamilyGrounding:
+    """What a statement about the family may draw on (see family_grounding)."""
+    people: frozenset[str]  # lowercased family names: the caregiver, names in a line with a relation word
+    relatives: dict  # canonical relation -> names written in the same line ("grandson" -> {"leo"})
+    display: dict  # lowercased name -> as written ("leo" -> "Leo")
+    stems: frozenset[str]  # stems of every grounded word
+
+
+def family_grounding(memory_texts: list[str], transcript: str, history: list[dict] | None,
+                     caregiver_name: str) -> FamilyGrounding:
+    """Family names and grounded words from every active memory line and the
+    senior's own words this session (the companion's turns never vouch for
+    themselves). A name counts as family when it is the caregiver's or sits in
+    a line with a relation word ("His grandson is named Leo"); Dr. Tan does
+    not."""
+    senior = [transcript or ""] + [m.get("content", "") for m in (history or []) if m.get("role") == "user"]
+    senior = [_ASKS_WHO_I_HAVE_RE.sub(" ", str(t)) for t in senior]
+    caregiver = _name_key((caregiver_name or "").strip())
+    people: set[str] = {caregiver} if caregiver else set()
+    relatives: dict[str, set[str]] = {}
+    display = {caregiver: caregiver_name.strip()} if caregiver else {}
+    stems = {_stem(w) for w in _PRODUCT_WORDS}
+    for line in list(memory_texts) + senior:
+        line = str(line)
+        words = _detail_words(line)
+        stems.update(_stem(w) for w in words)
+        for w in words:
+            stems.update(_stem(s) for s in DOMAIN_SYNONYMS.get(w, ()))
+        kin = {_KIN_FORMS[w] for w in _WORD_RE.findall(line.lower()) if w in _KIN_FORMS}
+        if not kin:
+            continue
+        written = {_name_key(n): re.sub(r"['\u2019]s$", "", n) for n in _NAME_RE.findall(line)}
+        names = set(written) - (_NOT_NAME_WORDS | _OPENER_WORDS | _ADDRESS_WORDS | set(_KIN_FORMS))
+        display.update({n: written[n] for n in names if n not in display})
+        people |= names
+        for k in kin:
+            relatives.setdefault(k, set()).update(names)
+    for group in _DETAIL_GROUPS:
+        group_stems = {_stem(w) for w in group}
+        if stems & group_stems:
+            stems |= group_stems
+    return FamilyGrounding(frozenset(people), relatives, display, frozenset(stems))
+
+
+def _family_ref(text: str, g: FamilyGrounding) -> bool:
+    words = set(_detail_words(text))
+    return bool(words & g.people or words & set(_KIN_FORMS) or _FAMILY_WORD_RE.search(text))
+
+
+_TAG_QUESTION_RE = re.compile(
+    r",\s*(?:isn't|aren't|wasn't|weren't|doesn't|don't|didn't|hasn't|haven't|won't|wouldn't|can't|right|no)\b[^,]*\?\W*$",
+    re.IGNORECASE,
+)
+_QUESTION_BREAK_RE = re.compile(r"[,;:\u2014\u2013]|\u2026|\.\.\.")
+
+
+def _question_cut(sentence: str) -> str:
+    """The part of `sentence` that states something: "" for a question, the
+    statement before a tag ("Leo is doing well, isn't he?") or before the
+    question proper ("Leo is doing well in school, did you know?")."""
+    if not sentence.rstrip().rstrip("\"')\u201d\u2019").endswith("?"):
+        return sentence
+    tag = _TAG_QUESTION_RE.search(sentence)
+    if tag:
+        return sentence[:tag.start()]
+    if _QUESTION_START_RE.match(sentence):
+        return ""
+    segments = _QUESTION_BREAK_RE.split(sentence)
+    opens = [i for i, seg in enumerate(segments) if _QUESTION_START_RE.match(seg)]
+    return " ".join(segments[:opens[0]]) if opens else ""
+
+
+def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bool = False) -> bool:
+    """True when `sentence` states something about a family member that no
+    memory line and nothing the senior said contains. `follows_family` is
+    whether the sentence before it was about the family, so a pronoun ("She'll
+    also bring ...") refers back to them."""
+    if _COMPANION_ACT_RE.search(sentence.replace("\u2019", "'")):
+        return False
+    statement = _question_cut(sentence)
+    if not statement.strip():
+        return False
+    about = follows_family or _family_ref(statement, g)
+    previous = False
+    for clause in _DETAIL_CLAUSE_RE.split(statement):
+        if not clause.strip():
+            continue
+        if _family_ref(clause, g):
+            is_family = True
+        elif _THIRD_PERSON_RE.search(clause):
+            is_family = about
+        else:
+            is_family = previous and not _OWN_SUBJECT_RE.search(clause)
+        previous = is_family
+        if not is_family or _HEDGE_RE.search(clause):
+            continue
+        if _KIN_NEGATION_RE.search(clause) and _NO_NEWS_RE.search(clause):
+            continue
+        for w in _detail_words(clause):
+            if (w in STOPWORDS or w in _NOT_NAME_WORDS or w in _CHAT_WORDS or w in _CONTRACTION_BITS
+                    or w in _ADDRESS_WORDS or w in g.people or w in _KIN_FORMS
+                    or _THIRD_PERSON_RE.fullmatch(w) or _FAMILY_WORD_RE.fullmatch(w)):
+                continue
+            if _stem(w) not in g.stems:
+                return True
+    return False
+
+
+def family_people_in(text: str, g: FamilyGrounding, caregiver_name: str) -> list[str]:
+    """Family names in `text` other than the caregiver's, in order, as written
+    in it ("Leo")."""
+    caregiver = _name_key(caregiver_name or "")
+    out = []
+    for n in _NAME_RE.findall(text):
+        key = _name_key(n)
+        if key in g.people and key != caregiver and n not in out:
+            out.append(re.sub(r"['\u2019]s$", "", n))
+    return out
+
+
+# The senior asks how someone in the family is, or for family news. The
+# companion then gets that relative's briefed facts and a no-news instruction.
+_FAMILY_QUESTION_RE = re.compile(
+    r"\bhow(?:'s|\s+is|\s+are|\s+has|\s+have)\s+(?:(?:my|our|the)\s+(?:\w+\s+)?(?:" + _KIN_ALT + r"|family)\b(?!')"
+    r"|everyone|everybody|(?-i:[A-Z][a-z]+)\s+(?:doing|getting|keeping|been)\b)"
+    r"|\b(?:hear|news|heard|updates?)\b[^.?!]{0,40}\b(?:family|" + _KIN_ALT + r")\b"
+    r"|\bwhat(?:'s|\s+is|\s+has)\s+(?:my\s+" + _KIN_ALT + r"|(?-i:[A-Z][a-z]+))\s+(?:been\s+)?up\s+to\b",
+    re.IGNORECASE,
+)
+_FAMILY_QUESTION_NOTE = (
+    "The senior is asking about the family. Say only what the profile facts and caregiver updates "
+    "say about them, then say warmly that you have no other news and ask the senior. Add nothing else "
+    "about any family member: no activity, plan, feeling or event the notes do not state (rule 25)."
+)
+
+
+def asks_about_family(transcript: str) -> bool:
+    return bool(_FAMILY_QUESTION_RE.search((transcript or "").replace("\u2019", "'")))
+
+
+def asked_relatives(transcript: str, g: FamilyGrounding, caregiver_name: str) -> list[str]:
+    """Briefed names of the relatives a family question asks about: "How is
+    my grandson doing?" -> ["Leo"] when a memo says so."""
+    if not asks_about_family(transcript):
+        return []
+    caregiver = _name_key(caregiver_name or "")
+    names = [_name_key(n) for n in family_people_in(transcript, g, caregiver_name)]
+    for w in _WORD_RE.findall(transcript.lower()):
+        if w in _KIN_FORMS:
+            names += sorted(g.relatives.get(_KIN_FORMS[w], ()))
+    return [g.display.get(n, n) for n in dict.fromkeys(names) if n != caregiver]
 
 # An apology in THINK's continuation of a fast-path crisis turn: the canned
 # fast-path line already apologised, so a second "sorry" is removed before it
@@ -1259,6 +1495,22 @@ def run_turn(
     # Deduplicate facts and remove guardrails
     filtered_profile = [f for f in filtered_profile if f not in filtered_schedule and f not in guardrails]
 
+    # #245: a family question ("How is my grandson doing?", "I'd love to hear
+    # about the family") gets the asked relative's briefed facts first, plus a
+    # no-news instruction, so THINK never has to guess how someone is.
+    family_question = asks_about_family(transcript) and not fast.triggered
+    if family_question:
+        kin_asked = {_KIN_FORMS[w] for w in _WORD_RE.findall(transcript.lower()) if w in _KIN_FORMS}
+        anyone = not kin_asked or bool(_FAMILY_WORD_RE.search(transcript))
+        named = {_name_key(n) for n in _NAME_RE.findall(transcript)}
+        family_facts = [
+            f for f in profile_facts
+            if f not in guardrails and f not in filtered_schedule
+            and (any(w in _KIN_FORMS and (anyone or _KIN_FORMS[w] in kin_asked) for w in _WORD_RE.findall(f.lower()))
+                 or named & {_name_key(n) for n in _NAME_RE.findall(f)} - _ADDRESS_WORDS)
+        ]
+        filtered_profile = list(dict.fromkeys(family_facts[:2] + filtered_profile))[:3]
+
     pending_conflicts = memory_store.get_pending_conflicts()
     # Only THINK asks a clarification; at the daily cap THINK never
     # runs, so the conflict must stay pending for a later turn to ask.
@@ -1268,6 +1520,9 @@ def run_turn(
     recall_note = _session_recall_note(transcript, history)
     if recall_note:
         continuation_note = f"{continuation_note} {recall_note}" if continuation_note else recall_note
+    if family_question:
+        continuation_note = (f"{continuation_note} {_FAMILY_QUESTION_NOTE}" if continuation_note
+                             else _FAMILY_QUESTION_NOTE)
     if driving_guard:
         driving_note = (
             f"The person plans to drive himself. Offer, first, that {caregiver_name} "
@@ -1293,7 +1548,8 @@ def run_turn(
             visitor_answer = _visitor_answer(transcript, caregiver_updates, caregiver_name)
             # Only a plain logistics question gets the read-out; an emotional
             # "is anyone coming?" still goes to THINK for a warm reply.
-            if visitor_answer is not None and not fast.triggered and intent == Intent.LOGISTICAL:
+            readout = visitor_answer is not None and not fast.triggered and intent == Intent.LOGISTICAL
+            if readout:
                 token_stream = iter([visitor_answer])
             else:
                 token_stream = think.stream_reply(
@@ -1320,10 +1576,16 @@ def run_turn(
             # privacy: a name the caregiver wrote is not invented) and what the
             # senior said this session; a sentence naming a relative outside it
             # is dropped before it is spoken.
-            known_household = household_corpus(
-                [i.text for i in memory_store.all() if i.is_active(t_now)],
-                transcript, history, caregiver_name,
-            )
+            active_texts = [i.text for i in memory_store.all() if i.is_active(t_now)]
+            known_household = household_corpus(active_texts, transcript, history, caregiver_name)
+            # ... and a statement about a briefed family member is spoken only
+            # when the briefing or the senior grounds it (invented_family_detail).
+            # The visitor read-out is the notes verbatim, so it is not checked.
+            dropped_detail = []
+            family = family_grounding(active_texts, transcript, history, caregiver_name)
+            asked = asked_relatives(transcript, family, caregiver_name) if family_question else []
+            no_news_for: list[str] = []  # relatives the reply already said it has no news of
+            replaced_for: list[str] = []  # ... because the guard said so in place of a dropped sentence
             # Fast-path crisis turn: the canned line already apologised, so
             # THINK's continuation never apologises again (it is shown as
             # text even when its audio failed); only the apology clause is
@@ -1336,6 +1598,8 @@ def run_turn(
                 budget = hotline_budget
                 follows_dropped = False
                 strangers: set[str] = set()
+                follows_family = False
+                last_person = asked[0] if asked else None
                 for s in s_iter:
                     # Safety advice is never dropped for naming a relative. A
                     # later sentence about the same invented person goes too:
@@ -1351,6 +1615,36 @@ def run_turn(
                         follows_dropped = True
                         continue
                     follows_dropped = False
+                    people = family_people_in(s, family, caregiver_name)
+                    lift_offer = driving_guard and _REAL_ALTERNATIVE_RE.search(s)
+                    if (not readout and not is_safety and not lift_offer
+                            and invented_family_detail(s, family, follows_family)):
+                        dropped_detail.append(s)
+                        follows_family = True
+                        # Who it was about: a relative it names, else the one a
+                        # pronoun points back to. Said in its place, once, warmly.
+                        if not people and caregiver_name.lower() not in s.lower() and last_person:
+                            people = [last_person]
+                        if people:
+                            last_person = people[-1]
+                            if people[0] not in no_news_for:
+                                no_news_for.append(people[0])
+                                replaced_for.append(people[0])
+                                yield _NO_NEWS_LINE.format(name=people[0])
+                        elif caregiver_name.lower() in s.lower():
+                            last_person = None
+                        continue
+                    no_news = not is_safety and "?" not in s and bool(_KIN_NEGATION_RE.search(s) and _NO_NEWS_RE.search(s))
+                    pointed = people or ([last_person] if last_person and _THIRD_PERSON_RE.search(s) else [])
+                    if no_news and pointed and pointed[0] in replaced_for:
+                        continue  # the no-news line already said it ("I don't have any other news about him.")
+                    follows_family = _family_ref(s, family) or bool(follows_family and _THIRD_PERSON_RE.search(s))
+                    if people:
+                        last_person = people[-1]
+                        if no_news:
+                            no_news_for.extend(people)  # it already said so
+                    elif caregiver_name and caregiver_name.lower() in s.lower():
+                        last_person = None
                     if drop_apology and _APOLOGY_RE.search(s):
                         stripped = _strip_apology(s)
                         if not stripped:
@@ -1399,7 +1693,21 @@ def run_turn(
             if dropped_unbriefed:
                 print(f"[orchestrator] dropped {len(dropped_unbriefed)} sentence(s) naming an unbriefed relative (#245)",
                       file=sys.stderr)
-            if dropped_unbriefed and not dropped_hotline and not reply_text.strip():
+            if dropped_detail:
+                print(f"[orchestrator] dropped {len(dropped_detail)} sentence(s) with family detail no memo grounds (#245)",
+                      file=sys.stderr)
+            missing = [n for n in asked if n.lower() not in reply_text.lower()]
+            if missing and reply_text.strip() and not dropped_hotline and not driving_guard:
+                # Asked how a briefed relative is and the reply never named
+                # them: answer the question honestly (T23).
+                extra_text, extra_paths, extra_first = _speak_turn(
+                    iter([_NO_NEWS_LINE.format(name=missing[0])]), audio_out_dir, on_chunk=on_chunk
+                )
+                reply_text = f"{reply_text} {extra_text}".strip()
+                think_audio_paths.extend(extra_paths)
+                if first_audio_time is None:
+                    first_audio_time = extra_first
+            if (dropped_unbriefed or dropped_detail) and not dropped_hotline and not reply_text.strip():
                 # Every sentence named someone nobody briefed: say so honestly
                 # instead of the "thoughts drifted" fallback. A driving-plan
                 # turn still gets its lift-first line (#192), not family news.

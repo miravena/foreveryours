@@ -39,6 +39,30 @@ Format: newest first. One entry per session: date, who, what, result, next.
   finding (copular and possessive names, adverb openers, negated or asked-about relatives, question
   tags, a driving turn emptied by the guard) is a test in `tests/test_invented_household_facts.py`
   or `tests/test_live_judge_check.py`.
+- **Second pass, same day (the first pass still gave 3/20 and failed T23 live):**
+  - **Gotcha: the model spoke the prompt's own counter-example.** Rule 25 ended with
+    `WRONG: "Leo is doing well in school and has a game on Saturday."` and 5 of 30 baseline replies
+    said exactly that. The WRONG lines are gone; the rule keeps the RIGHT example and says in words
+    that anything more about Leo would be invented. A worked wrong answer is a script to copy.
+  - **Family question note:** "How is my grandson doing?" / "I'd love to hear about the family" now
+    puts the relative's briefed facts first and adds a no-news instruction to THINK's input.
+  - **Detail guard** (`invented_family_detail`): a statement about a family member (the caregiver,
+    a name in a memo line with a relation word, a relation word, or "he"/"she" right after one) is
+    dropped when one of its content words is in no active memo and in nothing the senior said
+    (stemmed; a few synonym groups so "stopping by" grounds "dropping off"; conversational words
+    never need grounding). Questions, hopes, "no news" clauses, the companion's own acts ("I let
+    Sarah know") and lift offers on a driving turn are not checked. A warm no-news line is said in
+    place of the first dropped sentence about a relative; if the reply never names the asked
+    relative, the line is added at the end.
+  - **Measured** (local app, live key, sample household, fresh session per run): before, family
+    prompt 1/10 invented ("Your family is stopping by later today"), grandson prompt 3/10 (two of
+    them the rule's WRONG example word for word), and "How is my grandson doing?" 3/10 invented plus
+    2/10 that never named Leo. After, in two rounds: 0/10 and 0/10 each round, and 10/10 clean on the
+    T23 prompt in the first. Live judge check: 23/23 before; the first after-run failed T05 ("isn't"
+    was tokenised as "isn" + "t", read as an ungrounded word, and "Sarah isn't listening" was
+    dropped; fixed, now a test), the second passed 23/23.
+  - **Limit:** it compares words, not meaning. A true paraphrase in new words is dropped (costs
+    warmth, not truth), and an invention made only of grounded words passes.
 
 ### 2026-10-27 (#252: uptime monitor)
 Added `.github/workflows/uptime.yml` and `scripts/uptime_check.py`. The Space runtime endpoint

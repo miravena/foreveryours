@@ -8,7 +8,9 @@ bring lunch" -- none of it in any memo. Two layers, both offline here:
   what the senior said this session, with a right/wrong example.
 - A deterministic guard in the orchestrator: a sentence that introduces a
   relative nobody briefed ("your granddaughter Maya") is dropped before it is
-  spoken. Invented detail about a KNOWN person is left to rule 25.
+  spoken, and so is a statement about a briefed one that no memo and nothing
+  the senior said grounds ("Leo is doing great at school"); a warm no-news
+  line takes its place.
 
 Plus the grounding fix: a schedule question that also asks about a relative
 ("What's on for today? And how is my grandson doing?") reaches THINK with that
@@ -34,7 +36,11 @@ class TestRule25InPrompt(unittest.TestCase):
         self.assertIn("say plainly that you have no news about that, and ask the senior", prompt)
         self.assertIn("Small talk, feelings and general chat are still welcome", prompt)
         self.assertIn("RIGHT:", prompt)
-        self.assertIn("WRONG: \"Leo is doing well in school", prompt)
+        # No worked wrong answer: the live model spoke rule 25's old WRONG
+        # example word for word ("Leo is doing well in school and has a game
+        # on Saturday") in 5 of 30 replies.
+        self.assertNotIn("WRONG:", prompt)
+        self.assertNotIn("game on Saturday", prompt)
 
     def test_rule_25_reaches_the_model_on_every_turn(self):
         msgs = think.build_prompt("How is my grandson doing?", ["His grandson is named Leo"])
@@ -297,6 +303,155 @@ class TestGrounding(_TurnBase):
     def test_plain_schedule_question_still_gets_no_unrelated_profile_facts(self):
         _res, stream = self.turn("What's on for today?", "Sarah is dropping off groceries at 4 PM.")
         self.assertEqual(stream.call_args.args[1], [])
+
+
+class TestInventedFamilyDetail(unittest.TestCase):
+    """A statement about a briefed family member must be grounded in a memo
+    or in what the senior said (the 3-in-20 live sample and T23 on #245)."""
+
+    MEMOS = split_memo_facts(DEMO_MEMO) + ["Dad has a check-up with Dr. Tan on Thursday at 10 AM."]
+
+    def grounding(self, transcript="What's on for today?", history=None):
+        return orchestrator.family_grounding(self.MEMOS, transcript, history, "Sarah")
+
+    def reads(self, reply, transcript="What's on for today?", history=None):
+        """Which sentences of `reply` the guard drops, as the stream sees them."""
+        g, follows, dropped = self.grounding(transcript, history), False, []
+        for s in orchestrator._SENTENCE_SPLIT_RE.split(reply):
+            if orchestrator.invented_family_detail(s, g, follows):
+                dropped.append(s)
+                follows = True
+            else:
+                follows = orchestrator._family_ref(s, g) or bool(
+                    follows and orchestrator._THIRD_PERSON_RE.search(s))
+        return dropped
+
+    def test_the_live_inventions_are_dropped(self):
+        for reply, bad in [
+            ("Sarah is dropping off groceries at 4 PM today. She'll also bring your favorite jazz record for you "
+             "to enjoy.", "She'll also bring your favorite jazz record for you to enjoy."),
+            ("As for Leo, Sarah mentioned he's doing well and enjoying school, but I don't have any new details.",
+             "As for Leo, Sarah mentioned he's doing well and enjoying school, but I don't have any new details."),
+            ("Sarah is dropping off groceries at 4 PM today. Leo is doing great at school and has a soccer game "
+             "on Saturday.", "Leo is doing great at school and has a soccer game on Saturday."),
+            ("That's wonderful to hear\u2014Leo must be so proud of his game this weekend.",
+             "That's wonderful to hear\u2014Leo must be so proud of his game this weekend."),
+            ("Sarah mentioned Leo is doing well in school and has a game on Saturday.",
+             "Sarah mentioned Leo is doing well in school and has a game on Saturday."),
+        ]:
+            with self.subTest(reply=reply):
+                self.assertEqual(self.reads(reply), [bad])
+
+    def test_a_statement_with_a_question_tag_is_still_a_statement(self):
+        for reply in ["Leo is doing well, isn't he?", "Leo is doing well in school, did you know?",
+                      "Leo isn\u2019t feeling well.", "I'm sure he's doing well, Leo."]:
+            with self.subTest(reply=reply):
+                self.assertEqual(self.reads(reply), [reply])
+
+    def test_grounded_and_honest_replies_are_kept(self):
+        for reply in [
+            "Sarah is dropping off groceries at 4 PM today.",
+            "Sarah is stopping by this afternoon with your groceries.",
+            "Today the family has plans to drop off groceries at 4 PM. That's the main family update for now.",
+            "Sarah mentioned you love jazz, so maybe you'll enjoy some music later.",
+            "Sarah mentioned your grandson Leo, but I don't have any news about how he's doing. "
+            "Have you heard from him lately?",
+            "Leo is your grandson.",
+            "I hope Leo is doing well. Does he play any sport?",
+            "No, Sarah isn\u2019t listening to our conversation. She only sees safety flags.",
+            "I won\u2019t tell Sarah\u2014your secret is safe with me.",
+            "I've let Sarah know about the fall so she can check on you.",
+            "Your appointment with Dr. Tan is on Thursday at 10 AM, so bring your list of questions.",
+            "Ella Fitzgerald was a wonderful singer. She recorded so many great songs.",
+            "I'm glad Sarah can help you with the ride.",
+        ]:
+            with self.subTest(reply=reply):
+                self.assertEqual(self.reads(reply), [])
+
+    def test_what_the_senior_said_grounds_it(self):
+        reply = "Leo has a soccer game on Saturday\u2014how lovely."
+        self.assertEqual(self.reads(reply), [reply])
+        self.assertEqual(self.reads(reply, "Leo has a soccer game on Saturday."), [])
+        history = [{"role": "user", "content": "Leo has a soccer game on Saturday."},
+                   {"role": "assistant", "content": "How lovely."}]
+        self.assertEqual(self.reads(reply, "What's on today?", history), [])
+
+    def test_the_companion_never_grounds_itself(self):
+        reply = "Leo has a soccer game on Saturday."
+        history = [{"role": "assistant", "content": reply}]
+        self.assertEqual(self.reads(reply, "Tell me more.", history), [reply])
+
+    def test_family_questions_are_recognised(self):
+        for t in ["How is my grandson doing?", "What's on for today? And how is my grandson doing?",
+                  "What's happening today? I'd love to hear about the family.", "How's Leo doing?",
+                  "Any news from my grandson?", "What has Leo been up to?"]:
+            with self.subTest(t=t):
+                self.assertTrue(orchestrator.asks_about_family(t))
+        for t in ["What's on for today?", "How is the weather?", "What kind of music do I like?",
+                  "What's my grandson's name?"]:
+            with self.subTest(t=t):
+                self.assertFalse(orchestrator.asks_about_family(t))
+
+    def test_asked_relative_is_the_briefed_name(self):
+        g = self.grounding()
+        self.assertEqual(orchestrator.asked_relatives("How is my grandson doing?", g, "Sarah"), ["Leo"])
+        self.assertEqual(orchestrator.asked_relatives("How's Leo doing?", g, "Sarah"), ["Leo"])
+        self.assertEqual(orchestrator.asked_relatives("How is Sarah doing?", g, "Sarah"), [])
+        self.assertEqual(orchestrator.asked_relatives("How is my grandson's name?", g, "Sarah"), [])
+
+
+class TestDetailGuardInRunTurn(_TurnBase):
+    def test_invented_detail_becomes_an_honest_no_news_line(self):
+        res, _ = self.turn("What's on for today? And how is my grandson doing?",
+                           "Sarah is dropping off groceries at 4 PM today. Leo is doing great at school and has a "
+                           "soccer game on Saturday. Have you heard from him lately?")
+        self.assertEqual(res.reply_text, "Sarah is dropping off groceries at 4 PM today. I don't have any news about "
+                                         "how Leo is doing, but I'd love to hear if you have. Have you heard from "
+                                         "him lately?")
+
+    def test_the_no_news_line_is_said_once(self):
+        res, _ = self.turn("How is my grandson doing?",
+                           "That's wonderful to hear\u2014Leo must be so proud of his game this weekend. "
+                           "I know Sarah mentioned he's been excited about it.")
+        self.assertEqual(res.reply_text, orchestrator._NO_NEWS_LINE.format(name="Leo"))
+
+    def test_a_later_no_news_sentence_is_not_said_twice(self):
+        res, _ = self.turn("What's on for today? And how is my grandson doing?",
+                           "Leo is doing great at school. I don't have any other news about him. "
+                           "Have you heard from Leo lately?")
+        self.assertEqual(res.reply_text, orchestrator._NO_NEWS_LINE.format(name="Leo")
+                         + " Have you heard from Leo lately?")
+
+    def test_invented_detail_about_the_caregiver_is_dropped_without_a_no_news_line(self):
+        res, _ = self.turn("What's happening today? I'd love to hear about the family.",
+                           "Sarah is dropping off groceries at 4 PM today. She'll also bring your favorite jazz "
+                           "record for you to enjoy.")
+        self.assertEqual(res.reply_text, "Sarah is dropping off groceries at 4 PM today.")
+
+    def test_a_reply_that_skips_the_asked_relative_gets_the_no_news_line(self):
+        res, _ = self.turn("How is my grandson doing?", "Sarah mentioned you love jazz, shall we talk about that?")
+        self.assertIn("Leo", res.reply_text)
+        self.assertTrue(res.reply_text.endswith(orchestrator._NO_NEWS_LINE.format(name="Leo")))
+
+    def test_family_question_reaches_think_with_the_relative_and_the_note(self):
+        _res, stream = self.turn("How is my grandson doing?",
+                                 "Sarah mentioned your grandson Leo, but I don't have any news about how he's doing.")
+        self.assertEqual(stream.call_args.args[1][0], "His grandson is named Leo")
+        self.assertIn(orchestrator._FAMILY_QUESTION_NOTE, stream.call_args.args[0])
+
+    def test_family_news_question_gets_the_family_facts(self):
+        _res, stream = self.turn("What's happening today? I'd love to hear about the family.",
+                                 "Sarah is dropping off groceries at 4 PM today.")
+        self.assertIn("His grandson is named Leo", stream.call_args.args[1])
+
+    def test_lift_offer_on_a_driving_turn_is_kept(self):
+        res, _ = self.turn("I think I'll drive down to the shop myself this afternoon.",
+                           "Sarah or one of the family could give you a lift instead.")
+        self.assertIn("Sarah or one of the family could give you a lift instead.", res.reply_text)
+
+    def test_plain_question_gets_no_family_note(self):
+        _res, stream = self.turn("What's on for today?", "Sarah is dropping off groceries at 4 PM.")
+        self.assertNotIn(orchestrator._FAMILY_QUESTION_NOTE, stream.call_args.args[0])
 
 
 if __name__ == "__main__":

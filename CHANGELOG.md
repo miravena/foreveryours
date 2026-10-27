@@ -32,7 +32,11 @@ rename `Unreleased` to the version and date, then tag it.
   briefed or what Dad said in this conversation, and otherwise it says it has no news and asks. A
   sentence that introduces a relative nobody briefed ("your granddaughter Maya") is dropped before it
   is spoken, and a schedule question that also asks about a relative now reaches the model with that
-  relative's briefed facts. The live judge check gains T23, "How is my grandson doing?" (#245).
+  relative's briefed facts. A statement about a family member the family did brief ("Leo is doing
+  great at school") is spoken only when a memo or Dad's own words contain what it says; otherwise
+  the companion says it has no news about them and would love to hear. A question about the family
+  now reaches the model with the relative's briefed facts and a no-news instruction. The live judge
+  check gains T23, "How is my grandson doing?" (#245).
 - A memo about a named future day ("Dr. Tan on Thursday at 10 AM", "tomorrow", "on the 30th") now
   stays until the end of that day in the household's timezone instead of expiring after 24 hours;
   same-day errands ("4 PM today") keep the 24-hour life, and the caregiver panel says when it goes

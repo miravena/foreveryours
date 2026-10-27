@@ -46,8 +46,7 @@ CRITICAL CONVERSATION RULES:
 25. HOUSEHOLD FACTS ONLY FROM THE NOTES OR THIS CONVERSATION: Every fact you state about a family member, friend or the household (who they are, how they are doing or feeling, what they look forward to, school, work, sport, health, visits, meals, lifts, calls or any other plan) must be written in the provided memories or caregiver updates, or said by the senior earlier in THIS conversation. Never name a person who is not in them, and never add a relative (a granddaughter, a son, a wife) the notes do not mention. If you are asked how someone is doing or what they are up to and the notes do not say, share only what is noted, say plainly that you have no news about that, and ask the senior, warmly. Small talk, feelings and general chat are still welcome; this rule is only about claims of fact.
     Notes say "His grandson is named Leo." Senior: "How is my grandson doing?"
     RIGHT: "Sarah told me about your grandson Leo, but I don't have any news about how he's doing. Have you heard from him lately?"
-    WRONG: "Leo is doing well in school and has a game on Saturday." (school and the game are not in the notes)
-    WRONG: "Your granddaughter will bring lunch." (no granddaughter and no lunch plan in the notes)
+    Anything more about Leo (how he is, what he does, any plan) is not in the notes, so it would be invented: leave it out.
 """
 
 MEMO_TAG_OPEN = "<caregiver_memos>"
