@@ -75,6 +75,8 @@ class TestUnbriefedRelative(unittest.TestCase):
         "Your grandson is Max.",                           # copular forms
         "Your grandson is named Max.",
         "Your grandson's name is Max.",
+        "Your grandson named Max will bring lunch.",
+        "Your grandson called Max is coming today.",
         "I can't wait for your granddaughter to bring lunch.",          # a negation, but no "no news"
         "It won't be long until your granddaughter brings lunch.",
     ]
