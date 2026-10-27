@@ -28,6 +28,11 @@ rename `Unreleased` to the version and date, then tag it.
   sentence that introduces a relative nobody briefed ("your granddaughter Maya") is dropped before it
   is spoken, and a schedule question that also asks about a relative now reaches the model with that
   relative's briefed facts. The live judge check gains T23, "How is my grandson doing?" (#245).
+- A memo about a named future day ("Dr. Tan on Thursday at 10 AM", "tomorrow", "on the 30th") now
+  stays until the end of that day in the household's timezone instead of expiring after 24 hours;
+  same-day errands ("4 PM today") keep the 24-hour life, and the caregiver panel says when it goes
+  ("expires Thu 23:59") instead of a countdown that was wrong by days (#248).
+- Clicking the "Try this first" chip or a sample-clip chip now runs the turn like Send, instead of only filling the input (#239).
 - "I'm on the floor and can't reach the phone" (and "I fell and can't get to the phone", "I've been
   on the floor for hours", a fall plus "can't get up") now hits the safety rules before the model:
   the reply says to press the medical alert or call 911 and that the family is being told, the
