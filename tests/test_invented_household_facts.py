@@ -181,6 +181,9 @@ class TestUnbriefedRelative(unittest.TestCase):
     def test_a_sentence_opener_is_not_a_name(self):
         for s in ("Well, your grandson is Leo.", "Yes, your grandson is Leo.", "Actually, your grandson is Leo.",
                   "Sorry, your grandson is named Leo.",
+                  "Unfortunately, your grandson, Leo, cannot visit today.",
+                  "Sadly, your grandson cannot visit.",
+                  "Alas, your grandson, Leo, cannot visit today.",
                   "Oh, your daughter Sarah is coming at 4 PM."):
             with self.subTest(sentence=s):
                 self.assertFalse(unbriefed_relative(s, _judge_corpus()), s)

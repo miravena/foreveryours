@@ -375,7 +375,15 @@ def stranger_names(sentence: str, corpus: tuple[set[str], set[str], str]) -> set
     ("your granddaughter Maya" -> {"maya"}), lowercased."""
     names = corpus[0]
     found = {_name_key(m.group(1)) for m in _KIN_THEN_NAME_RE.finditer(sentence)}
-    found |= {_name_key(m.group(1)) for m in _NAME_THEN_KIN_RE.finditer(sentence)} - _OPENER_WORDS - _NOT_NAME_WORDS
+    for m in _NAME_THEN_KIN_RE.finditer(sentence):
+        key = _name_key(m.group(1))
+        # Not a name: an opener or adverb ("Well,", "Unfortunately,"), or a
+        # word before a relation that already names its person ("..., your
+        # grandson, Leo, cannot visit").
+        named_after = _KIN_THEN_NAME_RE.match(sentence[m.end(1):].lstrip(", "))
+        if key in _OPENER_WORDS or key in _NOT_NAME_WORDS or key.endswith("ly") or named_after:
+            continue
+        found.add(key)
     return found - names
 
 
