@@ -479,7 +479,7 @@ _SUGGESTION_RE = re.compile(
 )
 # Words that carry no household fact.
 _CHAT_WORDS = set("""
-mention mentioned mentions said say says told tell telling note noted notes know knew known news update updates
+mention mentioned mentions said say says told tell telling note noted notes know knew known news update updates according
 heard hear hearing lately recently earlier before today now later soon family lovely wonderful sure really just
 also still always think thought remember remembers wanted want wants asked ask asks share shared sharing chat
 chatting talk talking talked sound sounds like love loved would glad nice special thing things something anything
@@ -836,6 +836,9 @@ _LISTENING_QUESTION_RE = re.compile(
     r"(?:us|me|this|our|what|conversations?|chats?|everything)\b",
     re.IGNORECASE,
 )
+_DAY_QUESTION_RE = re.compile(
+    r"\b(?:today|tonight|tomorrow|this\s+(?:morning|afternoon|evening|week)|schedule|plans?|happening|on\s+for)\b",
+    re.IGNORECASE)
 _FAMILY_QUESTION_NOTE = (
     "The senior is asking about the family. Say only what the profile facts and caregiver updates "
     "say about them, then say warmly that you have no other news and ask the senior. Add nothing else "
@@ -1807,7 +1810,12 @@ def run_turn(
                 # The question is the sentence before the reply, for a pronoun
                 # only: "How is my grandson?" -> "He's doing great at school" is
                 # about Leo, "Today's schedule is light." is not.
-                follows_family, follows_relative = bool(family_question), False
+                # A question only about a relative ("How is my grandson
+                # doing?") makes a subjectless first answer about them
+                # ("Recovering from cancer treatment."); one that also asks
+                # about the day does not ("Today's schedule is light.").
+                follows_family = bool(family_question)
+                follows_relative = bool(asked) and not _DAY_QUESTION_RE.search(transcript or "")
                 last_person = asked[0] if asked else None
                 for s in s_iter:
                     # Safety advice is never dropped for naming a relative, and

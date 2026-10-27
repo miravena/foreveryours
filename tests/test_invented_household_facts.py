@@ -628,6 +628,13 @@ class TestDetailGuardInRunTurn(_TurnBase):
         res, _ = self.turn("How is my grandson doing?", "Recovering from surgery, as you told me.", history=history)
         self.assertNotIn("don't have any news", res.reply_text)
 
+    def test_a_subjectless_invented_answer_is_dropped(self):
+        res, _ = self.turn("How is my grandson doing?", "Recovering from cancer treatment.")
+        self.assertNotIn("cancer", res.reply_text)
+        self.assertIn("news about how Leo", res.reply_text)
+        res, _ = self.turn("What's on for today? And how is my grandson doing?", "Today's schedule is light.")
+        self.assertIn("Today's schedule is light.", res.reply_text)
+
     def test_a_briefed_fact_with_no_name_answers_the_question(self):
         self.store.add("Leo is recovering from surgery", source="caregiver_memo", supersede=False)
         res, _ = self.turn("How is my grandson doing?", "Recovering from surgery, according to the notes.")
