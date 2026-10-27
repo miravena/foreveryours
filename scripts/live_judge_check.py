@@ -453,9 +453,11 @@ def reply_states_none(pattern: str, why: str, about: str | None = None) -> Check
             if sentence.rstrip().rstrip("\"')").endswith("?"):
                 # Only the question proper is exempt: "Leo is doing well in
                 # school, did you know?" still states the school news.
+                # With no opener, the last comma segment is the tag ("isn't he?").
                 segments = sentence.split(",")
                 opens = [i for i, seg in enumerate(segments) if _QUESTION_OPENER_RE.match(seg.strip())]
-                sentence = ",".join(segments[:opens[0]]) if opens else ""
+                cut = opens[0] if opens else max(len(segments) - 1, 1)
+                sentence = ",".join(segments[:cut])
             for clause in _clauses(sentence):
                 if about_rx and not about_rx.search(clause):
                     continue

@@ -298,7 +298,11 @@ def household_corpus(memory_texts: list[str], transcript: str, history: list[dic
     capitalised word there vouches for one ("named Will"), and so does any
     lowercase word -- a caregiver or the senior may type "leo" -- except
     function words such as "will" (see _NOT_NAME_WORDS). Words the companion
-    calls the senior ("Dad", "dear") are never taken for a relative's name."""
+    calls the senior ("Dad", "dear") are never taken for a relative's name.
+    A relation word counts unless negated in its clause ("I have no
+    granddaughter"); whose relation it is is not parsed, so "my sister has a
+    son" still vouches for "your son" -- the guard is a backstop for rule 25,
+    not a parser."""
     texts = list(memory_texts) + [transcript or ""] + [
         m.get("content", "") for m in (history or []) if m.get("role") == "user"
     ]
@@ -309,7 +313,11 @@ def household_corpus(memory_texts: list[str], transcript: str, history: list[dic
         names.update(_name_key(n) for n in _NAME_RE.findall(str(t)))  # "named Will" stays a name
         text = _name_key(str(t))
         names.update(w for w in _LOWER_WORD_RE.findall(text) if w not in _NOT_NAME_WORDS)
-        kin.update(_KIN_FORMS[w] for w in _WORD_RE.findall(text) if w in _KIN_FORMS)
+        # "I do not have a granddaughter" vouches for none.
+        for clause in re.split(r"[.!?;,:\u2014]|\bbut\b", text):
+            for m in _WORD_RE.finditer(clause):
+                if m.group(0) in _KIN_FORMS and not _KIN_NEGATION_RE.search(clause[:m.start()]):
+                    kin.add(_KIN_FORMS[m.group(0)])
     return names, kin, caregiver
 
 
