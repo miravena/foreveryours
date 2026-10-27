@@ -807,9 +807,12 @@ _FAMILY_QUESTION_RE = re.compile(
 # The senior asks whether the family can hear them. The answer about the
 # caregiver is rule 19's (she cannot hear; she only sees safety flags), in
 # whatever words the model picks, so it is not checked as news about her.
+# "Have you heard any news about my family?" is not one: the verb needs the
+# conversation as its object, or a question about listening in.
 _LISTENING_QUESTION_RE = re.compile(
-    r"\b(?:listen\w*|hear\w*|overhear\w*|watch\w*|read\w*|record\w*|monitor\w*|spy\w*|eavesdrop\w*)\b"
-    r"(?=[^.!]*\?|.*\b(?:us|me|i|my|this|our|conversations?|chats?)\b)",
+    r"\b(?:listen\w*|eavesdrop\w*|spy\w*|spying|monitor\w*)\b(?=[^.!]*\?)"
+    r"|\b(?:hear|hears|overhear\w*|watch\w*|read|reads|see|sees|record\w*)\s+(?:\w+\s+){0,2}?"
+    r"(?:us|me|this|our|what|conversations?|chats?|everything)\b",
     re.IGNORECASE,
 )
 _FAMILY_QUESTION_NOTE = (

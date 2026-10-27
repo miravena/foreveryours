@@ -577,6 +577,16 @@ class TestDetailGuardInRunTurn(_TurnBase):
             res, _ = self.turn(q, reply)
             self.assertEqual(res.reply_text, reply)
 
+    def test_only_a_question_about_listening_in_is_a_privacy_turn(self):
+        for q in ("Is Sarah listening to us?", "Can Sarah hear what I tell you?", "Can she read our chats?",
+                  "Does anyone record this?"):
+            self.assertTrue(orchestrator._LISTENING_QUESTION_RE.search(q), q)
+        for q in ("Have you heard any news about my family?", "I was listening to jazz all morning.",
+                  "Did you hear about the storm?"):
+            self.assertFalse(orchestrator._LISTENING_QUESTION_RE.search(q), q)
+        res, _ = self.turn("Have you heard any news about my family?", "Sarah has cancer.")
+        self.assertNotIn("cancer", res.reply_text)
+
     def test_a_relative_on_a_privacy_turn_is_still_checked(self):
         res, _ = self.turn("Is Sarah listening to us?",
                            "Sarah can't hear us. Leo has a soccer game on Saturday.")
