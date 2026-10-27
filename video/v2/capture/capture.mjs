@@ -371,10 +371,15 @@ async function main() {
   let n = 0;
   for (const [dir, L] of lists) {
     const order = L.playlist.split('\n').filter(l => l && !l.startsWith('#'));
-    const names = order.length ? order : [...L.segs.keys()];
+    // A reply's audio is used only when complete: the playlist ended and every segment it lists
+    // was saved. A partial reply would cut the shot short while its caption runs in full.
+    if (L.playlist && (!L.playlist.includes('#EXT-X-ENDLIST') || order.some(nm => !L.segs.has(nm)))) {
+      throw new Error(`incomplete reply audio for ${dir}: ${order.filter(nm => !L.segs.has(nm)).length} segment(s) missing or the playlist never ended`);
+    }
+    const names = L.playlist ? order : [...L.segs.keys()];
     const files = [];
     names.forEach((nm, i) => {
-      const a = L.segs.get(nm); if (!a) return;
+      const a = L.segs.get(nm);
       const f = path.join(outDir, `_${tag}_seg${n}_${String(i).padStart(2, '0')}.${a.ext}`);
       fs.writeFileSync(f, a.body); files.push(f);
     });
