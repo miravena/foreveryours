@@ -866,7 +866,11 @@ def asks_about_family(transcript: str) -> bool:
 
 def asked_relatives(transcript: str, g: FamilyGrounding, caregiver_name: str) -> list[str]:
     """Briefed names of the relatives a family question asks about: "How is
-    my grandson doing?" -> ["Leo"] when a memo says so."""
+    my grandson doing?" -> ["Leo"] when a memo says so. A typed "how is leo
+    doing?" counts too; a lowercase "will" or "may" is not the grandson Will."""
+    transcript = re.sub(r"[A-Za-z][\w'-]*", lambda m: m.group(0).capitalize() if (
+        m.group(0).islower() and m.group(0) in g.people and m.group(0) not in _NOT_NAME_WORDS
+        and m.group(0) not in STOPWORDS) else m.group(0), transcript or "")
     if not asks_about_family(transcript):
         return []
     caregiver = _caregiver_parts(caregiver_name)
@@ -1812,7 +1816,7 @@ def run_turn(
             # live. A relative is checked on every turn.
             caregiver_checked = bool(family_question or _DAY_QUESTION_RE.search(transcript or ""))
             said_by_senior = [str(m.get("content", "")) for m in (history or []) if m.get("role") == "user"]
-            asked = asked_relatives(transcript, family, caregiver_name) if family_question else []
+            asked = asked_relatives(transcript, family, caregiver_name)
             no_news_for: list[str] = []  # relatives the reply already said it has no news of
             replaced_for: list[str] = []  # ... because the guard said so in place of a dropped sentence
             # Fast-path crisis turn: the canned line already apologised, so
@@ -1834,7 +1838,7 @@ def run_turn(
                 # doing?") makes a subjectless first answer about them
                 # ("Recovering from cancer treatment."); one that also asks
                 # about the day does not ("Today's schedule is light.").
-                follows_family = bool(family_question)
+                follows_family = bool(family_question or asked)
                 follows_relative = bool(asked) and not _DAY_QUESTION_RE.search(transcript or "")
                 last_person = asked[0] if asked else None
                 for s in s_iter:
