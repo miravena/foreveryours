@@ -677,6 +677,12 @@ class TestDetailGuardInRunTurn(_TurnBase):
         self.assertEqual(res.reply_text.count("news about"), 1, res.reply_text)
         self.assertIn("Have you heard from him lately?", res.reply_text)
 
+    def test_recalling_dads_question_is_not_stating_it(self):
+        g = orchestrator.family_grounding(["His grandson is named Leo"], "What did I just ask you?",
+                                          [{"role": "user", "content": "Does Leo need chemotherapy?"}], "Sarah")
+        self.assertFalse(orchestrator.invented_family_detail("You asked about Leo needing chemotherapy.", g))
+        self.assertTrue(orchestrator.invented_family_detail("Leo needs chemotherapy.", g))
+
     def test_a_question_without_a_question_mark_grounds_nothing(self):
         for q in ("Does Leo have cancer", "does leo have cancer", "Leo is fine. Does he have cancer"):
             g = orchestrator.family_grounding(["His grandson is named Leo"], q, None, "Sarah")

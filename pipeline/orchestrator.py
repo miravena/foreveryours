@@ -527,6 +527,11 @@ learn learns told hear hears know knows shared share matter matters about like t
 reach reaching out check checking call calling contact contacting touch soon back help
 something anything wrong seems seem comes come happens happen if there else nothing issue issues problem problems
 """.split())
+# Recalling what the senior asked is not saying it is so: "You asked about
+# Leo needing chemotherapy" (rule 24).
+_RECALLED_QUESTION_RE = re.compile(
+    r"\byou(?:'ve)?\s+(?:just\s+)?(?:asked|wondered|wanted\s+to\s+know|were\s+asking|were\s+wondering)\b",
+    re.IGNORECASE)
 # Sending the senior to a person for help is a referral, not news about
 # them: "Sarah or your doctor can check that with you." Only what comes
 # before it is checked.
@@ -778,7 +783,7 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         clause = _OPINION_RE.sub(" ", clause)
         plain = clause.replace("\u2019", "'")
         for cut in (_COMPANION_ACT_RE.search(plain), _SUGGESTION_RE.search(plain), _HEDGE_RE.search(clause),
-                    _REFERRAL_RE.search(plain)):
+                    _REFERRAL_RE.search(plain), _RECALLED_QUESTION_RE.search(plain)):
             if cut:
                 clause = clause[:cut.start()]
         neg = _KIN_NEGATION_RE.search(clause)
