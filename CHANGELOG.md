@@ -49,6 +49,8 @@ rename `Unreleased` to the version and date, then tag it.
   counts as a schedule question, so the caregiver updates reach the reply (#189).
 
 ### Docs
+- `docs/incidents/2026-10-27-space-outage.md`: why the live Space stopped being scheduled on
+  ZeroGPU, its uptime history, and hosting options with costs through judging (#252, #253).
 - Demo video v2: shots 3-4 now brief and ask about a Dr. Tan appointment (verified 3/3 on the live Space), AI narration (Kokoro af_heart), and reproducible capture and assembly scripts in `video/v2/` (#5).
 - Final Devpost text in `docs/DEVPOST_DRAFT.md` (#20), re-checked on the live Space build `bb1a021`:
   the backstop on Nemotron 3 Super, flag origin, model footer, notification preview marked not sent,
