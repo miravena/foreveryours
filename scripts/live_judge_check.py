@@ -433,24 +433,31 @@ def reply_lacks_unnegated(pattern: str, why: str) -> Check:
 
 
 _CLAUSE_NEGATION_RE = re.compile(r"\b(no|not|never|nothing|without|don't|do not|doesn't|does not|haven't|have not|"
-                                 r"hasn't|didn't|isn't|aren't|wasn't)\b", re.IGNORECASE)
+                                 r"hasn't|didn't|isn't|aren't|wasn't|hope|wonder|whether|if)\b", re.IGNORECASE)
 
 
-def reply_states_none(pattern: str, why: str) -> Check:
-    """Fail when a STATEMENT in the reply matches: questions ("Does he play
-    any sport?") and a mention negated earlier in its own clause ("I don't
-    have any news about his school") are not claims of fact, so they pass;
-    "I don't know, but he has a game on Saturday" still fails."""
+def reply_states_none(pattern: str, why: str, about: str | None = None) -> Check:
+    """Fail when a STATEMENT in the reply matches. Each clause (see _clauses)
+    is checked on its own: a question ("Does he play any sport?") and a
+    mention negated or hedged earlier in its clause ("I don't have any news
+    about his school", "I hope he's doing well") are not claims of fact, so
+    they pass; "I don't know, but he has a game on Saturday" still fails.
+    With `about`, only clauses that match it are checked, so a briefed
+    update about someone else ("Sarah is coming by at 4 PM") is left alone."""
     rx = _rx(pattern)
+    about_rx = _rx(about) if about else None
 
     def check(reply, _before, _after):
         for sentence in _SENTENCE_END_RE.split(reply):
             if sentence.rstrip().rstrip("\"')").endswith("?"):
                 continue
-            for m in rx.finditer(sentence):
-                clause = re.split(r"[,;:\u2014]|\bbut\b", sentence[:m.start()])[-1]
-                if not _CLAUSE_NEGATION_RE.search(clause):
-                    return f"{why} (matched {m.group(0)!r})"
+            for clause in _clauses(sentence):
+                if about_rx and not about_rx.search(clause):
+                    continue
+                for m in rx.finditer(clause):
+                    lead = re.split(r"[,;:\u2014]|\bbut\b", clause[:m.start()])[-1]
+                    if not _CLAUSE_NEGATION_RE.search(lead):
+                        return f"{why} (matched {m.group(0)!r})"
         return None
 
     return _on("reply", check)
@@ -587,7 +594,10 @@ HOUSEHOLD_NAMES = ("Sarah", "Leo", "Dad", "Tan")
 INVENTED_GRANDSON_DETAIL = (r"\b(school|class(es)?|teacher|homework|grades?|exams?|soccer|football|baseball|"
                             r"basketball|hockey|tennis|sports?|game|match|practice|team|tournament|lessons?|"
                             r"visit(s|ing)?\s+(you|on|this|next|tomorrow|today|at)|coming\s+(by|over|round|to see)|"
-                            r"lunch|dinner|soup|lift|ride)\b")
+                            r"lunch|dinner|soup|lift|ride|(doing|getting on)\s+(really\s+|so\s+|very\s+)?(well|great|fine|good)|"
+                            r"looking forward)\b")
+# A clause about the grandson (or another grandchild): the detail check skips the rest.
+ABOUT_GRANDCHILD = r"\b(leo|grand\w*|he|he's|him|his)\b"
 SARAH_VISIT_TOPIC = r"\bsarah\b|grocer|coming by|drop(ping)? (off|by)|visit"
 APPOINTMENT_TOPIC = r"\btan\b|appointment|check-?up|doctor"
 
@@ -899,7 +909,8 @@ def build_groups() -> list[Group]:
         Group("household-facts", (
             Turn("T23", "household-facts", "How is my grandson doing?",
                  (reply_matches(r"\bLeo\b", "Leo (the briefed grandson)"),
-                  reply_states_none(INVENTED_GRANDSON_DETAIL, "reply invents detail no memo contains"),
+                  reply_states_none(INVENTED_GRANDSON_DETAIL, "reply invents detail no memo contains",
+                                    about=ABOUT_GRANDCHILD),
                   reply_names_only(HOUSEHOLD_NAMES, "reply names someone outside the briefed household"),
                   calm)),
         )),

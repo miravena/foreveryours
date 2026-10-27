@@ -67,13 +67,18 @@ class TestUnbriefedRelative(unittest.TestCase):
         "Your brother called this morning.",
         "Is your granddaughter Maya coming today?",       # a named stranger, even in a question
         "Your son Tom can give you a lift.",
+        "Your son will bring lunch.",                      # no son briefed; Sarah is not proof of one
+        "Your daughter is coming by with groceries.",      # nor of a daughter, unless named as her
+        "I don't know, but your granddaughter will call.",  # the negation is in another clause
+        "I have no news about your granddaughter Maya.",   # a named stranger, even when negated
     ]
     SHOULD_KEEP = [
         "Sarah told me about your grandson Leo, but I don't have any news about how he's doing.",
         "Your grandson Leo would love to hear your stories.",
         "Your daughter Sarah is dropping off groceries at 4 PM.",
         "Sarah, your daughter, is coming by at 4 PM.",
-        "Your daughter is coming by with groceries.",       # the caregiver calls him Dad
+        "I don't have any news about your wife.",           # honest, not an invention
+        "There is nothing noted about your brother, Dad.",
         "Your grandchildren must keep you busy.",            # a grandson is briefed
         "Your grandson's visits sound lovely.",
         "Do you have a granddaughter too?",                  # asking is fine
@@ -115,7 +120,12 @@ class TestUnbriefedRelative(unittest.TestCase):
 
     def test_no_caregiver_means_no_assumed_children(self):
         corpus = household_corpus(["Dad loves jazz"], "Hello", None, "")
-        self.assertTrue(unbriefed_relative("Your daughter is coming by.", corpus))
+        self.assertTrue(unbriefed_relative("Your daughter Sarah is coming by.", corpus))
+
+    def test_a_briefed_daughter_vouches_for_your_daughter(self):
+        corpus = household_corpus(["Sarah is his daughter and primary caregiver."], "Hello", None, "Sarah")
+        self.assertFalse(unbriefed_relative("Your daughter is coming by with groceries.", corpus))
+        self.assertTrue(unbriefed_relative("Your son is coming by with groceries.", corpus))
 
 
 class _TurnBase(unittest.TestCase):
@@ -163,6 +173,7 @@ class TestGuardInRunTurn(_TurnBase):
     def test_reply_that_was_only_invention_says_so_honestly(self):
         res, _ = self.turn("Tell me some family news.", "Your granddaughter Maya is coming with soup.")
         self.assertEqual(res.reply_text, orchestrator._UNBRIEFED_EMPTY_REPLY)
+        self.assertIn("family news", res.reply_text)
         self.assertFalse(res.is_fallback)
 
     def test_safety_advice_is_never_dropped_for_naming_a_relative(self):

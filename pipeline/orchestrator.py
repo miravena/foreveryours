@@ -248,48 +248,72 @@ _NAME_THEN_KIN_RE = re.compile(r"\b([A-Z][a-z]+),\s+(?i:your)\s+(?i:" + _KIN_ADJ
 _WORD_RE = re.compile(r"[a-z]+(?:-[a-z]+)*")
 
 
+_NAME_AFTER_RE = re.compile(r",?\s+([A-Z][a-z]+)\b")
+_NAME_BEFORE_RE = re.compile(r"\b([A-Z][a-z]+),\s+$")
+# "I don't have any news about your wife" is honest, not an invention: a
+# negation earlier in the same clause clears a bare relation word.
+_KIN_CLAUSE_BREAK_RE = re.compile(r"[,;:\u2014]|\bbut\b", re.IGNORECASE)
+_KIN_NEGATION_RE = re.compile(
+    r"\b(?:no|not|never|nothing|without|don't|do not|doesn't|does not|haven't|have not|hasn't|didn't|"
+    r"isn't|aren't|wasn't)\b|n['\u2019]t\b", re.IGNORECASE)
+
+
 def household_corpus(memory_texts: list[str], transcript: str, history: list[dict] | None,
-                     caregiver_name: str) -> tuple[set[str], set[str]]:
-    """(known words, known canonical relations) for unbriefed_relative():
-    every active memory line, the senior's own words this session (his turns
-    in `history` plus this transcript; the companion's turns never vouch for
-    themselves) and the caregiver's name. The caregiver calls the senior
-    "Dad" (rule 11), so a son or daughter is known whenever a caregiver is."""
+                     caregiver_name: str) -> tuple[set[str], set[str], str]:
+    """(known words, known canonical relations, caregiver's name lowercased)
+    for unbriefed_relative(): every active memory line, the senior's own
+    words this session (his turns in `history` plus this transcript; the
+    companion's turns never vouch for themselves) and the caregiver's name."""
     texts = list(memory_texts) + [transcript or ""] + [
         m.get("content", "") for m in (history or []) if m.get("role") == "user"
     ]
-    if caregiver_name and caregiver_name.strip():
-        texts.append(caregiver_name)
+    caregiver = (caregiver_name or "").strip().lower()
+    if caregiver:
+        texts.append(caregiver)
     words: set[str] = set()
     for t in texts:
         words.update(_WORD_RE.findall(str(t).lower()))
     kin = {_KIN_FORMS[w] for w in words if w in _KIN_FORMS}
-    if caregiver_name and caregiver_name.strip():
-        kin.update(_CHILD)
-    return words, kin
+    return words, kin, caregiver
 
 
-def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str]]) -> bool:
+def _bound_to(sentence: str, m: re.Match, name: str) -> bool:
+    """The relation word at `m` is bound to `name`: "your daughter Sarah",
+    "Sarah, your daughter"."""
+    after = _NAME_AFTER_RE.match(sentence, m.end())
+    before = _NAME_BEFORE_RE.search(sentence[:m.start()])
+    return bool(name) and any(x is not None and x.group(1).lower() == name for x in (after, before))
+
+
+def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) -> bool:
     """True when `sentence` introduces a relative nobody briefed: "your
     granddaughter Maya" (a name bound to a relation word, and the name is in
     nothing known), or "your granddaughter will bring lunch" (a relation the
-    briefing and the senior never mention). A question may ask about an
-    unknown relation ("Do you have a granddaughter?") but never name a
-    stranger as one."""
-    words, kin = corpus
+    briefing and the senior never mention). Allowed: asking about an unknown
+    relation ("Do you have a granddaughter?"), saying there is no news of one
+    ("I don't have any news about your wife"), and the caregiver called by
+    her relation ("your daughter Sarah": she calls the senior "Dad", rule 11).
+    Never allowed: naming a stranger as a relative, even in a question."""
+    words, kin, caregiver = corpus
     for rx in (_KIN_THEN_NAME_RE, _NAME_THEN_KIN_RE):
         for m in rx.finditer(sentence):
             if m.group(1).lower() not in words:
                 return True
-    if sentence.rstrip().rstrip("\"')”’").endswith("?"):
+    if sentence.rstrip().rstrip("\"')\u201d\u2019").endswith("?"):
         return False
     for m in _YOUR_KIN_RE.finditer(sentence):
-        if not any(k in kin for k in _KIN_ACCEPTS[_KIN_FORMS[m.group(1).lower()]]):
-            return True
+        relation = _KIN_FORMS[m.group(1).lower()]
+        if any(k in kin for k in _KIN_ACCEPTS[relation]):
+            continue
+        if relation in _CHILD and _bound_to(sentence, m, caregiver):
+            continue
+        if _KIN_NEGATION_RE.search(_KIN_CLAUSE_BREAK_RE.split(sentence[:m.start()])[-1]):
+            continue
+        return True
     return False
 
 
-_UNBRIEFED_EMPTY_REPLY = "I don't have that noted down. Would you tell me a little about it?"
+_UNBRIEFED_EMPTY_REPLY = "I don't have any family news noted down. Have you heard from anyone lately?"
 
 # An apology in THINK's continuation of a fast-path crisis turn: the canned
 # fast-path line already apologised, so a second "sorry" is removed before it

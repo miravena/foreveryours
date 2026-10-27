@@ -392,7 +392,9 @@ class TestAssertionProbes(unittest.TestCase):
                       "Leo is coming by this weekend to see you.",
                       "I don't have news, but Leo has football practice on Saturday.",
                       "Your grandson is doing well, I'm sure.",              # no Leo
-                      "Leo is fine. Max says he will visit you on Sunday."]:
+                      "Leo is fine. Max says he will visit you on Sunday.",
+                      "Leo is doing well and is looking forward to seeing you.",
+                      "Sarah is coming by at 4 PM, and Leo is coming by after school."]:
             with self.subTest(reply=reply):
                 self.assertTrue(_reply_failures("T23", reply), f"false PASS: {reply!r}")
         for reply in ["Sarah told me about your grandson Leo, but I don't have any news about how he's doing. "
@@ -401,7 +403,11 @@ class TestAssertionProbes(unittest.TestCase):
                       "so tell me, how has he been?",
                       "Leo is your grandson, and I don't have any news about him today. Does he still visit you?",
                       "I don't have an update on Leo. Would you like to tell me about him?",
-                      "Oh, Leo! I don't know how he's doing, Dad. When did you last speak with him?"]:
+                      "Oh, Leo! I don't know how he's doing, Dad. When did you last speak with him?",
+                      # a briefed update about someone else is not grandson detail (review finding)
+                      "Sarah mentioned your grandson Leo. I don't have news about him. "
+                      "Sarah is coming by with groceries at 4 PM.",
+                      "I hope Leo is doing well. Sarah didn't say, so how has he been?"]:
             with self.subTest(reply=reply):
                 self.assertEqual(_reply_failures("T23", reply), [], reply)
 
