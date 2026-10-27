@@ -243,8 +243,11 @@ _YOUR_KIN_RE = re.compile(r"\byour\s+" + _KIN_ADJ + r"(" + _KIN_ALT + r")\b(?!-)
 # A name: capitalised, case-sensitive, whole ("Jean-Luc", "O'Brien").
 _NAME = r"[A-Z][a-z]+(?:[-'\u2019][A-Z]?[a-z]+)*"
 _NAME_RE = re.compile(r"\b" + _NAME + r"\b")
+# "your grandson Max", "your grandson is Max", "your grandson is named Max",
+# "your grandson's name is Max".
 _KIN_THEN_NAME_RE = re.compile(
-    r"\b(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r"),?\s+(" + _NAME + r")\b"
+    r"\b(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r")"
+    r"(?:,?\s+|(?i:['\u2019]s\s+name)?\s+(?i:is|was)\s+(?i:(?:named|called)\s+)?)(" + _NAME + r")\b"
 )
 # An apposition closes with a comma or ends the sentence: "Maya, your
 # granddaughter, is coming". "Sorry, your grandson is Leo" is no apposition.
