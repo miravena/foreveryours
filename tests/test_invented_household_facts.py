@@ -155,6 +155,13 @@ class TestUnbriefedRelative(unittest.TestCase):
     def test_addressing_the_senior_is_not_naming_a_relative(self):
         self.assertFalse(unbriefed_relative("Your grandson, Dad, sounds lovely.", _judge_corpus()))
 
+    def test_a_sentence_opener_is_not_a_name(self):
+        for s in ("Well, your grandson is Leo.", "Yes, your grandson is Leo.", "Actually, your grandson is Leo.",
+                  "Oh, your daughter Sarah is coming at 4 PM."):
+            with self.subTest(sentence=s):
+                self.assertFalse(unbriefed_relative(s, _judge_corpus()), s)
+        self.assertTrue(unbriefed_relative("Maya, your granddaughter, is coming at noon.", _judge_corpus()))
+
     def test_a_question_tag_does_not_make_a_statement_a_question(self):
         corpus = _judge_corpus()
         self.assertTrue(unbriefed_relative("Your granddaughter will call later, won't she?", corpus))

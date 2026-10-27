@@ -285,6 +285,15 @@ _NOT_NAME_WORDS = STOPWORDS | {
 }
 # How the companion addresses the senior: "Your grandson, Dad, sounds lovely."
 _ADDRESS_WORDS = {"dad", "daddy", "dear", "darling", "love", "honey", "sweetheart", "grandpa", "grandad", "granddad"}
+# Capitalised words that open a sentence, never a name: "Well, your grandson is Leo."
+_OPENER_WORDS = {
+    "well", "yes", "yeah", "oh", "ah", "aw", "wow", "hmm", "actually", "now", "okay", "ok", "alright",
+    "sure", "right", "also", "plus", "honestly", "look", "listen", "remember", "sadly", "luckily",
+    "today", "tonight", "tomorrow", "indeed", "anyway", "besides", "still", "though", "meanwhile",
+    "again", "first", "finally", "otherwise", "however", "course", "true", "sometimes", "perhaps",
+    "maybe", "please", "thanks", "absolutely", "certainly", "definitely", "lovely", "great", "good",
+    "wonderful", "sweet", "nice", "yesterday", "later", "soon",
+}
 _LOWER_WORD_RE = re.compile(r"[a-z]+(?:[-'\u2019][a-z]+)*")
 
 
@@ -339,10 +348,13 @@ def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) ->
     her relation ("your daughter Sarah": she calls the senior "Dad", rule 11).
     Never allowed: naming a stranger as a relative, even in a question."""
     names, kin, caregiver = corpus
-    for rx in (_KIN_THEN_NAME_RE, _NAME_THEN_KIN_RE):
-        for m in rx.finditer(sentence):
-            if _name_key(m.group(1)) not in names:
-                return True
+    for m in _KIN_THEN_NAME_RE.finditer(sentence):
+        if _name_key(m.group(1)) not in names:
+            return True
+    for m in _NAME_THEN_KIN_RE.finditer(sentence):  # "Well, your grandson ..." is no name
+        key = _name_key(m.group(1))
+        if key not in names and key not in _OPENER_WORDS and key not in _NOT_NAME_WORDS:
+            return True
     if sentence.rstrip().rstrip("\"')\u201d\u2019").endswith("?") and _QUESTION_START_RE.match(sentence):
         return False
     for m in _YOUR_KIN_RE.finditer(sentence):
