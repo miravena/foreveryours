@@ -281,6 +281,8 @@ _NOT_NAME_WORDS = STOPWORDS | {
     "them", "us", "there", "here", "so", "but", "if", "then", "than", "as", "by", "from", "up",
     "down", "out", "over", "just", "also", "very", "all", "any", "some", "one", "two", "new", "old",
 }
+# How the companion addresses the senior: "Your grandson, Dad, sounds lovely."
+_ADDRESS_WORDS = {"dad", "daddy", "dear", "darling", "love", "honey", "sweetheart", "grandpa", "grandad", "granddad"}
 _LOWER_WORD_RE = re.compile(r"[a-z]+(?:[-'\u2019][a-z]+)*")
 
 
@@ -290,17 +292,19 @@ def household_corpus(memory_texts: list[str], transcript: str, history: list[dic
     unbriefed_relative(), all lowercased, from every active memory line, the
     senior's own words this session (his turns in `history` plus this
     transcript; the companion's turns never vouch for themselves) and the
-    caregiver's name. A name is compared whole ("Jean-Luc", "O'Brien"), and
-    any word there vouches for one -- a caregiver or the senior may type
-    "leo" in lowercase -- except function words such as "will" (see
-    _NOT_NAME_WORDS)."""
+    caregiver's name. A name is compared whole ("Jean-Luc", "O'Brien"). Any
+    capitalised word there vouches for one ("named Will"), and so does any
+    lowercase word -- a caregiver or the senior may type "leo" -- except
+    function words such as "will" (see _NOT_NAME_WORDS). Words the companion
+    calls the senior ("Dad", "dear") are never taken for a relative's name."""
     texts = list(memory_texts) + [transcript or ""] + [
         m.get("content", "") for m in (history or []) if m.get("role") == "user"
     ]
     caregiver = _name_key((caregiver_name or "").strip())
-    names: set[str] = {caregiver} if caregiver else set()
+    names: set[str] = set(_ADDRESS_WORDS) | ({caregiver} if caregiver else set())
     kin: set[str] = set()
     for t in texts:
+        names.update(_name_key(n) for n in _NAME_RE.findall(str(t)))  # "named Will" stays a name
         text = _name_key(str(t))
         names.update(w for w in _LOWER_WORD_RE.findall(text) if w not in _NOT_NAME_WORDS)
         kin.update(_KIN_FORMS[w] for w in _WORD_RE.findall(text) if w in _KIN_FORMS)

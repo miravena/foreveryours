@@ -137,6 +137,11 @@ class TestUnbriefedRelative(unittest.TestCase):
         corpus = household_corpus(["his grandson is named leo", "Sarah will bring groceries"], "Hello", None, "Sarah")
         self.assertFalse(unbriefed_relative("Your grandson Leo is named in the notes.", corpus))
         self.assertTrue(unbriefed_relative("Your grandson Will is coming by.", corpus))
+        corpus = household_corpus(["His grandson is named Will"], "Hello", None, "Sarah")
+        self.assertFalse(unbriefed_relative("Your grandson Will is named in the notes.", corpus))
+
+    def test_addressing_the_senior_is_not_naming_a_relative(self):
+        self.assertFalse(unbriefed_relative("Your grandson, Dad, sounds lovely.", _judge_corpus()))
 
     def test_a_question_tag_does_not_make_a_statement_a_question(self):
         corpus = _judge_corpus()
