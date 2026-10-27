@@ -102,7 +102,8 @@ deploys it by hand: `.github/workflows/deploy-space.yml` does, so a collaborator
 - **Before the freeze** (the `FREEZE_UTC` date in the workflow): every push to `main` runs the
   tests, deploys that commit, waits for the Space to come up, checks the deployed sha, smokes the
   Gradio API and runs the live judge check suite (`scripts/live_judge_check.py`) with a small
-  call cap.
+  call cap. A push that only changes `docs/**`, `*.md` or `video/**` does not deploy (the Space
+  ships none of them, and each redeploy re-enters Hugging Face's hardware scheduling, #252).
 - **After the freeze:** a push to `main` only runs the tests. Deploy by publishing a GitHub
   Release (see *Releases*) or by *Run workflow* with `action=deploy`. Rollback = publish or re-run
   the workflow on the previous tag. Nothing deploys automatically.
@@ -121,9 +122,13 @@ deploys it by hand: `.github/workflows/deploy-space.yml` does, so a collaborator
 - **Every deploy runs the live suite,** releases included, so a release cannot pass on stubbed
   tests and API reachability alone.
 - **By hand, if Actions is unavailable:** from a clean, pushed `main`,
-  `HF_TOKEN=... NEBIUS_API_KEY= python scripts/deploy_hf_space.py elevenbaselab/foreveryours --hardware zero-a10g`
+  `HF_TOKEN=... NEBIUS_API_KEY= python scripts/deploy_hf_space.py elevenbaselab/foreveryours --hardware cpu-basic`
   then `python scripts/verify_space_sha.py elevenbaselab/foreveryours --wait 900 --smoke`.
   The deploy script refuses a dirty tree, so the recorded sha is always a real commit.
+- **Hardware is one setting:** the repo variable `SPACE_HARDWARE` (default `cpu-basic`; ADR-017).
+  Change it to `cpu-upgrade`, or back to `zero-a10g`, and re-run the workflow. `cpu-*` needs a
+  PRO account; the deploy stops at once, with a message, if the account is not PRO or has no
+  card, instead of waiting out the 900 s build check.
 
 ## After every Space deploy: the live judge check
 

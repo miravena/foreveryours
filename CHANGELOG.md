@@ -12,11 +12,15 @@ rename `Unreleased` to the version and date, then tag it.
 
 ### Added
 - Uptime monitor: a scheduled workflow checks the hosted demo every 30 minutes and opens, updates and closes an `outage` Issue assigned to both maintainers (#252).
+- Space hardware is one setting (repo variable `SPACE_HARDWARE`, default `cpu-basic`), and the deploy
+  stops early with a clear message when the account cannot run it (not PRO, no card); proposed in ADR-017 (#253).
 - Hosted page names which model does what in an always-visible footer, and each caregiver flag
   says which layer raised it (safety rules, Nemotron backstop, or repeated-question check);
   `CaregiverFlag` gains a persisted `source` field, old flag files load as unknown (#214).
 
 ### Changed
+- A push to `main` that only changes `docs/**`, `*.md` or `video/**` no longer redeploys the
+  Space, so docs merges stop restarting it (#252).
 - AUDIT's default model is now `nvidia/nemotron-3-super-120b-a12b` (recall 1.00 vs Nano 0.88 on the 43-row eval, 0/17 false flags each); THINK stays on Nano. ADR-016 amends ADR-010 and ADR-002; ADR-012 to ADR-015 are Accepted (#200).
 - Hosted page puts the action first: a bold "Try this first" line with a one-click example that
   fills the type box, one-line AI notice with the privacy link, plain sample clip names, and the
