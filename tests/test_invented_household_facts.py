@@ -316,14 +316,11 @@ class TestInventedFamilyDetail(unittest.TestCase):
 
     def reads(self, reply, transcript="What's on for today?", history=None):
         """Which sentences of `reply` the guard drops, as the stream sees them."""
-        g, follows, dropped = self.grounding(transcript, history), False, []
+        g, family, relative, dropped = self.grounding(transcript, history), False, False, []
         for s in orchestrator._SENTENCE_SPLIT_RE.split(reply):
-            if orchestrator.invented_family_detail(s, g, follows):
+            if orchestrator.invented_family_detail(s, g, family, relative):
                 dropped.append(s)
-                follows = True
-            else:
-                follows = orchestrator._family_ref(s, g) or bool(
-                    follows and orchestrator._THIRD_PERSON_RE.search(s))
+            family, relative = orchestrator.family_thread(s, g, "Sarah", family, relative)
         return dropped
 
     def test_the_live_inventions_are_dropped(self):
@@ -393,6 +390,18 @@ class TestInventedFamilyDetail(unittest.TestCase):
         history = [{"role": "user", "content": "Leo has a soccer game on Saturday."},
                    {"role": "assistant", "content": "How lovely."}]
         self.assertEqual(self.reads(reply, "What's on today?", history), [])
+
+    def test_a_hope_or_no_news_clears_only_what_follows_it(self):
+        for reply in ["Leo has cancer and I hope he feels better soon.",
+                      "Leo has a soccer game and I don't know when it is."]:
+            with self.subTest(reply=reply):
+                self.assertEqual(self.reads(reply), [reply])
+
+    def test_a_follow_up_with_no_subject_is_still_about_the_relative(self):
+        self.assertEqual(self.reads("Leo is your grandson. Soccer practice is on Saturday."),
+                         ["Soccer practice is on Saturday."])
+        self.assertEqual(self.reads("Sarah is dropping off groceries at 4 PM. Jazz always lifts the spirits."), [])
+        self.assertEqual(self.reads("Leo is your grandson. That must make you proud."), [])
 
     def test_a_question_the_senior_asks_grounds_nothing(self):
         self.assertEqual(self.reads("Leo has cancer.", "Does Leo have cancer?"), ["Leo has cancer."])

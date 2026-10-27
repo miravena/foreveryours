@@ -597,24 +597,21 @@ def _question_cut(sentence: str) -> str:
     return " ".join(segments[:opens[0]]) if opens else ""
 
 
-def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bool = False) -> bool:
+def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bool = False,
+                           follows_relative: bool = False) -> bool:
     """True when `sentence` states something about a family member that no
-    memory line and nothing the senior said contains. `follows_family` is
-    whether the sentence before it was about the family, so a pronoun ("She'll
-    also bring ...") refers back to them."""
+    memory line and nothing the senior said contains. `follows_family` and
+    `follows_relative` say what the sentence before it was about (see
+    family_thread): after the family, a pronoun ("She'll also bring ...")
+    points back to them; after a relative, so does a sentence with no subject
+    of its own ("Leo is your grandson. Soccer practice is on Saturday.")."""
     statement = _question_cut(sentence)
     if not statement.strip():
         return False
     about = follows_family or _family_ref(statement, g)
     name_parts = _name_parts(g)
-    previous = False
+    previous = follows_relative
     for clause in _DETAIL_CLAUSE_RE.split(statement):
-        # Only what comes before the companion's own act is checked: "I let
-        # Sarah know so she can check on you" passes, "Leo has a game on
-        # Saturday, so I'll let Sarah know" does not.
-        act = _COMPANION_ACT_RE.search(clause.replace("\u2019", "'"))
-        if act:
-            clause = clause[:act.start()]
         if not clause.strip():
             continue
         if _family_ref(clause, g):
@@ -624,11 +621,22 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         else:
             is_family = previous and not _OWN_SUBJECT_RE.search(clause)
         previous = is_family
-        if not is_family or _HEDGE_RE.search(clause):
+        if not is_family:
             continue
-        if _KIN_NEGATION_RE.search(clause) and (_NO_NEWS_RE.search(clause)
-                                                 or _CANNOT_PERCEIVE_RE.search(_plain(clause))):
-            continue
+        # Only what comes before the companion's own act, a hope, or a "no
+        # news" is checked: "I hope he's doing well" and "I let Sarah know so
+        # she can check on you" pass; "Leo has cancer and I hope he feels
+        # better" and "Leo has a game on Saturday, so I'll let Sarah know" do not.
+        for cut in (_COMPANION_ACT_RE.search(clause.replace("\u2019", "'")), _HEDGE_RE.search(clause)):
+            if cut:
+                clause = clause[:cut.start()]
+        neg = _KIN_NEGATION_RE.search(clause)
+        if neg:
+            at = neg.start()
+            while at and clause[at - 1].isalpha():  # the whole word: "can't", not "n't"
+                at -= 1
+            if _NO_NEWS_RE.search(clause, at) or _CANNOT_PERCEIVE_RE.search(_plain(clause[at:])):
+                clause = clause[:at]
         for w in _detail_words(clause):
             if (w in STOPWORDS or w in _NOT_NAME_WORDS or w in _CHAT_WORDS or w in _CONTRACTION_BITS
                     or w in _ADDRESS_WORDS or w in name_parts or w in _KIN_FORMS
@@ -637,6 +645,21 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
             if _stem(w) not in g.stems:
                 return True
     return False
+
+
+def family_thread(sentence: str, g: FamilyGrounding, caregiver_name: str,
+                  follows_family: bool, follows_relative: bool) -> tuple[bool, bool]:
+    """(follows_family, follows_relative) for the sentence after `sentence`,
+    for invented_family_detail(). A relative is a family member other than
+    the caregiver: by name, by relation word, or carried on by "he"/"she" or a
+    sentence with no subject of its own."""
+    lowered = sentence.lower()
+    named = bool(family_people_in(sentence, g, caregiver_name)) or any(
+        w in _KIN_FORMS for w in _WORD_RE.findall(lowered))
+    carried = bool(_THIRD_PERSON_RE.search(sentence)) or not _OWN_SUBJECT_RE.search(sentence)
+    relative = named or (follows_relative and carried and (caregiver_name or "\0").lower() not in lowered)
+    family = relative or _family_ref(sentence, g) or (follows_family and bool(_THIRD_PERSON_RE.search(sentence)))
+    return family, relative
 
 
 def family_people_in(text: str, g: FamilyGrounding, caregiver_name: str) -> list[str]:
@@ -1626,7 +1649,7 @@ def run_turn(
                 budget = hotline_budget
                 follows_dropped = False
                 strangers: set[str] = set()
-                follows_family = False
+                follows_family = follows_relative = False
                 last_person = asked[0] if asked else None
                 for s in s_iter:
                     # Safety advice is never dropped for naming a relative. A
@@ -1646,9 +1669,10 @@ def run_turn(
                     people = family_people_in(s, family, caregiver_name)
                     lift_offer = driving_guard and _REAL_ALTERNATIVE_RE.search(s)
                     if (not readout and not is_safety and not lift_offer
-                            and invented_family_detail(s, family, follows_family)):
+                            and invented_family_detail(s, family, follows_family, follows_relative)):
                         dropped_detail.append(s)
-                        follows_family = True
+                        follows_family, follows_relative = family_thread(
+                            s, family, caregiver_name, follows_family, follows_relative)
                         # Who it was about: a relative it names, else the one a
                         # pronoun points back to. Said in its place, once, warmly.
                         if not people and caregiver_name.lower() not in s.lower() and last_person:
@@ -1666,7 +1690,8 @@ def run_turn(
                     pointed = people or ([last_person] if last_person and _THIRD_PERSON_RE.search(s) else [])
                     if no_news and pointed and pointed[0] in replaced_for:
                         continue  # the no-news line already said it ("I don't have any other news about him.")
-                    follows_family = _family_ref(s, family) or bool(follows_family and _THIRD_PERSON_RE.search(s))
+                    follows_family, follows_relative = family_thread(
+                        s, family, caregiver_name, follows_family, follows_relative)
                     if people:
                         last_person = people[-1]
                         if no_news:
