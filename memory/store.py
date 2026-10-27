@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from caregiver import fact_subject_key, normalize_fact_text
+from memory.expiry import dated_expiry
 from memory.profile_io import atomic_write_json, profile_lock
 
 CAREGIVER_SOURCES = ("caregiver_memo", "caregiver_note")
@@ -299,7 +300,11 @@ class MemoryStore:
                 scope = MemoryScope.TEMPORARY.value
             
             if scope == MemoryScope.TEMPORARY.value and expires_at is None:
-                expires_at = time.time() + 86400
+                # 24 h for a same-day errand; a fact about a named future day
+                # ("Thursday", "tomorrow", "on the 30th") lasts to the end of
+                # that day in the household's timezone (#248).
+                now = time.time()
+                expires_at = dated_expiry(text, now, self.timezone_str) or now + 86400
             
             item = MemoryItem(
                 text=text,

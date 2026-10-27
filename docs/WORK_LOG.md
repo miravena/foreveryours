@@ -9,6 +9,22 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-27 (#248: a dated memo no longer expires in 24 hours)
+
+- **What:** `MemoryStore.add` gave every time-marked fact a flat 24 h life, so "Dr. Tan on Thursday
+  at 10 AM" saved on Monday was gone by Tuesday noon. New `memory/expiry.py::dated_expiry` reads
+  the day words in the text (weekday, "next <weekday>", tomorrow, "in N days", explicit dates,
+  "this/next week") and expires the fact at the end of the latest named day in the household's
+  timezone (`SENIOR_TIMEZONE`); no named future day keeps 24 h. The rule is deterministic, so the
+  extractor's label is not trusted. The panel label is `expires Thu 23:59` beyond 24 h and the
+  countdown inside it.
+- **Choices:** a weekday equal to today means today (24 h); "next <weekday>" is next calendar
+  week's, the later of two readings; recurring wording ("every Thursday", "Thursdays") and past
+  wording ("last Thursday") name no day; the result is never shorter than 24 h. Scope is still
+  decided by the existing time-marker check, so a recurring or birthday fact without a clock time
+  stays Permanent. Numeric dates ("30/10") are not parsed (day/month order is ambiguous).
+- **Check:** `tests/test_dated_memo_expiry.py` (frozen clock), full suite.
+
 ### 2026-10-26 (#5: demo video v2, VIDEO_SCRIPT appointment line check)
 
 - **What:** Rebuilt the demo video from live-Space captures with an AI narrator (Kokoro af_heart)
