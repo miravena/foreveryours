@@ -470,7 +470,8 @@ instead
 # safety flags"), never from a memo.
 _PRODUCT_WORDS = set("""
 safety flag flags alert alerts sees see conversation conversations listen listening hear read transcript private
-secret between us check checks wellbeing lift lifts ride rides give arrange
+secret between us check checks wellbeing lift lifts ride rides give arrange message messages chat chats
+talk words what say
 """.split())
 # A grounded word grounds its group: one visit is "dropping off", "stopping by"
 # or "coming over"; "4 PM" is this afternoon.
@@ -479,6 +480,13 @@ _DETAIL_GROUPS = (
         "swinging bring bringing brings brought deliver delivering over by round".split()),
     {"pm", "afternoon", "evening"},
     {"am", "morning"},
+)
+# What the family cannot do is rule 19's privacy answer, not news about them:
+# "Sarah can't read your messages", "No, Sarah isn't listening".
+# "Leo can't see well" is not one: the object has to be the conversation.
+_CANNOT_PERCEIVE_RE = re.compile(
+    r"\b(?:listen|listens|listening|watch|watches|watching)\b"
+    r"|\b(?:hear|hears|read|reads|see|sees|access|know)\b.*\b(?:us|we|you|your|conversations?|messages?|chats?|talk|say|tell)\b"
 )
 _CONTRACTION_BITS = {"s", "t", "ll", "re", "ve", "d", "m"}
 _NO_NEWS_LINE = "I don't have any news about how {name} is doing, but I'd love to hear if you have."
@@ -576,6 +584,7 @@ def _question_cut(sentence: str) -> str:
     """The part of `sentence` that states something: "" for a question, the
     statement before a tag ("Leo is doing well, isn't he?") or before the
     question proper ("Leo is doing well in school, did you know?")."""
+    sentence = sentence.replace("\u2019", "'")
     if not sentence.rstrip().rstrip("\"')\u201d\u2019").endswith("?"):
         return sentence
     tag = _TAG_QUESTION_RE.search(sentence)
@@ -617,7 +626,8 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         previous = is_family
         if not is_family or _HEDGE_RE.search(clause):
             continue
-        if _KIN_NEGATION_RE.search(clause) and _NO_NEWS_RE.search(clause):
+        if _KIN_NEGATION_RE.search(clause) and (_NO_NEWS_RE.search(clause)
+                                                 or _CANNOT_PERCEIVE_RE.search(_plain(clause))):
             continue
         for w in _detail_words(clause):
             if (w in STOPWORDS or w in _NOT_NAME_WORDS or w in _CHAT_WORDS or w in _CONTRACTION_BITS

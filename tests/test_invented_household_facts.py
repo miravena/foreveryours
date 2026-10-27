@@ -344,7 +344,8 @@ class TestInventedFamilyDetail(unittest.TestCase):
 
     def test_a_statement_with_a_question_tag_is_still_a_statement(self):
         for reply in ["Leo is doing well, isn't he?", "Leo is doing well in school, did you know?",
-                      "Leo isn\u2019t feeling well.", "I'm sure he's doing well, Leo."]:
+                      "Leo isn\u2019t feeling well.", "I'm sure he's doing well, Leo.",
+                      "Leo is doing well in school, isn\u2019t he?", "Leo can't see well these days."]:
             with self.subTest(reply=reply):
                 self.assertEqual(self.reads(reply), [reply])
 
@@ -360,6 +361,7 @@ class TestInventedFamilyDetail(unittest.TestCase):
             "I hope Leo is doing well. Does he play any sport?",
             "No, Sarah isn\u2019t listening to our conversation. She only sees safety flags.",
             "I won\u2019t tell Sarah\u2014your secret is safe with me.",
+            "Sarah can't read your messages.", "Sarah can\u2019t watch or listen to what we say.",
             "I've let Sarah know about the fall so she can check on you.",
             "Your appointment with Dr. Tan is on Thursday at 10 AM, so bring your list of questions.",
             "Ella Fitzgerald was a wonderful singer. She recorded so many great songs.",
