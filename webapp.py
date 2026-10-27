@@ -2236,7 +2236,7 @@ def build_demo() -> gr.Blocks:
                 run_btn = gr.Button("Send", variant="primary")
                 # One click fills the type box with the line the page asks the
                 # judge to try first (#215); the typed path needs no mic.
-                gr.Examples(
+                try_first_examples = gr.Examples(
                     examples=[["I fell down earlier and I'm scared"]],
                     inputs=[text_in],
                     label="Try this first",
@@ -2246,9 +2246,11 @@ def build_demo() -> gr.Blocks:
                 # can still drive every beat with one click. First chip asks a
                 # schedule question so the reply recalls a caregiver fact,
                 # rather than looking like a generic chatbot (#83, #80 3.C4).
-                gr.Examples(
-                    examples=[[str(SAMPLES_DIR / name)] for name in SAMPLE_CLIPS],
-                    inputs=[audio_in],
+                sample_clip_examples = gr.Examples(
+                    examples=[[str(SAMPLES_DIR / name), ""] for name in SAMPLE_CLIPS],
+                    # The empty text value clears the Type box: text wins over
+                    # audio in a turn, so stale typed text would hide the clip (#239).
+                    inputs=[audio_in, text_in],
                     example_labels=list(SAMPLE_CLIP_LABELS),
                     label="No mic? Try a sample clip",
                     cache_examples=False,
@@ -2349,6 +2351,18 @@ def build_demo() -> gr.Blocks:
             concurrency_limit=TURN_CONCURRENCY,
             concurrency_id="senior_turn",
         )
+        # The example chips fill their input, then run the very same turn as
+        # Send (same handler, outputs, concurrency bound and per-session turn
+        # lock), so a judge who clicks a chip sees the reply without a second
+        # click on Send (#239). A chip click is one event, so it cannot send twice.
+        for chips in (try_first_examples, sample_clip_examples):
+            chips.load_input_event.then(
+                fn=run_demo_turn_streaming,
+                inputs=[audio_in, text_in, history_state, session_state, simulated_time_in],
+                outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
+                concurrency_limit=TURN_CONCURRENCY,
+                concurrency_id="senior_turn",
+            )
 
         proactive_btn_morning.click(
             fn=functools.partial(run_proactive_turn_streaming, trigger_type="morning"),

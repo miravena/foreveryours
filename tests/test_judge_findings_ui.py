@@ -92,6 +92,8 @@ class TestJudgeFindingsUi(unittest.TestCase):
                 "Dad says he fell and is scared",
             ],
         )
+        # #239: a clip chip also blanks the Type box, so typed text cannot win over it.
+        self.assertTrue(all(row[1] == "" for row in datasets[0]["props"]["samples"]))
         self.assertEqual(
             list(webapp.SAMPLE_CLIPS),
             ["senior_schedule.wav", "senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav"],
@@ -108,6 +110,23 @@ class TestJudgeFindingsUi(unittest.TestCase):
         comps = datasets[0]["props"]["components"]
         self.assertEqual(len(comps), 1)
         self.assertEqual(comps[0]["name"], "textbox")
+
+    def test_example_chips_run_the_send_turn(self):
+        """#239: each chip fills its input, then runs the same turn as Send."""
+        deps = self.config["dependencies"]
+        send = [d for d in deps if (d["targets"][0][1] == "click" and d["api_name"] == "run_demo_turn_streaming")]
+        self.assertEqual(len(send), 1)
+        send = send[0]
+        labels = ("Try this first", "No mic? Try a sample clip")
+        for label in labels:
+            ds = [d for d in self._of_type("dataset") if d["props"].get("label") == label][0]
+            fill = [d for d in deps if d["targets"][0] == [ds["id"], "click"] or tuple(d["targets"][0]) == (ds["id"], "click")]
+            self.assertEqual(len(fill), 1, label)
+            chained = [d for d in deps if d.get("trigger_after") == fill[0]["id"]]
+            self.assertEqual(len(chained), 1, label)
+            self.assertEqual(chained[0]["inputs"], send["inputs"])
+            self.assertEqual(chained[0]["outputs"], send["outputs"])
+            self.assertTrue(chained[0]["api_name"].startswith("run_demo_turn_streaming"))
 
     def test_transparency_notice_is_one_line_with_privacy_link(self):
         notice = [v for v in self.markdown if "TRANSPARENCY NOTICE" in v]
