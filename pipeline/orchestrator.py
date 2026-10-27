@@ -246,7 +246,11 @@ _NAME_RE = re.compile(r"\b" + _NAME + r"\b")
 _KIN_THEN_NAME_RE = re.compile(
     r"\b(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r"),?\s+(" + _NAME + r")\b"
 )
-_NAME_THEN_KIN_RE = re.compile(r"\b(" + _NAME + r"),\s+(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r")\b")
+# An apposition closes with a comma or ends the sentence: "Maya, your
+# granddaughter, is coming". "Sorry, your grandson is Leo" is no apposition.
+_NAME_THEN_KIN_RE = re.compile(
+    r"\b(" + _NAME + r"),\s+(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r")\b(?=\s*(?:,|[.!?]|$))"
+)
 _WORD_RE = re.compile(r"[a-z]+(?:-[a-z]+)*")
 
 
@@ -302,6 +306,10 @@ _KIN_DENIED_RE = re.compile(
     r"|n't\s+(?:(?:have|has|had|got|a|an|any|one)\s+){0,3}$",
 )
 _DENIED_NAME_RE = re.compile(r"\s+(?:(?:named|called)\s+)?([a-z]+(?:[-'][a-z]+)*)")
+_ASKS_WHO_I_HAVE_RE = re.compile(
+    r"[^.!?]*\b(?:(?:do|did)\s+i\s+(?:have|has)|have\s+i\s+(?:got|ever\s+had))\b[^.!?]*\?",
+    re.IGNORECASE,
+)
 _LOWER_WORD_RE = re.compile(r"[a-z]+(?:[-'\u2019][a-z]+)*")
 
 
@@ -325,9 +333,10 @@ def household_corpus(memory_texts: list[str], transcript: str, history: list[dic
     granddaughter"); whose relation it is is not parsed, so "my sister has a
     son" still vouches for "your son" -- the guard is a backstop for rule 25,
     not a parser."""
-    texts = list(memory_texts) + [transcript or ""] + [
-        m.get("content", "") for m in (history or []) if m.get("role") == "user"
-    ]
+    senior = [transcript or ""] + [m.get("content", "") for m in (history or []) if m.get("role") == "user"]
+    # "Do I have a granddaughter named Maya?" asks; it vouches for nobody.
+    senior = [_ASKS_WHO_I_HAVE_RE.sub(" ", str(t)) for t in senior]
+    texts = list(memory_texts) + senior
     caregiver = _name_key((caregiver_name or "").strip())
     names: set[str] = set(_ADDRESS_WORDS) | ({caregiver} if caregiver else set())
     kin: set[str] = set()
