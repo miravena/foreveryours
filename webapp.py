@@ -2178,7 +2178,8 @@ BUSY_NOTICE_JS = r"""
           headers: { "Content-Type": "application/json" }
         });
       }, function (err) {
-        if (isApi(url)) showBusy();
+        // A request the page cancelled itself (AbortError) is not an outage.
+        if (isApi(url) && !(err && err.name === "AbortError")) showBusy();
         throw err;
       });
     };

@@ -71,9 +71,17 @@ const window = {
   fetch: () => Promise.resolve(next), Response, XMLHttpRequest,
   setTimeout(f, ms) { timers.push({ f, ms }); return timers.length; }, clearTimeout(id) { if (timers[id - 1]) timers[id - 1].f = null; },
 };
+let reject = null;
+const baseFetch = window.fetch;
+window.fetch = (...a) => reject ? Promise.reject(reject) : baseFetch(...a);
 __SCRIPT__
 const banner = () => body.children.find(c => c.attrs.role === "status");
 (async () => {
+  reject = Object.assign(new Error("cancelled"), { name: "AbortError" });
+  try { await window.fetch("https://x.hf.space/gradio_api/queue/join", {}); } catch (e) {}
+  results.banner_after_fetch_abort = !!banner();
+  reject = null;
+
   next = { status: 200, headers: new Headers({ "content-type": "application/json" }) };
   const ok = await window.fetch("https://x.hf.space/gradio_api/queue/join", {});
   results.json_passthrough = ok === next;
@@ -135,6 +143,9 @@ class BusyNoticeBehaviourTest(unittest.TestCase):
         self.assertTrue(self.r["non_api_passthrough"])
         self.assertFalse(self.r["banner_after_json"])
         self.assertFalse(self.r["banner_after_non_api"])
+
+    def test_a_cancelled_fetch_is_not_an_outage(self):
+        self.assertFalse(self.r["banner_after_fetch_abort"])
 
     def test_html_api_answer_becomes_a_json_busy_error(self):
         self.assertEqual(self.r["rewritten_status"], 429)
