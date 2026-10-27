@@ -1815,20 +1815,19 @@ def run_turn(
         
             dropped_hotline = []
             dropped_unbriefed = []
-            # #245: what the family briefed (any active memory line, any
-            # privacy: a name the caregiver wrote is not invented) and what the
-            # senior said this session; a sentence naming a relative outside it
-            # is dropped before it is spoken.
-            active_texts = [i.text for i in memory_store.all() if i.is_active(t_now)]
-            known_household = household_corpus(active_texts, transcript, history, caregiver_name)
+            # #245: what the family briefed and what the senior said this
+            # session; a sentence naming a relative outside it is dropped
+            # before it is spoken. Only what Dad may hear counts: THINK never
+            # sees a caregiver-only note, so a name from one in the reply is a
+            # guess or a leak, and it never vouches for a detail nor puts a
+            # name into the no-news line.
+            speakable = [i.text for i in memory_store.all() if i.is_active(t_now)
+                         and i.privacy != PrivacyLevel.CAREGIVER_ONLY.value]
+            known_household = household_corpus(speakable, transcript, history, caregiver_name)
             # ... and a statement about a briefed family member is spoken only
             # when the briefing or the senior grounds it (invented_family_detail).
             # The visitor read-out is the notes verbatim, so it is not checked.
-            # Only what Dad may hear grounds it: a caregiver-only note never
-            # vouches for a detail, nor puts a name into the no-news line.
             dropped_detail = []
-            speakable = [i.text for i in memory_store.all() if i.is_active(t_now)
-                         and i.privacy != PrivacyLevel.CAREGIVER_ONLY.value]
             family = family_grounding(speakable, transcript, history, caregiver_name)
             # The caregiver is checked only when Dad asks about the family or
             # the day, which is where the model invents visits and news. On

@@ -754,6 +754,12 @@ class TestDetailGuardInRunTurn(_TurnBase):
         res, _ = self.turn("How is my granddaughter doing?", "I don't have any news about that. How are you today?")
         self.assertNotIn("Maya", res.reply_text)
 
+    def test_a_caregiver_only_name_is_not_briefed(self):
+        self.store.add("His granddaughter is named Will", source="caregiver_memo", supersede=False,
+                       privacy=PrivacyLevel.CAREGIVER_ONLY.value)
+        res, _ = self.turn("Tell me about my family.", "Your granddaughter is Will.")
+        self.assertNotIn("Will", res.reply_text)
+
     def test_lift_offer_on_a_driving_turn_is_kept(self):
         res, _ = self.turn("I think I'll drive down to the shop myself this afternoon.",
                            "Sarah or one of the family could give you a lift instead.")
