@@ -389,6 +389,10 @@ def main():
                 ev[2] = re.sub(r"Time to first WAV written[^\r\n]*\r?\n", "", ev[2])
                 line = json.dumps(ev, ensure_ascii=False) + "\n"
             out.write(line)
+    with open(cast_clean) as fh:   # a line split across two PTY reads would slip past the filter
+        shown = "".join(json.loads(ln)[2] for i, ln in enumerate(fh) if i and ln.strip())
+    if re.search(r"Time to first|\(synthesis\)", shown):
+        sys.exit("the day-2 cast still shows a timing line; not rendering it")
     day2_clip = os.path.join(WORK, "day2_clean.mp4")
     run([os.environ.get("FY_TERM_PYTHON", "python3"), os.path.join(ROOT, "video", "render_terminal.py"), cast_clean, day2_clip,
          str(s6["duration"])], stdout=subprocess.DEVNULL)

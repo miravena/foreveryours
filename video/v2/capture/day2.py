@@ -58,10 +58,13 @@ def main():
         for ln in fh.read().splitlines()[1:]:
             if ln.strip():
                 text += json.loads(ln)[2]
+    shutil.rmtree(APP, ignore_errors=True)
+    # The recorder's wrapper does not pass on the command's exit status, so check the output.
+    if 'Companion replied: "' not in text:
+        sys.exit("beat4 printed no companion reply (missing key or a failed run); not using this cast")
     with open(os.path.join(out_dir, "day2.json"), "w") as fh:
         json.dump({"shot": "day2", "clip": mp4, "cast": cast, "duration": seconds,
                    "senior_text": QUESTION, "terminal_output": text}, fh, indent=2)
-    shutil.rmtree(APP, ignore_errors=True)
     print(text)
 
 
