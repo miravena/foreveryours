@@ -301,6 +301,7 @@ _KIN_DENIED_RE = re.compile(
     r"\b(?:no|not|never|without|don't|doesn't|didn't|haven't|hasn't)\s+(?:(?:have|has|had|got|a|an|any|one)\s+){0,3}$"
     r"|n't\s+(?:(?:have|has|had|got|a|an|any|one)\s+){0,3}$",
 )
+_DENIED_NAME_RE = re.compile(r"\s+(?:(?:named|called)\s+)?([a-z]+(?:[-'][a-z]+)*)")
 _LOWER_WORD_RE = re.compile(r"[a-z]+(?:[-'\u2019][a-z]+)*")
 
 
@@ -341,7 +342,9 @@ def household_corpus(memory_texts: list[str], transcript: str, history: list[dic
                 if m.group(0) not in _KIN_FORMS:
                     continue
                 if _KIN_DENIED_RE.search(clause[:m.start()]):
-                    denied.update(_LOWER_WORD_RE.findall(clause[m.end():]))
+                    named = _DENIED_NAME_RE.match(clause, m.end())  # only that relative's own name
+                    if named:
+                        denied.add(named.group(1))
                 else:
                     kin.add(_KIN_FORMS[m.group(0)])
     return names - (denied - _NOT_NAME_WORDS - {caregiver}), kin, caregiver

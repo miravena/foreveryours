@@ -120,6 +120,9 @@ class TestUnbriefedRelative(unittest.TestCase):
         self.assertTrue(unbriefed_relative("Your granddaughter will bring lunch.", corpus))
         corpus = _judge_corpus("I do not have a granddaughter named Maya.")
         self.assertTrue(unbriefed_relative("Your granddaughter Maya will bring lunch.", corpus))
+        # The denial covers that relative's own name only, never a briefed one.
+        corpus = _judge_corpus("I have no granddaughter and my grandson Leo is visiting.")
+        self.assertFalse(unbriefed_relative("Your grandson Leo is visiting.", corpus))
 
     def test_an_unrelated_negation_does_not_hide_a_briefed_relation(self):
         corpus = household_corpus(["Dad does not drive and his son Tom gives him lifts"], "Hello", None, "Sarah")
