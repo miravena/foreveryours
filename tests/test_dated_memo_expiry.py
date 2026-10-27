@@ -74,6 +74,7 @@ class DatedExpiryRule(unittest.TestCase):
         # a named month that is long gone is next year's; a recent one is a past event
         self.assertEqual(self.expiry("Check-up on March 3 at 10 AM"), end_of(2027, 3, 3))
         self.assertIsNone(self.expiry("Check-up was on Oct 20 at 10 AM"))
+        self.assertIsNone(self.expiry("Doctor appointment was October 1 at 10 AM"))
 
     def test_explicit_year_is_taken_as_written(self):
         self.assertEqual(self.expiry("Eye test on 30 October 2027 at 2 PM"), end_of(2027, 10, 30))

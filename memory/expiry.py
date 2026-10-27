@@ -18,7 +18,8 @@ Rules (all relative to "today" in `tz`, never the server's clock zone):
     generous: a reminder that lingers a few days beats one that vanishes.
   * explicit dates: "2026-10-30", "30 October", "Oct 30th", "on the 30th".
     A named month already past is next year's, except within the last 14 days
-    where it is read as a past event (no extension). A bare "the 30th" rolls
+    or when the sentence is in the past tense ("was", "had", "last"), where it
+    is a past event (no extension). A bare "the 30th" rolls
     to the next month that has that day.
   * recurring wording ("every Thursday", "Thursdays", "each Monday") and past
     wording ("last Thursday", "yesterday") name no future day and are ignored.
@@ -43,6 +44,7 @@ _MONTHS = {
 _MONTH_RE = "|".join(sorted(_MONTHS, key=len, reverse=True))
 _WEEKDAY_RE = "|".join(list(_WEEKDAYS) + list(_WEEKDAY_ALIASES))
 _ORD = r"(?:st|nd|rd|th)?"
+_PAST_WORDING = re.compile(r"\b(?:was|were|had|went|saw|ago|yesterday|last|earlier)\b")
 
 _RECURRING = re.compile(r"\b(?:every|each|all|most)\s+(?:other\s+)?$")
 _WEEKDAY = re.compile(rf"\b(?:(next|last|this|coming|past)\s+)?({_WEEKDAY_RE})\b")
@@ -85,7 +87,7 @@ def _named_dates(text: str, today: dt.date) -> list[dt.date]:
             d = _safe_date(int(year), month, day)
         else:
             d = _safe_date(today.year, month, day)
-            if d and d < today - dt.timedelta(days=14):
+            if d and d < today - dt.timedelta(days=14) and not _PAST_WORDING.search(text):
                 d = _safe_date(today.year + 1, month, day)  # a named month long gone means next year's
         if d and d >= today:
             out.append(d)
