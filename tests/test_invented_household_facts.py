@@ -106,6 +106,10 @@ class TestUnbriefedRelative(unittest.TestCase):
         corpus = _judge_corpus("Will she bring the baby?", history)
         self.assertFalse(unbriefed_relative("Your granddaughter Maya sounds wonderful.", corpus))
 
+    def test_a_name_the_senior_typed_in_lowercase_vouches(self):
+        corpus = _judge_corpus("my granddaughter maya is visiting next week")
+        self.assertFalse(unbriefed_relative("How lovely that your granddaughter Maya is visiting.", corpus))
+
     def test_the_companion_never_vouches_for_itself(self):
         history = [{"role": "user", "content": "Hello there."},
                    {"role": "assistant", "content": "Your granddaughter Maya says hello."}]
@@ -117,6 +121,17 @@ class TestUnbriefedRelative(unittest.TestCase):
         corpus = household_corpus(texts, "Hello", None, "Sarah")
         self.assertFalse(unbriefed_relative("Your grandson Leo visits on Saturday at 3 PM.", corpus))
         self.assertTrue(unbriefed_relative("Your granddaughter Maya will bring lunch.", corpus))
+
+    def test_whole_names_are_compared(self):
+        # Review findings: a hyphenated briefed name is known in full, and an
+        # ordinary lowercase word ("will") never vouches for a name ("Will").
+        corpus = household_corpus(["His grandson is named Jean-Luc", "Sarah will bring groceries"],
+                                  "Hello", None, "Sarah")
+        self.assertFalse(unbriefed_relative("Your grandson Jean-Luc loves music.", corpus))
+        self.assertTrue(unbriefed_relative("Your grandson Will is coming by.", corpus))
+        self.assertTrue(unbriefed_relative("Your grandson Jean is coming by.", corpus))
+        corpus = household_corpus(["His granddaughter is Niamh O'Brien"], "Hello", None, "Sarah")
+        self.assertFalse(unbriefed_relative("Your granddaughter O\u2019Brien called.", corpus))
 
     def test_no_caregiver_means_no_assumed_children(self):
         corpus = household_corpus(["Dad loves jazz"], "Hello", None, "")

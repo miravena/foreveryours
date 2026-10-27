@@ -240,16 +240,18 @@ _KIN_FORMS = {
 _KIN_ALT = "|".join(sorted((re.escape(f) for f in _KIN_FORMS), key=len, reverse=True))
 _KIN_ADJ = r"(?:(?:late|dear|little|eldest|oldest|youngest|younger|older|lovely|sweet)\s+)?"
 _YOUR_KIN_RE = re.compile(r"\byour\s+" + _KIN_ADJ + r"(" + _KIN_ALT + r")\b(?!-)", re.IGNORECASE)
-# The name half is case-sensitive: a name is capitalised mid-sentence.
+# A name: capitalised, case-sensitive, whole ("Jean-Luc", "O'Brien").
+_NAME = r"[A-Z][a-z]+(?:[-'\u2019][A-Z]?[a-z]+)*"
+_NAME_RE = re.compile(r"\b" + _NAME + r"\b")
 _KIN_THEN_NAME_RE = re.compile(
-    r"\b(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r"),?\s+([A-Z][a-z]+)\b"
+    r"\b(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r"),?\s+(" + _NAME + r")\b"
 )
-_NAME_THEN_KIN_RE = re.compile(r"\b([A-Z][a-z]+),\s+(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r")\b")
+_NAME_THEN_KIN_RE = re.compile(r"\b(" + _NAME + r"),\s+(?i:your)\s+(?i:" + _KIN_ADJ + _KIN_ALT + r")\b")
 _WORD_RE = re.compile(r"[a-z]+(?:-[a-z]+)*")
 
 
-_NAME_AFTER_RE = re.compile(r",?\s+([A-Z][a-z]+)\b")
-_NAME_BEFORE_RE = re.compile(r"\b([A-Z][a-z]+),\s+$")
+_NAME_AFTER_RE = re.compile(r",?\s+(" + _NAME + r")\b")
+_NAME_BEFORE_RE = re.compile(r"\b(" + _NAME + r"),\s+$")
 # "I don't have any news about your wife" is honest, not an invention: a
 # negation earlier in the same clause clears a bare relation word.
 _KIN_CLAUSE_BREAK_RE = re.compile(r"[,;:\u2014]|\bbut\b", re.IGNORECASE)
@@ -258,23 +260,30 @@ _KIN_NEGATION_RE = re.compile(
     r"isn't|aren't|wasn't)\b|n['\u2019]t\b", re.IGNORECASE)
 
 
+def _name_key(name: str) -> str:
+    return name.lower().replace("\u2019", "'")
+
+
 def household_corpus(memory_texts: list[str], transcript: str, history: list[dict] | None,
                      caregiver_name: str) -> tuple[set[str], set[str], str]:
-    """(known words, known canonical relations, caregiver's name lowercased)
-    for unbriefed_relative(): every active memory line, the senior's own
-    words this session (his turns in `history` plus this transcript; the
-    companion's turns never vouch for themselves) and the caregiver's name."""
-    texts = list(memory_texts) + [transcript or ""] + [
-        m.get("content", "") for m in (history or []) if m.get("role") == "user"
-    ]
-    caregiver = (caregiver_name or "").strip().lower()
-    if caregiver:
-        texts.append(caregiver)
-    words: set[str] = set()
-    for t in texts:
-        words.update(_WORD_RE.findall(str(t).lower()))
-    kin = {_KIN_FORMS[w] for w in words if w in _KIN_FORMS}
-    return words, kin, caregiver
+    """(known names, known canonical relations, caregiver's name) for
+    unbriefed_relative(), all lowercased, from every active memory line, the
+    senior's own words this session (his turns in `history` plus this
+    transcript; the companion's turns never vouch for themselves) and the
+    caregiver's name. From memory only CAPITALISED words count as names, so
+    the verb in "Sarah will bring groceries" never vouches for a grandson
+    "Will"; the senior's own words all count, because he may type "my
+    granddaughter maya" in lowercase."""
+    senior = [transcript or ""] + [m.get("content", "") for m in (history or []) if m.get("role") == "user"]
+    caregiver = _name_key((caregiver_name or "").strip())
+    names: set[str] = {caregiver} if caregiver else set()
+    kin: set[str] = set()
+    for t in list(memory_texts) + senior:
+        names.update(_name_key(n) for n in _NAME_RE.findall(str(t)))
+        kin.update(_KIN_FORMS[w] for w in _WORD_RE.findall(str(t).lower()) if w in _KIN_FORMS)
+    for t in senior:
+        names.update(_name_key(w) for w in re.findall(r"[a-z]+(?:[-'\u2019][a-z]+)*", str(t).lower()))
+    return names, kin, caregiver
 
 
 def _bound_to(sentence: str, m: re.Match, name: str) -> bool:
@@ -282,7 +291,7 @@ def _bound_to(sentence: str, m: re.Match, name: str) -> bool:
     "Sarah, your daughter"."""
     after = _NAME_AFTER_RE.match(sentence, m.end())
     before = _NAME_BEFORE_RE.search(sentence[:m.start()])
-    return bool(name) and any(x is not None and x.group(1).lower() == name for x in (after, before))
+    return bool(name) and any(x is not None and _name_key(x.group(1)) == name for x in (after, before))
 
 
 def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) -> bool:
@@ -294,10 +303,10 @@ def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) ->
     ("I don't have any news about your wife"), and the caregiver called by
     her relation ("your daughter Sarah": she calls the senior "Dad", rule 11).
     Never allowed: naming a stranger as a relative, even in a question."""
-    words, kin, caregiver = corpus
+    names, kin, caregiver = corpus
     for rx in (_KIN_THEN_NAME_RE, _NAME_THEN_KIN_RE):
         for m in rx.finditer(sentence):
-            if m.group(1).lower() not in words:
+            if _name_key(m.group(1)) not in names:
                 return True
     if sentence.rstrip().rstrip("\"')\u201d\u2019").endswith("?"):
         return False
