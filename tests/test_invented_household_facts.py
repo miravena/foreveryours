@@ -440,6 +440,13 @@ class TestInventedFamilyDetail(unittest.TestCase):
                   "She'll only be notified if there's a safety concern."):
             self.assertFalse(orchestrator.invented_family_detail(s, g, follows_family=True), s)
         self.assertTrue(orchestrator.invented_family_detail("Sarah has an emergency at work.", g))
+        self.assertTrue(orchestrator.invented_family_detail("Leo has cancer and Sarah has been notified.", g))
+
+    def test_a_referral_to_the_caregiver_is_kept(self):
+        g = orchestrator.family_grounding(["His grandson is named Leo"], "Can I take two aspirin?", None, "Sarah")
+        for s in ("Sarah or your doctor can check that with you.", "Sarah can help you with that."):
+            self.assertFalse(orchestrator.invented_family_detail(s, g), s)
+        self.assertTrue(orchestrator.invented_family_detail("Leo has cancer, but Sarah can help.", g))
 
     def test_how_is_a_name_is_a_family_question(self):
         for q in ("How is Leo?", "How\u2019s Leo?", "how's Leo"):

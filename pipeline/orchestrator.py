@@ -503,9 +503,24 @@ _CANNOT_PERCEIVE_RE = re.compile(
 # How the caregiver hears from the companion at all is rule 19's other half,
 # also not news: "She only gets a message if there's a safety concern",
 # "Only safety alerts reach her", "She'll be notified if something's wrong".
-# A bare "emergency" is not enough: "Sarah has an emergency at work" is news.
+# Such a clause may use these words too; every other word is still checked,
+# so "Leo has cancer and Sarah has been notified" is not let through. A bare
+# "emergency" is not enough: "Sarah has an emergency at work" is news.
 _ALERT_PATH_RE = re.compile(
     r"\b(?:safety\s+\w+|alerts?|alerted|flag|flags|flagged|notif(?:y|ied|ication|ications))\b", re.IGNORECASE)
+_ALERT_WORDS = set("""
+safety alert alerts alerted flag flags flagged notify notified notification notifications concern concerns
+get gets got receive receives received see sees reach reaches sent send sends message messages
+something anything wrong seems seem comes come happens happen if there else nothing issue issues problem problems
+""".split())
+# Sending the senior to a person for help is a referral, not news about
+# them: "Sarah or your doctor can check that with you." Only what comes
+# before it is checked.
+_REFERRAL_RE = re.compile(
+    r"\b(?:or|and)\s+(?:your\s+|a\s+)?(?:doctor|pharmacist|nurse|gp)\b"
+    r"|\b(?:can|could)\s+(?:check|help|go\s+over|look\s+at|look\s+into|answer|sort)\b",
+    re.IGNORECASE,
+)
 _CONTRACTION_BITS = {"s", "t", "ll", "re", "ve", "d", "m"}
 _NO_NEWS_LINE = "I don't have any news about how {name} is doing, but I'd love to hear if you have."
 _NO_NEWS_BUT_RE = re.compile(r"[,;\u2014-]?\s*\bbut\b\s+(\S.*)", re.IGNORECASE)
@@ -691,14 +706,16 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         else:
             is_family = previous and not _OWN_SUBJECT_RE.search(clause) and not _names_someone_else(clause, g)
         previous = is_family
-        if not is_family or _ALERT_PATH_RE.search(clause):
+        if not is_family:
             continue
+        alert = bool(_ALERT_PATH_RE.search(clause))
         # Only what comes before the companion's own act, a hope, or a "no
         # news" is checked: "I hope he's doing well" and "I let Sarah know so
         # she can check on you" pass; "Leo has cancer and I hope he feels
         # better" and "Leo has a game on Saturday, so I'll let Sarah know" do not.
         plain = clause.replace("\u2019", "'")
-        for cut in (_COMPANION_ACT_RE.search(plain), _SUGGESTION_RE.search(plain), _HEDGE_RE.search(clause)):
+        for cut in (_COMPANION_ACT_RE.search(plain), _SUGGESTION_RE.search(plain), _HEDGE_RE.search(clause),
+                    _REFERRAL_RE.search(plain)):
             if cut:
                 clause = clause[:cut.start()]
         neg = _KIN_NEGATION_RE.search(clause)
@@ -711,7 +728,8 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         for w in _detail_words(clause):
             if (w in STOPWORDS or w in _NOT_NAME_WORDS or w in _CHAT_WORDS or w in _CONTRACTION_BITS
                     or w in _ADDRESS_WORDS or w in name_parts or w in _KIN_FORMS
-                    or _THIRD_PERSON_RE.fullmatch(w) or _FAMILY_WORD_RE.fullmatch(w)):
+                    or _THIRD_PERSON_RE.fullmatch(w) or _FAMILY_WORD_RE.fullmatch(w)
+                    or (alert and w in _ALERT_WORDS)):
                 continue
             if _stem(w) not in g.stems:
                 return True
