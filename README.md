@@ -54,6 +54,19 @@ Written down on purpose: a judge or a family should know where this stops.
   took several seconds in our checks). No hosted latency figure is claimed.
 - English only. Not a medical device, not a diagnosis, not an emergency dispatcher.
 
+## Uptime monitor
+
+`.github/workflows/uptime.yml` checks the hosted demo every 30 minutes (and on demand from the
+Actions tab, with an optional dry run). A check passes when the Space runtime stage is `RUNNING`
+and the app's `/config` answers 200; it counts as down only when two checks a few minutes apart
+both fail. On down it opens an Issue labelled `outage`, assigned to both maintainers so GitHub
+emails them; while that Issue stays open it adds at most one comment every 6 hours, and when
+the checks pass again it comments how long the demo was down and closes it. An open Issue you
+label `outage` by hand is adopted instead of a second one being opened. To silence it, disable
+the workflow in the Actions tab, or close the Issue (the next failed check opens a fresh one).
+Logic and tests: `scripts/uptime_check.py`, `tests/test_uptime_check.py`. It stops checking
+after 2027-01-15.
+
 ## Pipeline
 
 THINK and AUDIT run on Nebius Token Factory with open-weight NVIDIA Nemotron models; speech-to-text

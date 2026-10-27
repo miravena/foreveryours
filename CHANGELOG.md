@@ -11,6 +11,7 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Added
+- Uptime monitor: a scheduled workflow checks the hosted demo every 30 minutes and opens, updates and closes an `outage` Issue assigned to both maintainers (#252).
 - Hosted page names which model does what in an always-visible footer, and each caregiver flag
   says which layer raised it (safety rules, Nemotron backstop, or repeated-question check);
   `CaregiverFlag` gains a persisted `source` field, old flag files load as unknown (#214).

@@ -9,6 +9,13 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-27 (#252: uptime monitor)
+Added `.github/workflows/uptime.yml` and `scripts/uptime_check.py`. The Space runtime endpoint
+(`huggingface.co/api/spaces/<id>/runtime`) answers without a token for a public Space, so no
+secret is needed. Chose the Issue itself as the state store (an open Issue labelled `outage`
+means "down"), which also lets a hand-labelled Issue be adopted. Gotcha: Actions cron can run
+late and is disabled after 60 days of repo inactivity.
+
 ### 2026-10-27 (#248: a dated memo no longer expires in 24 hours)
 
 - **What:** `MemoryStore.add` gave every time-marked fact a flat 24 h life, so "Dr. Tan on Thursday
