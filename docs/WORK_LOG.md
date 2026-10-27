@@ -82,6 +82,12 @@ Format: newest first. One entry per session: date, who, what, result, next.
     eye). Live judge check 23/23 in the last 10 runs. Misses in earlier runs where the guard dropped
     nothing were the model leaving out "only safety flags" (T05/T06) and the check reading the
     4 PM groceries in a correct T11 reply as a second appointment time, not the guard.
+  - **Last review rounds:** a claim joined on after a hope or suggestion; a subjectless answer
+    about an unbriefed relative; a name from a caregiver-only note (no longer counts as briefed);
+    lowercase "how is sarah"; "Leo hasn't told anyone about his cancer"; Will/May opening Dad's
+    statement; "today" on the family question; "What is Leo doing?" and "Tell me about my
+    grandson". Each is a test. The question shapes are a list, so a new phrasing can still slip
+    past; rule 25 is the first line. Re-measured on the final code: 0/30 by eye, judge 23/23.
   - **Limit:** it compares words, not meaning. A true paraphrase in new words is dropped (costs
     warmth, not truth), and an invention made only of grounded words passes.
 
