@@ -22,7 +22,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from caregiver import DEMO_MEMO, SAMPLE_FAMILY, CaregiverFlags, split_memo_facts
-from memory.store import MemoryStore
+from memory.store import MemoryStore, PrivacyLevel
 from pipeline import orchestrator, think
 from pipeline.orchestrator import household_corpus, unbriefed_relative, run_turn
 
@@ -453,6 +453,12 @@ class TestDetailGuardInRunTurn(_TurnBase):
         _res, stream = self.turn("What's happening today? I'd love to hear about the family.",
                                  "Sarah is dropping off groceries at 4 PM today.")
         self.assertIn("His grandson is named Leo", stream.call_args.args[1])
+
+    def test_a_caregiver_only_note_never_reaches_the_no_news_line(self):
+        self.store.add("His granddaughter is named Maya", source="caregiver_memo", supersede=False,
+                       privacy=PrivacyLevel.CAREGIVER_ONLY.value)
+        res, _ = self.turn("How is my granddaughter doing?", "I don't have any news about that. How are you today?")
+        self.assertNotIn("Maya", res.reply_text)
 
     def test_lift_offer_on_a_driving_turn_is_kept(self):
         res, _ = self.turn("I think I'll drive down to the shop myself this afternoon.",

@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import notify  # noqa: E402
 from caregiver import CaregiverFlags  # noqa: E402
-from memory.store import DOMAIN_SYNONYMS, STOPWORDS, MemoryStore  # noqa: E402
+from memory.store import DOMAIN_SYNONYMS, STOPWORDS, MemoryStore, PrivacyLevel  # noqa: E402
 from safety import fastpath  # noqa: E402
 
 from . import audit, speak, think  # noqa: E402
@@ -1585,8 +1585,12 @@ def run_turn(
             # ... and a statement about a briefed family member is spoken only
             # when the briefing or the senior grounds it (invented_family_detail).
             # The visitor read-out is the notes verbatim, so it is not checked.
+            # Only what Dad may hear grounds it: a caregiver-only note never
+            # vouches for a detail, nor puts a name into the no-news line.
             dropped_detail = []
-            family = family_grounding(active_texts, transcript, history, caregiver_name)
+            speakable = [i.text for i in memory_store.all() if i.is_active(t_now)
+                         and i.privacy != PrivacyLevel.CAREGIVER_ONLY.value]
+            family = family_grounding(speakable, transcript, history, caregiver_name)
             asked = asked_relatives(transcript, family, caregiver_name) if family_question else []
             no_news_for: list[str] = []  # relatives the reply already said it has no news of
             replaced_for: list[str] = []  # ... because the guard said so in place of a dropped sentence
