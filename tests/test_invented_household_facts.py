@@ -71,6 +71,9 @@ class TestUnbriefedRelative(unittest.TestCase):
         "Your daughter is coming by with groceries.",      # nor of a daughter, unless named as her
         "I don't know, but your granddaughter will call.",  # the negation is in another clause
         "I have no news about your granddaughter Maya.",   # a named stranger, even when negated
+        "Your dear grandson Max is coming over.",          # an adjective does not hide the name
+        "I can't wait for your granddaughter to bring lunch.",          # a negation, but no "no news"
+        "It won't be long until your granddaughter brings lunch.",
     ]
     SHOULD_KEEP = [
         "Sarah told me about your grandson Leo, but I don't have any news about how he's doing.",

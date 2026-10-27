@@ -237,7 +237,7 @@ _KIN_FORMS = {
     "nephews": "nephew", "nieces": "niece", "cousins": "cousin", "aunts": "aunt", "uncles": "uncle",
     "mum": "mother", "mom": "mother", "sons-in-law": "son-in-law", "daughters-in-law": "daughter-in-law",
 }
-_KIN_ALT = "|".join(sorted((re.escape(f) for f in _KIN_FORMS), key=len, reverse=True))
+_KIN_ALT = "(?:" + "|".join(sorted((re.escape(f) for f in _KIN_FORMS), key=len, reverse=True)) + ")"
 _KIN_ADJ = r"(?:(?:late|dear|little|eldest|oldest|youngest|younger|older|lovely|sweet)\s+)?"
 _YOUR_KIN_RE = re.compile(r"\byour\s+" + _KIN_ADJ + r"(" + _KIN_ALT + r")\b(?!-)", re.IGNORECASE)
 # A name: capitalised, case-sensitive, whole ("Jean-Luc", "O'Brien").
@@ -253,7 +253,8 @@ _WORD_RE = re.compile(r"[a-z]+(?:-[a-z]+)*")
 _NAME_AFTER_RE = re.compile(r",?\s+(" + _NAME + r")\b")
 _NAME_BEFORE_RE = re.compile(r"\b(" + _NAME + r"),\s+$")
 # "I don't have any news about your wife" is honest, not an invention: a
-# negation earlier in the same clause clears a bare relation word.
+# negation plus a no-news word earlier in the same clause clears a bare
+# relation word. "I can't wait for your granddaughter to ..." does not.
 _KIN_CLAUSE_BREAK_RE = re.compile(r"[,;:\u2014]|\bbut\b", re.IGNORECASE)
 _KIN_NEGATION_RE = re.compile(
     r"\b(?:no|not|never|nothing|without|don't|do not|doesn't|does not|haven't|have not|hasn't|didn't|"
@@ -303,6 +304,11 @@ _KIN_DENIED_RE = re.compile(
 _LOWER_WORD_RE = re.compile(r"[a-z]+(?:[-'\u2019][a-z]+)*")
 
 
+_NO_NEWS_RE = re.compile(
+    r"\b(news|noted|notes?|know|knew|heard|hear|updates?|information|details?|record\w*|sure|told|"
+    r"mention\w*|said|says|anything|nothing)\b", re.IGNORECASE)
+
+
 def household_corpus(memory_texts: list[str], transcript: str, history: list[dict] | None,
                      caregiver_name: str) -> tuple[set[str], set[str], str]:
     """(known names, known canonical relations, caregiver's name) for
@@ -350,7 +356,7 @@ def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) ->
     nothing known), or "your granddaughter will bring lunch" (a relation the
     briefing and the senior never mention). Allowed: asking about an unknown
     relation ("Do you have a granddaughter?"), saying there is no news of one
-    ("I don't have any news about your wife"), and the caregiver called by
+    ("I don't have any news about your wife", see _NO_NEWS_RE), and the caregiver called by
     her relation ("your daughter Sarah": she calls the senior "Dad", rule 11).
     Never allowed: naming a stranger as a relative, even in a question."""
     names, kin, caregiver = corpus
@@ -369,7 +375,8 @@ def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) ->
             continue
         if relation in _CHILD and _bound_to(sentence, m, caregiver):
             continue
-        if _KIN_NEGATION_RE.search(_KIN_CLAUSE_BREAK_RE.split(sentence[:m.start()])[-1]):
+        lead = _KIN_CLAUSE_BREAK_RE.split(sentence[:m.start()])[-1]
+        if _KIN_NEGATION_RE.search(lead) and _NO_NEWS_RE.search(lead):
             continue
         return True
     return False
