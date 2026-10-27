@@ -174,6 +174,17 @@ class TestDeployWorkflow(unittest.TestCase):
         self.assertEqual(self.on["push"]["branches"], ["main"])
         self.assertEqual(self.on["release"]["types"], ["published"])
 
+    def test_docs_and_video_pushes_do_not_redeploy(self):
+        ignored = self.on["push"]["paths-ignore"]
+        for pattern in ("docs/**", "*.md", "**/*.md", "video/**"):
+            self.assertIn(pattern, ignored)
+        # Nothing the Space ships may be ignored, or a code fix would never reach judges.
+        for pattern in ignored:
+            for shipped in ("app.py", "webapp.py", "pipeline/", "safety/", "memory/",
+                            "requirements.txt", "packages.txt", "samples/", "scripts/"):
+                self.assertFalse(pattern.startswith(shipped) or pattern in ("**", "*"), pattern)
+        self.assertNotIn("paths-ignore", self.on["release"] or {})
+
     def test_deploy_needs_tests_and_one_at_a_time(self):
         self.assertEqual(self.wf["jobs"]["deploy"]["needs"], "tests")
         self.assertIn("group", self.wf["concurrency"])
@@ -187,6 +198,12 @@ class TestDeployWorkflow(unittest.TestCase):
         self.assertNotIn("${{ secrets.HF_TOKEN_FY_SPACE }}", self.text.replace(
             "HF_TOKEN: ${{ secrets.HF_TOKEN_FY_SPACE }}", ""), "the secret is referenced once, as env only")
 
+    def test_hardware_is_one_setting_defaulting_to_cpu_basic(self):
+        value = self.wf["env"]["SPACE_HARDWARE"]
+        self.assertIn("vars.SPACE_HARDWARE", value)
+        self.assertIn("'cpu-basic'", value)
+        self.assertEqual(self.text.count("--hardware"), 1, "no second place chooses hardware")
+
     def test_steps_run_in_check_deploy_verify_order(self):
         names = [s.get("name", "") for s in self.wf["jobs"]["deploy"]["steps"]]
         order = [next(i for i, n in enumerate(names) if key in n)
@@ -196,7 +213,8 @@ class TestDeployWorkflow(unittest.TestCase):
         for name, step in steps.items():
             if name.startswith(("Deploy", "Wait", "Live")):
                 self.assertIn("mode == 'deploy'", step["if"], name)
-        self.assertIn("--hardware zero-a10g", steps["Deploy ${{ github.sha }} to the Space"]["run"])
+        self.assertIn('--hardware "$SPACE_HARDWARE"', steps["Deploy ${{ github.sha }} to the Space"]["run"])
+        self.assertNotIn("zero-a10g", steps["Deploy ${{ github.sha }} to the Space"]["run"])
         self.assertIn("--max-calls", steps["Live judge check suite (small call cap)"]["run"])
         # Every deploy runs the live suite, releases included (HOW_TO_WORK_HERE.md).
         self.assertNotIn("event_name", steps["Live judge check suite (small call cap)"]["if"])

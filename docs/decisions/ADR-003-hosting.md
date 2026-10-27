@@ -1,6 +1,6 @@
 # ADR-003: Host the judge demo on Hugging Face Spaces
 
-**Status:** Accepted
+**Status:** Accepted (hosting on free ZeroGPU superseded by [ADR-017](ADR-017-judging-period-hosting.md) once it is accepted)
 **Date:** 2026-10-01
 **Decided by:** Team
 **Affects:** `app.py`, `webapp.py`, `scripts/deploy_hf_space.py`

@@ -184,9 +184,10 @@ cp .env.example .env   # fill in NEBIUS_API_KEY for the full pipeline; works wit
   stages `app.py` + pipeline + `requirements.txt`/`packages.txt` with the Spaces config header
   and uploads them. `HF_TOKEN=... NEBIUS_API_KEY=... python scripts/deploy_hf_space.py <user>/<space>`;
   `--dry-run` builds the staging folder without uploading. The key goes in as a Space *secret*,
-  never a file. Hugging Face now needs a PRO account for a Gradio Space on the default
-  `cpu-basic` hardware; on a free account (verified email, older than 30 days) add
-  `--hardware zero-a10g` (ADR-003); the ZeroGPU outage of 2026-10-27 and the hosting options are in
+  never a file. Hugging Face needs a PRO account for a Gradio Space on the default
+  `cpu-basic` hardware (ADR-017; the hardware is the `SPACE_HARDWARE` setting); on a free account
+  (verified email, older than 30 days) add `--hardware zero-a10g` (ADR-003). The ZeroGPU outage of
+  2026-10-27 and the hosting options are in
   [`docs/incidents/2026-10-27-space-outage.md`](docs/incidents/2026-10-27-space-outage.md). Each visitor gets an isolated, auto-deleted session (see `SAFETY_AND_PRIVACY.md`).
 - **Cloudflare Tunnel (`cloudflared`)**: Exposes a running `webapp.py` to a secure public HTTPS URL via `cloudflared tunnel --url http://localhost:7860`.
 

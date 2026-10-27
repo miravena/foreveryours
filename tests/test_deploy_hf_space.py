@@ -4,6 +4,7 @@ Offline: stages into a temp folder and inspects it. Nothing is uploaded and the
 staged app is never imported (that would download the Whisper model).
 """
 import ast
+import io
 import importlib.util
 import tempfile
 import unittest
@@ -209,6 +210,96 @@ class TestHardwareRequest(unittest.TestCase):
     def test_already_there_is_left_alone(self):
         self.assertFalse(self._deploy("zero-a10g", "zero-a10g"))
         self.assertFalse(self._deploy("zero-a10g", None))
+
+
+class TestHardwarePreflight(unittest.TestCase):
+    """cpu-basic / cpu-upgrade need PRO and a card: fail at once, upload nothing (ADR-017)."""
+
+    SHA = "0123456789abcdef0123456789abcdef01234567"
+
+    def _run(self, hardware, who=None, create_exc=None, env_hw=None):
+        from types import SimpleNamespace
+        from unittest import mock
+        api = mock.MagicMock()
+        api.whoami.return_value = who if who is not None else {"name": "me", "isPro": True, "canPay": True}
+        api.get_space_runtime.return_value = SimpleNamespace(hardware=hardware, requested_hardware=None)
+        if create_exc:
+            api.create_repo.side_effect = create_exc
+        argv = ["deploy", "me/demo", "--gradio-version", "6.0.0"]
+        if hardware:
+            argv += ["--hardware", hardware]
+        env = {"HF_TOKEN": "hf_SENTINEL", "NEBIUS_API_KEY": ""}
+        if env_hw:
+            env["SPACE_HARDWARE"] = env_hw
+        err = io.StringIO()
+        hub = SimpleNamespace(HfApi=lambda **kw: api)
+        with mock.patch("sys.argv", argv), mock.patch.dict("sys.modules", {"huggingface_hub": hub}), \
+                mock.patch.dict(deploy.os.environ, env, clear=True), \
+                mock.patch.object(deploy, "stage", return_value=[]), \
+                mock.patch.object(deploy, "git_head_sha", return_value=self.SHA), \
+                mock.patch.object(deploy, "git_tree_is_dirty", return_value=False), \
+                mock.patch("sys.stderr", err), mock.patch("sys.stdout", io.StringIO()):
+            rc = deploy.main()
+        return rc, api, err.getvalue()
+
+    def _assert_nothing_touched(self, api):
+        api.create_repo.assert_not_called()
+        api.request_space_hardware.assert_not_called()
+        api.upload_folder.assert_not_called()
+
+    def test_default_is_cpu_basic_and_env_overrides_it(self):
+        self.assertEqual(deploy.default_hardware({}), "cpu-basic")
+        self.assertEqual(deploy.default_hardware({"SPACE_HARDWARE": ""}), "cpu-basic")
+        self.assertEqual(deploy.default_hardware({"SPACE_HARDWARE": "cpu-upgrade"}), "cpu-upgrade")
+
+    def test_non_pro_account_fails_early_for_both_cpu_tiers(self):
+        for hw in ("cpu-basic", "cpu-upgrade"):
+            with self.subTest(hw=hw):
+                rc, api, err = self._run(hw, who={"name": "me", "isPro": False, "canPay": False})
+                self.assertEqual(rc, 3)
+                self.assertIn("not PRO", err)
+                self.assertIn(hw, err)
+                self._assert_nothing_touched(api)
+
+    def test_pro_without_a_card_fails_early(self):
+        rc, api, err = self._run("cpu-basic", who={"name": "me", "isPro": True, "canPay": False})
+        self.assertEqual(rc, 3)
+        self.assertIn("payment method", err)
+        self._assert_nothing_touched(api)
+
+    def test_pro_with_a_card_deploys_to_cpu_basic(self):
+        rc, api, _ = self._run("cpu-basic")
+        self.assertEqual(rc, 0)
+        self.assertEqual(api.create_repo.call_args.kwargs["space_hardware"], "cpu-basic")
+        api.upload_folder.assert_called_once()
+
+    def test_paid_org_counts_as_paid(self):
+        rc, api, _ = self._run("cpu-basic", who={"name": "me", "isPro": False, "canPay": False,
+                                                 "orgs": [{"name": "t", "plan": "team"}]})
+        self.assertEqual(rc, 0)
+
+    def test_zerogpu_is_not_blocked_by_the_preflight(self):
+        rc, api, _ = self._run("zero-a10g", who={"name": "me", "isPro": False, "canPay": False})
+        self.assertEqual(rc, 0)
+        api.whoami.assert_not_called()
+
+    def test_env_variable_picks_the_hardware_when_flag_absent(self):
+        rc, api, _ = self._run(None, env_hw="cpu-upgrade")
+        self.assertEqual(rc, 0)
+        self.assertEqual(api.create_repo.call_args.kwargs["space_hardware"], "cpu-upgrade")
+
+    def test_api_rejecting_the_hardware_fails_with_a_clear_message(self):
+        from types import SimpleNamespace
+        exc = RuntimeError("403 quota")
+        exc.response = SimpleNamespace(status_code=403)
+        rc, api, err = self._run("cpu-basic", create_exc=exc)
+        self.assertEqual(rc, 3)
+        self.assertIn("rejected hardware cpu-basic", err)
+        api.upload_folder.assert_not_called()
+
+    def test_other_api_errors_are_not_swallowed(self):
+        with self.assertRaises(RuntimeError):
+            self._run("cpu-basic", create_exc=RuntimeError("boom"))
 
 
 if __name__ == "__main__":
