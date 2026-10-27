@@ -116,6 +116,10 @@ class TestUnbriefedRelative(unittest.TestCase):
         corpus = _judge_corpus("I have no granddaughter, but my sister has one.")
         self.assertTrue(unbriefed_relative("Your granddaughter will bring lunch.", corpus))
 
+    def test_an_unrelated_negation_does_not_hide_a_briefed_relation(self):
+        corpus = household_corpus(["Dad does not drive and his son Tom gives him lifts"], "Hello", None, "Sarah")
+        self.assertFalse(unbriefed_relative("Your son Tom gives you lifts.", corpus))
+
     def test_the_companion_never_vouches_for_itself(self):
         history = [{"role": "user", "content": "Hello there."},
                    {"role": "assistant", "content": "Your granddaughter Maya says hello."}]

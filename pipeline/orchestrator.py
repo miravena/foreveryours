@@ -294,6 +294,12 @@ _OPENER_WORDS = {
     "maybe", "please", "thanks", "absolutely", "certainly", "definitely", "lovely", "great", "good",
     "wonderful", "sweet", "nice", "yesterday", "later", "soon",
 }
+# A relation the speaker denies having, right before the word: "I do not have
+# a granddaughter", "no son". "Dad does not drive and his son Tom ..." is not.
+_KIN_DENIED_RE = re.compile(
+    r"\b(?:no|not|never|without|don't|doesn't|didn't|haven't|hasn't)\s+(?:(?:have|has|had|got|a|an|any|one)\s+){0,3}$"
+    r"|n't\s+(?:(?:have|has|had|got|a|an|any|one)\s+){0,3}$",
+)
 _LOWER_WORD_RE = re.compile(r"[a-z]+(?:[-'\u2019][a-z]+)*")
 
 
@@ -308,7 +314,7 @@ def household_corpus(memory_texts: list[str], transcript: str, history: list[dic
     lowercase word -- a caregiver or the senior may type "leo" -- except
     function words such as "will" (see _NOT_NAME_WORDS). Words the companion
     calls the senior ("Dad", "dear") are never taken for a relative's name.
-    A relation word counts unless negated in its clause ("I have no
+    A relation word counts unless denied just before it ("I have no
     granddaughter"); whose relation it is is not parsed, so "my sister has a
     son" still vouches for "your son" -- the guard is a backstop for rule 25,
     not a parser."""
@@ -325,7 +331,7 @@ def household_corpus(memory_texts: list[str], transcript: str, history: list[dic
         # "I do not have a granddaughter" vouches for none.
         for clause in re.split(r"[.!?;,:\u2014]|\bbut\b", text):
             for m in _WORD_RE.finditer(clause):
-                if m.group(0) in _KIN_FORMS and not _KIN_NEGATION_RE.search(clause[:m.start()]):
+                if m.group(0) in _KIN_FORMS and not _KIN_DENIED_RE.search(clause[:m.start()]):
                     kin.add(_KIN_FORMS[m.group(0)])
     return names, kin, caregiver
 

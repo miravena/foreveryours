@@ -397,7 +397,9 @@ class TestAssertionProbes(unittest.TestCase):
                       "Sarah is coming by at 4 PM, and Leo is coming by after school.",
                       "Leo is doing well in school, did you know?",               # a question tag
                       "Leo is doing well in school, isn't he?",
-                      "Leo has soccer practice tomorrow, doesn't he?"]:
+                      "Leo has soccer practice tomorrow, doesn't he?",
+                      "Leo is fine.",
+                      "Your grandson Leo is healthy and happy."]:
             with self.subTest(reply=reply):
                 self.assertTrue(_reply_failures("T23", reply), f"false PASS: {reply!r}")
         for reply in ["Sarah told me about your grandson Leo, but I don't have any news about how he's doing. "

@@ -602,7 +602,9 @@ INVENTED_GRANDSON_DETAIL = (r"\b(school|class(es)?|teacher|homework|grades?|exam
                             r"basketball|hockey|tennis|sports?|game|match|practice|team|tournament|lessons?|"
                             r"visit(s|ing)?\s+(you|on|this|next|tomorrow|today|at)|coming\s+(by|over|round|to see)|"
                             r"lunch|dinner|soup|lift|ride|(doing|getting on)\s+(really\s+|so\s+|very\s+)?(well|great|fine|good)|"
-                            r"looking forward)\b")
+                            r"looking forward|"
+                            r"(is|'s|are|seems|sounds|feels|feeling)\s+(really\s+|so\s+|very\s+)?"
+                            r"(fine|healthy|happy|well|good|great|busy|okay|ok)(?!\s+(to|for|at)\b))\b")
 # A clause about the grandson (or another grandchild): the detail check skips the rest.
 ABOUT_GRANDCHILD = r"\b(leo|grand\w*|he|he's|him|his)\b"
 SARAH_VISIT_TOPIC = r"\bsarah\b|grocer|coming by|drop(ping)? (off|by)|visit"
