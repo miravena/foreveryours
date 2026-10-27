@@ -260,8 +260,28 @@ _KIN_NEGATION_RE = re.compile(
     r"isn't|aren't|wasn't)\b|n['\u2019]t\b", re.IGNORECASE)
 
 
+# A real question opens like one; "Your granddaughter will call, won't she?"
+# is a statement with a tag.
+_QUESTION_START_RE = re.compile(
+    r"^\W*(?:(?:oh|and|so|well|dad|now)\W+)*(?:do|does|did|is|are|was|were|have|has|had|can|could|will|"
+    r"would|shall|should|may|might|how|what|who|whom|where|when|why|which|any)\b",
+    re.IGNORECASE,
+)
+
+
 def _name_key(name: str) -> str:
     return name.lower().replace("\u2019", "'")
+
+
+# Lowercase words that never vouch for a name ("Sarah will bring groceries"
+# is no proof of a grandson "Will").
+_NOT_NAME_WORDS = STOPWORDS | {
+    "will", "would", "can", "could", "may", "might", "must", "shall", "should", "be", "been", "being",
+    "am", "not", "no", "this", "that", "these", "those", "his", "her", "him", "its", "our", "their",
+    "them", "us", "there", "here", "so", "but", "if", "then", "than", "as", "by", "from", "up",
+    "down", "out", "over", "just", "also", "very", "all", "any", "some", "one", "two", "new", "old",
+}
+_LOWER_WORD_RE = re.compile(r"[a-z]+(?:[-'\u2019][a-z]+)*")
 
 
 def household_corpus(memory_texts: list[str], transcript: str, history: list[dict] | None,
@@ -270,19 +290,20 @@ def household_corpus(memory_texts: list[str], transcript: str, history: list[dic
     unbriefed_relative(), all lowercased, from every active memory line, the
     senior's own words this session (his turns in `history` plus this
     transcript; the companion's turns never vouch for themselves) and the
-    caregiver's name. From memory only CAPITALISED words count as names, so
-    the verb in "Sarah will bring groceries" never vouches for a grandson
-    "Will"; the senior's own words all count, because he may type "my
-    granddaughter maya" in lowercase."""
-    senior = [transcript or ""] + [m.get("content", "") for m in (history or []) if m.get("role") == "user"]
+    caregiver's name. A name is compared whole ("Jean-Luc", "O'Brien"), and
+    any word there vouches for one -- a caregiver or the senior may type
+    "leo" in lowercase -- except function words such as "will" (see
+    _NOT_NAME_WORDS)."""
+    texts = list(memory_texts) + [transcript or ""] + [
+        m.get("content", "") for m in (history or []) if m.get("role") == "user"
+    ]
     caregiver = _name_key((caregiver_name or "").strip())
     names: set[str] = {caregiver} if caregiver else set()
     kin: set[str] = set()
-    for t in list(memory_texts) + senior:
-        names.update(_name_key(n) for n in _NAME_RE.findall(str(t)))
-        kin.update(_KIN_FORMS[w] for w in _WORD_RE.findall(str(t).lower()) if w in _KIN_FORMS)
-    for t in senior:
-        names.update(_name_key(w) for w in re.findall(r"[a-z]+(?:[-'\u2019][a-z]+)*", str(t).lower()))
+    for t in texts:
+        text = _name_key(str(t))
+        names.update(w for w in _LOWER_WORD_RE.findall(text) if w not in _NOT_NAME_WORDS)
+        kin.update(_KIN_FORMS[w] for w in _WORD_RE.findall(text) if w in _KIN_FORMS)
     return names, kin, caregiver
 
 
@@ -308,7 +329,7 @@ def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) ->
         for m in rx.finditer(sentence):
             if _name_key(m.group(1)) not in names:
                 return True
-    if sentence.rstrip().rstrip("\"')\u201d\u2019").endswith("?"):
+    if sentence.rstrip().rstrip("\"')\u201d\u2019").endswith("?") and _QUESTION_START_RE.match(sentence):
         return False
     for m in _YOUR_KIN_RE.finditer(sentence):
         relation = _KIN_FORMS[m.group(1).lower()]

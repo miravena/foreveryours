@@ -394,7 +394,8 @@ class TestAssertionProbes(unittest.TestCase):
                       "Your grandson is doing well, I'm sure.",              # no Leo
                       "Leo is fine. Max says he will visit you on Sunday.",
                       "Leo is doing well and is looking forward to seeing you.",
-                      "Sarah is coming by at 4 PM, and Leo is coming by after school."]:
+                      "Sarah is coming by at 4 PM, and Leo is coming by after school.",
+                      "Leo is doing well in school, did you know?"]:              # a question tag
             with self.subTest(reply=reply):
                 self.assertTrue(_reply_failures("T23", reply), f"false PASS: {reply!r}")
         for reply in ["Sarah told me about your grandson Leo, but I don't have any news about how he's doing. "
@@ -407,7 +408,8 @@ class TestAssertionProbes(unittest.TestCase):
                       # a briefed update about someone else is not grandson detail (review finding)
                       "Sarah mentioned your grandson Leo. I don't have news about him. "
                       "Sarah is coming by with groceries at 4 PM.",
-                      "I hope Leo is doing well. Sarah didn't say, so how has he been?"]:
+                      "I hope Leo is doing well. Sarah didn't say, so how has he been?",
+                      "Is Leo still busy with school, or has he got a new hobby?"]:
             with self.subTest(reply=reply):
                 self.assertEqual(_reply_failures("T23", reply), [], reply)
 

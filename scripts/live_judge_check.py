@@ -438,7 +438,8 @@ _CLAUSE_NEGATION_RE = re.compile(r"\b(no|not|never|nothing|without|don't|do not|
 
 def reply_states_none(pattern: str, why: str, about: str | None = None) -> Check:
     """Fail when a STATEMENT in the reply matches. Each clause (see _clauses)
-    is checked on its own: a question ("Does he play any sport?") and a
+    is checked on its own: a question ("Does he play any sport?", but not a
+    statement with a question tag) and a
     mention negated or hedged earlier in its clause ("I don't have any news
     about his school", "I hope he's doing well") are not claims of fact, so
     they pass; "I don't know, but he has a game on Saturday" still fails.
@@ -450,7 +451,11 @@ def reply_states_none(pattern: str, why: str, about: str | None = None) -> Check
     def check(reply, _before, _after):
         for sentence in _SENTENCE_END_RE.split(reply):
             if sentence.rstrip().rstrip("\"')").endswith("?"):
-                continue
+                # Only the question proper is exempt: "Leo is doing well in
+                # school, did you know?" still states the school news.
+                segments = sentence.split(",")
+                opens = [i for i, seg in enumerate(segments) if _QUESTION_OPENER_RE.match(seg.strip())]
+                sentence = ",".join(segments[:opens[0]]) if opens else ""
             for clause in _clauses(sentence):
                 if about_rx and not about_rx.search(clause):
                     continue

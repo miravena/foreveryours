@@ -133,6 +133,16 @@ class TestUnbriefedRelative(unittest.TestCase):
         corpus = household_corpus(["His granddaughter is Niamh O'Brien"], "Hello", None, "Sarah")
         self.assertFalse(unbriefed_relative("Your granddaughter O\u2019Brien called.", corpus))
 
+    def test_lowercase_memo_names_vouch_but_function_words_do_not(self):
+        corpus = household_corpus(["his grandson is named leo", "Sarah will bring groceries"], "Hello", None, "Sarah")
+        self.assertFalse(unbriefed_relative("Your grandson Leo is named in the notes.", corpus))
+        self.assertTrue(unbriefed_relative("Your grandson Will is coming by.", corpus))
+
+    def test_a_question_tag_does_not_make_a_statement_a_question(self):
+        corpus = _judge_corpus()
+        self.assertTrue(unbriefed_relative("Your granddaughter will call later, won't she?", corpus))
+        self.assertFalse(unbriefed_relative("How is your wife these days?", corpus))
+
     def test_no_caregiver_means_no_assumed_children(self):
         corpus = household_corpus(["Dad loves jazz"], "Hello", None, "")
         self.assertTrue(unbriefed_relative("Your daughter Sarah is coming by.", corpus))
