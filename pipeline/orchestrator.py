@@ -342,12 +342,12 @@ def household_corpus(memory_texts: list[str], transcript: str, history: list[dic
     return names, kin, caregiver
 
 
-def _bound_to(sentence: str, m: re.Match, name: str) -> bool:
-    """The relation word at `m` is bound to `name`: "your daughter Sarah",
-    "Sarah, your daughter"."""
+def _bound_to(sentence: str, m: re.Match, names: set[str]) -> bool:
+    """The relation word at `m` is bound to one of `names`: "your daughter
+    Sarah", "Sarah, your daughter"."""
     after = _NAME_AFTER_RE.match(sentence, m.end())
     before = _NAME_BEFORE_RE.search(sentence[:m.start()])
-    return bool(name) and any(x is not None and _name_key(x.group(1)) == name for x in (after, before))
+    return any(x is not None and _name_key(x.group(1)) in names for x in (after, before))
 
 
 def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) -> bool:
@@ -356,10 +356,12 @@ def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) ->
     nothing known), or "your granddaughter will bring lunch" (a relation the
     briefing and the senior never mention). Allowed: asking about an unknown
     relation ("Do you have a granddaughter?"), saying there is no news of one
-    ("I don't have any news about your wife", see _NO_NEWS_RE), and the caregiver called by
-    her relation ("your daughter Sarah": she calls the senior "Dad", rule 11).
-    Never allowed: naming a stranger as a relative, even in a question."""
-    names, kin, caregiver = corpus
+    ("I don't have any news about your wife", see _NO_NEWS_RE), and a
+    relation bound to a person the family or the senior named ("your
+    daughter Sarah", "your wife Mary"). Never allowed: naming a stranger as a
+    relative, even in a question. Not parsed: whose relation a memo states,
+    so "your granddaughter Leo" for a briefed grandson Leo passes."""
+    names, kin, _caregiver = corpus
     for m in _KIN_THEN_NAME_RE.finditer(sentence):
         if _name_key(m.group(1)) not in names:
             return True
@@ -373,7 +375,10 @@ def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) ->
         relation = _KIN_FORMS[m.group(1).lower()]
         if any(k in kin for k in _KIN_ACCEPTS[relation]):
             continue
-        if relation in _CHILD and _bound_to(sentence, m, caregiver):
+        # Bound to someone the family named ("your wife Mary" when a memo says
+        # "Dad is married to Mary"): the person is real, and which relation
+        # the memo used is not parsed.
+        if _bound_to(sentence, m, names - _ADDRESS_WORDS):
             continue
         lead = _KIN_CLAUSE_BREAK_RE.split(sentence[:m.start()])[-1]
         if _KIN_NEGATION_RE.search(lead) and _NO_NEWS_RE.search(lead):
@@ -382,6 +387,7 @@ def unbriefed_relative(sentence: str, corpus: tuple[set[str], set[str], str]) ->
     return False
 
 
+_PRONOUN_START_RE = re.compile(r"^\W*(?:she|he|they|her|his|their|them|him)\b", re.IGNORECASE)
 _UNBRIEFED_EMPTY_REPLY = "I don't have any family news noted down. Have you heard from anyone lately?"
 
 # An apology in THINK's continuation of a fast-path crisis turn: the canned
@@ -1295,12 +1301,19 @@ def run_turn(
 
             def filter_sentences(s_iter):
                 budget = hotline_budget
+                follows_dropped = False
                 for s in s_iter:
-                    # Safety advice is never dropped for naming a relative.
-                    if (unbriefed_relative(s, known_household) and _hotline_match(s) is None
-                            and not _OTHER_EMERGENCY_RE.search(s)):
+                    # Safety advice is never dropped for naming a relative. A
+                    # sentence right after a dropped one that opens with a
+                    # pronoun ("She is bringing soup.") is about the same
+                    # invented person, so it goes too.
+                    is_safety = _hotline_match(s) is not None or _OTHER_EMERGENCY_RE.search(s)
+                    if not is_safety and (unbriefed_relative(s, known_household)
+                                          or (follows_dropped and _PRONOUN_START_RE.match(s))):
                         dropped_unbriefed.append(s)
+                        follows_dropped = True
                         continue
+                    follows_dropped = False
                     if drop_apology and _APOLOGY_RE.search(s):
                         stripped = _strip_apology(s)
                         if not stripped:

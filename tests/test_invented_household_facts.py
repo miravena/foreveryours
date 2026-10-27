@@ -174,6 +174,11 @@ class TestUnbriefedRelative(unittest.TestCase):
         self.assertTrue(unbriefed_relative("Your granddaughter will call later, won't she?", corpus))
         self.assertFalse(unbriefed_relative("How is your wife these days?", corpus))
 
+    def test_a_relation_bound_to_a_briefed_name_passes(self):
+        corpus = household_corpus(["Dad is married to Mary."], "Hello", None, "Sarah")
+        self.assertFalse(unbriefed_relative("Your wife Mary sounds lovely.", corpus))
+        self.assertTrue(unbriefed_relative("Your wife sounds lovely.", corpus))  # no name, no wife briefed
+
     def test_no_caregiver_means_no_assumed_children(self):
         corpus = household_corpus(["Dad loves jazz"], "Hello", None, "")
         self.assertTrue(unbriefed_relative("Your daughter Sarah is coming by.", corpus))
@@ -220,6 +225,12 @@ class TestGuardInRunTurn(_TurnBase):
         self.assertIn("Sarah is dropping off groceries at 4 PM.", res.reply_text)
         self.assertNotIn("Maya", res.reply_text)
         self.assertFalse(res.is_fallback)
+
+    def test_a_pronoun_follow_up_to_a_dropped_relative_goes_too(self):
+        res, _ = self.turn("Tell me some family news.",
+                           "Your granddaughter Maya is visiting today. She is bringing soup for lunch. "
+                           "Sarah is dropping off groceries at 4 PM.")
+        self.assertEqual(res.reply_text, "Sarah is dropping off groceries at 4 PM.")
 
     def test_briefed_relative_is_spoken(self):
         reply = "Sarah told me about your grandson Leo, but I don't have any news about how he's doing."
