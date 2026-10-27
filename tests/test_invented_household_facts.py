@@ -283,6 +283,10 @@ class TestGuardInRunTurn(_TurnBase):
         self.assertIn("911", res.reply_text)
 
 
+    def test_a_safety_turn_drops_nothing_for_naming_a_relative(self):
+        res, _ = self.turn("I fell and hurt my neck.", "Don't move your neck; ask your daughter to stay with you.")
+        self.assertIn("ask your daughter to stay with you", res.reply_text)
+
     def test_driving_plan_turn_keeps_its_lift_offer_when_all_was_dropped(self):
         res, _ = self.turn("I think I'll drive down to the shop myself this afternoon.",
                            "Your son can drive you instead.")

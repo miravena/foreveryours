@@ -1704,12 +1704,15 @@ def run_turn(
                 follows_family, follows_relative = bool(family_question), bool(asked)
                 last_person = asked[0] if asked else None
                 for s in s_iter:
-                    # Safety advice is never dropped for naming a relative. A
-                    # later sentence about the same invented person goes too:
-                    # one that names them again ("Maya is bringing soup."), or
-                    # one right after the drop that opens with a pronoun
-                    # ("She is bringing soup.").
-                    is_safety = _hotline_match(s) is not None or _OTHER_EMERGENCY_RE.search(s)
+                    # Safety advice is never dropped for naming a relative, and
+                    # on a safety fast-path turn nothing is: "Don't move your
+                    # neck; ask your daughter to stay with you" names no
+                    # hotline but is still advice. A later sentence about the
+                    # same invented person goes too: one that names them again
+                    # ("Maya is bringing soup."), or one right after the drop
+                    # that opens with a pronoun ("She is bringing soup.").
+                    is_safety = (fast.triggered or _hotline_match(s) is not None
+                                 or _OTHER_EMERGENCY_RE.search(s))
                     mentions_stranger = bool(strangers & {_name_key(n) for n in _NAME_RE.findall(s)})
                     if not is_safety and (unbriefed_relative(s, known_household) or mentions_stranger
                                           or (follows_dropped and _PRONOUN_START_RE.match(s))):
