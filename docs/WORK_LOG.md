@@ -9,6 +9,88 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-27 (#245: no invented household facts)
+
+- **What:** THINK rule 25 (household facts only from the briefing or this conversation, with a
+  right/wrong example), rule 11 no longer names a son "John" that no household has, the LOGISTICAL
+  guidance no longer says "family updates", a schedule question that names a relative now reaches
+  THINK with that relative's briefed facts (it used to get none), and an output guard drops a
+  sentence that introduces a relative nobody briefed. Live judge check gains T23.
+- **Guard choice:** a general "unknown capitalised name" check was rejected: it would cut ordinary
+  small talk (Ella Fitzgerald, Miles Davis, place names). The guard only looks at a relation word
+  after "your", or a name bound to one, so its false positives need the model to claim a relative
+  absent from every memo and from everything Dad said. Invented detail about a briefed person
+  ("Leo is doing well in school") is left to rule 25.
+- **Before/after, local pipeline** (`orchestrator.run_turn`, pre-brief + sample household seeded,
+  TTS, AUDIT and extraction stubbed so THINK is the only live call; 3 fresh sessions per prompt):
+  - "What's happening today? I'd love to hear about the family." before 0/3 replies with an
+    invented fact; after 1/3 ("he's looking forward to visiting you").
+  - "What's on for today? And how is my grandson doing?" before 2/3 ("Leo is looking forward to
+    visiting you"; "Leo is doing well and looking forward to seeing you"); after 0/3 clear
+    inventions, two hedged ("I'm sure he'll enjoy catching up soon"; "next Saturday" for
+    "Saturday"). After the fix every reply carried Leo's briefed fact and two said they had no news.
+  - Rule 25 then gained "or feeling, what they look forward to"; with the final prompt,
+    on the judge-check pre-brief alone: "How is my grandson doing?" -> "Sarah mentioned your
+    grandson Leo, but I don't have any news about how he's doing. Have you heard from him lately?"
+    (passes T23); the family prompt -> the groceries line only. Live THINK calls used: 14.
+- **Not reproduced locally:** school, soccer, "Maya" and soup did not appear in these 12 runs, so
+  the counts are small-sample and the guard's live effect is shown by its tests, not by a run.
+- **Review:** `scripts/openai_review.sh` was re-run until it reported no findings; each round's
+  finding (copular and possessive names, adverb openers, negated or asked-about relatives, question
+  tags, a driving turn emptied by the guard) is a test in `tests/test_invented_household_facts.py`
+  or `tests/test_live_judge_check.py`.
+- **Second pass, same day (the first pass still gave 3/20 and failed T23 live):**
+  - **Gotcha: the model spoke the prompt's own counter-example.** Rule 25 ended with
+    `WRONG: "Leo is doing well in school and has a game on Saturday."` and 5 of 30 baseline replies
+    said exactly that. The WRONG lines are gone; the rule keeps the RIGHT example and says in words
+    that anything more about Leo would be invented. A worked wrong answer is a script to copy.
+  - **Family question note:** "How is my grandson doing?" / "I'd love to hear about the family" now
+    puts the relative's briefed facts first and adds a no-news instruction to THINK's input.
+  - **Detail guard** (`invented_family_detail`): a statement about a family member (the caregiver,
+    a name in a memo line with a relation word, a relation word, or "he"/"she" right after one) is
+    dropped when one of its content words is in no active memo and in nothing the senior said
+    (stemmed; a few synonym groups so "stopping by" grounds "dropping off"; conversational words
+    never need grounding). Questions, hopes, "no news" clauses, the companion's own acts ("I let
+    Sarah know") and lift offers on a driving turn are not checked. A warm no-news line is said in
+    place of the first dropped sentence about a relative; if the reply never names the asked
+    relative, the line is added at the end.
+  - **Measured** (local app, live key, sample household, fresh session per run): before, family
+    prompt 1/10 invented ("Your family is stopping by later today"), grandson prompt 3/10 (two of
+    them the rule's WRONG example word for word), and "How is my grandson doing?" 3/10 invented plus
+    2/10 that never named Leo. After, in two rounds: 0/10 and 0/10 each round, and 10/10 clean on the
+    T23 prompt in the first. Live judge check: 23/23 before; the first after-run failed T05 ("isn't"
+    was tokenised as "isn" + "t", read as an ungrounded word, and "Sarah isn't listening" was
+    dropped; fixed, now a test), the second passed 23/23.
+  - **Later review rounds** found sentences the guard dropped though they were true, and some it
+    let through: the caregiver's safety-alert explanation in other words ("She only gets a message
+    if there's a safety concern" failed T05 again live), a referral ("Sarah or your doctor can check
+    that with you"), "How is Leo?" not read as a family question, caregiver surnames, and a pronoun
+    about the caregiver taken as answering about the asked relative. Each is a test.
+  - **Gotcha: the caregiver's sentences on safety turns.** Logging what the guard dropped during
+    repeated judge runs showed it cutting true sentences about Sarah on every turn type: rule 19's
+    privacy answer in new words each run ("She only sees brief safety alerts if something needs
+    attention", failing T05/T06), the fall follow-up ("She'll be in touch soon to check on you",
+    T15), and "Sarah mentioned you have an appointment with Dr. Tan" (T09/T11 lost their whole
+    answer: "appointment" is not the memo's "check-up"). Widening the word lists never caught up
+    with the model's wording. So the caregiver is now checked only when Dad asks about the family
+    or the day (where it invented visits and news), her relaying Dad's own plans ("Sarah mentioned
+    you have ...") is read as the memo, and a relative is checked on every turn. Trade-off: an
+    invented fact about the caregiver on some other turn ("Sarah has cancer but can't hear us") is
+    left to rule 25.
+  - **Final measurement** (same harness, final code): family prompt 0/10, grandson prompt 0/10,
+    "How is my grandson doing?" 0/10 invented, 10/10 naming Leo with no news (30 replies read by
+    eye). Live judge check 23/23 in the last 10 runs. Misses in earlier runs where the guard dropped
+    nothing were the model leaving out "only safety flags" (T05/T06) and the check reading the
+    4 PM groceries in a correct T11 reply as a second appointment time, not the guard.
+  - **Last review rounds:** a claim joined on after a hope or suggestion; a subjectless answer
+    about an unbriefed relative; a name from a caregiver-only note (no longer counts as briefed);
+    lowercase "how is sarah"; "Leo hasn't told anyone about his cancer"; Will/May opening Dad's
+    statement; "today" on the family question; "What is Leo doing?" and "Tell me about my
+    grandson". Each is a test. The question shapes are a list, so a new phrasing can still slip
+    past; rule 25 is the first line. Re-measured on the final code: 0/30 by eye, judge 23/23.
+  - **Limit:** it compares words, not meaning. A true paraphrase in new words is dropped (costs
+    warmth, not truth), and an invention made only of grounded words passes.
+
 ### 2026-10-27 (#252: uptime monitor)
 Added `.github/workflows/uptime.yml` and `scripts/uptime_check.py`. The Space runtime endpoint
 (`huggingface.co/api/spaces/<id>/runtime`) answers without a token for a public Space, so no
