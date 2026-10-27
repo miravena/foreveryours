@@ -729,6 +729,10 @@ class TestDetailGuardInRunTurn(_TurnBase):
         g = orchestrator.family_grounding(["His grandson is named Will"], "", None, "Sarah")
         self.assertEqual(orchestrator.asked_relatives("how will I know how it is going?", g, "Sarah"), [])
 
+    def test_a_typed_lowercase_caregiver_name_is_a_family_question(self):
+        res, _ = self.turn("how is sarah doing?", "Sarah has cancer.")
+        self.assertNotIn("cancer", res.reply_text)
+
     def test_how_is_leo_drops_an_invented_reply(self):
         res, _ = self.turn("How is Leo?", "He's doing great at school and has a soccer game on Saturday.")
         self.assertNotIn("soccer", res.reply_text)

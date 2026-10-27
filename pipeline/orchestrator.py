@@ -886,13 +886,19 @@ def asks_about_family(transcript: str) -> bool:
     return bool(_FAMILY_QUESTION_RE.search((transcript or "").replace("\u2019", "'")))
 
 
+def _capitalise_names(text: str, names) -> str:
+    """A typed "how is leo doing?" reads as "How is Leo doing?" for the known
+    names given; a lowercase "will" or "may" stays a word."""
+    return re.sub(r"[A-Za-z][\w'-]*", lambda m: m.group(0).capitalize() if (
+        m.group(0).islower() and m.group(0) in names and m.group(0) not in _NOT_NAME_WORDS
+        and m.group(0) not in STOPWORDS) else m.group(0), text or "")
+
+
 def asked_relatives(transcript: str, g: FamilyGrounding, caregiver_name: str) -> list[str]:
     """Briefed names of the relatives a family question asks about: "How is
     my grandson doing?" -> ["Leo"] when a memo says so. A typed "how is leo
     doing?" counts too; a lowercase "will" or "may" is not the grandson Will."""
-    transcript = re.sub(r"[A-Za-z][\w'-]*", lambda m: m.group(0).capitalize() if (
-        m.group(0).islower() and m.group(0) in g.people and m.group(0) not in _NOT_NAME_WORDS
-        and m.group(0) not in STOPWORDS) else m.group(0), transcript or "")
+    transcript = _capitalise_names(transcript, g.people)
     if not asks_about_family(transcript):
         return []
     caregiver = _caregiver_parts(caregiver_name)
@@ -1741,7 +1747,9 @@ def run_turn(
     # #245: a family question ("How is my grandson doing?", "I'd love to hear
     # about the family") gets the asked relative's briefed facts first, plus a
     # no-news instruction, so THINK never has to guess how someone is.
-    family_question = asks_about_family(transcript) and not fast.triggered
+    # A typed "how is sarah doing?" asks about her as "How is Sarah doing?" does.
+    family_question = (asks_about_family(_capitalise_names(transcript, _caregiver_parts(caregiver_name)))
+                       and not fast.triggered)
     kin_asked = {_KIN_FORMS[w] for w in _WORD_RE.findall(transcript.lower()) if w in _KIN_FORMS}
     if family_question:
         anyone = not kin_asked or bool(_FAMILY_WORD_RE.search(transcript))
