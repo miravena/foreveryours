@@ -239,6 +239,7 @@ _KIN_FORMS = {
 }
 _KIN_ALT = "(?:" + "|".join(sorted((re.escape(f) for f in _KIN_FORMS), key=len, reverse=True)) + ")"
 _KIN_ADJ = r"(?:(?:late|dear|little|eldest|oldest|youngest|younger|older|lovely|sweet)\s+)?"
+_MY_KIN_RE = re.compile(r"\b(?:my|our)\s+" + _KIN_ADJ + r"(" + _KIN_ALT + r")\b(?!-)", re.IGNORECASE)
 _YOUR_KIN_RE = re.compile(r"\byour\s+" + _KIN_ADJ + r"(" + _KIN_ALT + r")\b(?!-)", re.IGNORECASE)
 # A name: capitalised, case-sensitive, whole ("Jean-Luc", "O'Brien").
 _NAME = r"[A-Z][a-z]+(?:[-'\u2019][A-Z]?[a-z]+)*"
@@ -1859,9 +1860,12 @@ def run_turn(
                 # doing?") makes a subjectless first answer about them
                 # ("Recovering from cancer treatment."); one that also asks
                 # about the day does not ("Today's schedule is light.").
+                # A relative no memo names counts too: "How is my granddaughter
+                # doing?" -> "Recovering from cancer treatment." is invented.
+                kin = _MY_KIN_RE.search(transcript or "") if family_question and not asked else None
                 follows_family = bool(family_question or asked)
-                follows_relative = bool(asked) and not _DAY_QUESTION_RE.search(transcript or "")
-                last_person = asked[0] if asked else None
+                follows_relative = bool(asked or kin) and not _DAY_QUESTION_RE.search(transcript or "")
+                last_person = asked[0] if asked else (f"your {kin.group(1).lower()}" if kin else None)
                 for s in s_iter:
                     # Safety advice is never dropped for naming a relative, and
                     # on a safety fast-path turn nothing is: "Don't move your
