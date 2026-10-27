@@ -92,6 +92,8 @@ class TestJudgeFindingsUi(unittest.TestCase):
                 "Dad says he fell and is scared",
             ],
         )
+        # #239: a clip chip also blanks the Type box, so typed text cannot win over it.
+        self.assertTrue(all(row[1] == "" for row in datasets[0]["props"]["samples"]))
         self.assertEqual(
             list(webapp.SAMPLE_CLIPS),
             ["senior_schedule.wav", "senior_jazz.wav", "senior_grandson.wav", "senior_distress.wav"],

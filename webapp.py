@@ -2247,8 +2247,10 @@ def build_demo() -> gr.Blocks:
                 # schedule question so the reply recalls a caregiver fact,
                 # rather than looking like a generic chatbot (#83, #80 3.C4).
                 sample_clip_examples = gr.Examples(
-                    examples=[[str(SAMPLES_DIR / name)] for name in SAMPLE_CLIPS],
-                    inputs=[audio_in],
+                    examples=[[str(SAMPLES_DIR / name), ""] for name in SAMPLE_CLIPS],
+                    # The empty text value clears the Type box: text wins over
+                    # audio in a turn, so stale typed text would hide the clip (#239).
+                    inputs=[audio_in, text_in],
                     example_labels=list(SAMPLE_CLIP_LABELS),
                     label="No mic? Try a sample clip",
                     cache_examples=False,
