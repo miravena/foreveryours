@@ -61,6 +61,13 @@ Format: newest first. One entry per session: date, who, what, result, next.
     T23 prompt in the first. Live judge check: 23/23 before; the first after-run failed T05 ("isn't"
     was tokenised as "isn" + "t", read as an ungrounded word, and "Sarah isn't listening" was
     dropped; fixed, now a test), the second passed 23/23.
+  - **Later review rounds** found sentences the guard dropped though they were true, and some it
+    let through: the caregiver's safety-alert explanation in other words ("She only gets a message
+    if there's a safety concern" failed T05 again live), a referral ("Sarah or your doctor can check
+    that with you"), "How is Leo?" not read as a family question, caregiver surnames, and a pronoun
+    about the caregiver taken as answering about the asked relative. Each is a test. Final code,
+    same harness: 0/10, 0/10 and 0/10 on the T23 prompt (30 replies read by eye, not only the
+    keyword check), live judge check 23/23.
   - **Limit:** it compares words, not meaning. A true paraphrase in new words is dropped (costs
     warmth, not truth), and an invention made only of grounded words passes.
 

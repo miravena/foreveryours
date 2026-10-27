@@ -506,11 +506,15 @@ _CANNOT_PERCEIVE_RE = re.compile(
 # Such a clause may use these words too; every other word is still checked,
 # so "Leo has cancer and Sarah has been notified" is not let through. A bare
 # "emergency" is not enough: "Sarah has an emergency at work" is news.
+# The live judge check's own test for that answer is "only/unless ... safety".
 _ALERT_PATH_RE = re.compile(
-    r"\b(?:safety\s+\w+|alerts?|alerted|flag|flags|flagged|notif(?:y|ied|ication|ications))\b", re.IGNORECASE)
+    r"\b(?:safety\s+\w+|alerts?|alerted|flag|flags|flagged|notif(?:y|ied|ication|ications))\b"
+    r"|\b(?:only|unless|except)\b.*\b(?:safety|safe|unsafe|danger|emergency|fall|hurt)\b", re.IGNORECASE)
 _ALERT_WORDS = set("""
-safety alert alerts alerted flag flags flagged notify notified notification notifications concern concerns
-get gets got receive receives received see sees reach reaches sent send sends message messages
+safety safe unsafe danger emergency fall hurt alert alerts alerted flag flags flagged notify notified
+notification notifications concern concerns concerned worried worry
+get gets got receive receives received see sees reach reaches sent send sends message messages note notes
+learn learns told hear hears know knows shared share matter matters about like think
 something anything wrong seems seem comes come happens happen if there else nothing issue issues problem problems
 """.split())
 # Sending the senior to a person for help is a referral, not news about
@@ -696,6 +700,7 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
     about = follows_family or _family_ref(statement, g)
     name_parts = _name_parts(g)
     previous = follows_relative
+    alert = bool(_ALERT_PATH_RE.search(statement))  # "..., like a fall" is still that answer
     for clause in _DETAIL_CLAUSE_RE.split(statement):
         if not clause.strip():
             continue
@@ -708,7 +713,6 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         previous = is_family
         if not is_family:
             continue
-        alert = bool(_ALERT_PATH_RE.search(clause))
         # Only what comes before the companion's own act, a hope, or a "no
         # news" is checked: "I hope he's doing well" and "I let Sarah know so
         # she can check on you" pass; "Leo has cancer and I hope he feels
@@ -752,6 +756,20 @@ def family_thread(sentence: str, g: FamilyGrounding, caregiver_name: str,
     relative = named or (follows_relative and carried and not _mentions_caregiver(sentence, caregiver_name))
     family = relative or _family_ref(sentence, g) or (follows_family and pronoun)
     return family, relative
+
+
+def relative_fact_stems(memory_texts: list[str], names: list[str]) -> set[str]:
+    """Stems of what the memo lines naming any of `names` say about them,
+    beyond the name and the relation: "Leo is recovering from surgery" ->
+    {"recover", "surgery"}."""
+    keys = {_name_key(n) for n in names}
+    out = set()
+    for text in memory_texts:
+        if keys & {_name_key(n) for n in _NAME_RE.findall(text)}:
+            out |= {_stem(w) for w in _detail_words(text)
+                    if w not in STOPWORDS and w not in _CHAT_WORDS and w not in _KIN_FORMS
+                    and w not in _CONTRACTION_BITS and _name_key(w) not in keys and len(w) > 2}
+    return out
 
 
 def family_people_in(text: str, g: FamilyGrounding, caregiver_name: str) -> list[str]:
@@ -1862,9 +1880,12 @@ def run_turn(
             kin_said = {_KIN_FORMS[w] for w in _WORD_RE.findall(reply_text.lower()) if w in _KIN_FORMS}
             # ... and so does a pronoun not about the caregiver ("He's ...",
             # not "Sarah said she is dropping off groceries").
+            # ... and so does a briefed fact about them with no name on it:
+            # "Recovering from surgery, according to the notes."
             answered = bool(kin_said & kin_asked) or any(
                 _THIRD_PERSON_RE.search(x) and not _mentions_caregiver(x, caregiver_name)
-                for x in _SENTENCE_SPLIT_RE.split(reply_text))
+                for x in _SENTENCE_SPLIT_RE.split(reply_text)) or bool(
+                relative_fact_stems(speakable, asked) & {_stem(w) for w in _detail_words(reply_text)})
             missing = [] if answered else [n for n in asked if n.lower() not in reply_text.lower()]
             if missing and reply_text.strip() and not dropped_hotline and not driving_guard:
                 # Asked how a briefed relative is and the reply never named

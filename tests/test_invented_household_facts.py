@@ -440,7 +440,12 @@ class TestInventedFamilyDetail(unittest.TestCase):
                   "She'll only be notified if there's a safety concern."):
             self.assertFalse(orchestrator.invented_family_detail(s, g, follows_family=True), s)
         self.assertTrue(orchestrator.invented_family_detail("Sarah has an emergency at work.", g))
+        for s in ("She only learns about it if there's a safety issue.",
+                  "She's only told about safety matters, like a fall.",
+                  "She only receives a note if I'm concerned for your safety."):
+            self.assertFalse(orchestrator.invented_family_detail(s, g, follows_family=True), s)
         self.assertTrue(orchestrator.invented_family_detail("Leo has cancer and Sarah has been notified.", g))
+        self.assertTrue(orchestrator.invented_family_detail("Leo only had a fall at school.", g))
 
     def test_a_referral_to_the_caregiver_is_kept(self):
         g = orchestrator.family_grounding(["His grandson is named Leo"], "Can I take two aspirin?", None, "Sarah")
@@ -563,6 +568,11 @@ class TestDetailGuardInRunTurn(_TurnBase):
         self.assertNotIn("soccer", res.reply_text)
         self.assertIn("Sarah is dropping off groceries at 4 PM.", res.reply_text)
         self.assertEqual(res.reply_text.count("news about"), 1)
+
+    def test_a_briefed_fact_with_no_name_answers_the_question(self):
+        self.store.add("Leo is recovering from surgery", source="caregiver_memo", supersede=False)
+        res, _ = self.turn("How is my grandson doing?", "Recovering from surgery, according to the notes.")
+        self.assertNotIn("don't have any news", res.reply_text)
 
     def test_how_is_leo_drops_an_invented_reply(self):
         res, _ = self.turn("How is Leo?", "He's doing great at school and has a soccer game on Saturday.")
