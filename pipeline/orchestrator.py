@@ -1886,7 +1886,12 @@ def run_turn(
                 # doing?" -> "Recovering from cancer treatment." is invented.
                 kin = _MY_KIN_RE.search(transcript or "") if family_question and not asked else None
                 follows_family = bool(family_question or asked)
-                follows_relative = bool(asked or kin) and not _DAY_QUESTION_RE.search(transcript or "")
+                # A day question is one of its own: "What's on for today? And
+                # how is my grandson?", not "How is my grandson doing today?".
+                day_asked = any(_DAY_QUESTION_RE.search(part) and not _MY_KIN_RE.search(part)
+                                and not asked_relatives(part, family, caregiver_name)
+                                for part in re.split(r"[.?!]+|\band\b", transcript or ""))
+                follows_relative = bool(asked or kin) and not day_asked
                 last_person = asked[0] if asked else (f"your {kin.group(1).lower()}" if kin else None)
                 for s in s_iter:
                     # Safety advice is never dropped for naming a relative, and

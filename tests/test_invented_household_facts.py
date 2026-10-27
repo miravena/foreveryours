@@ -696,6 +696,12 @@ class TestDetailGuardInRunTurn(_TurnBase):
         self.assertNotIn("cancer", res.reply_text)
         self.assertIn("news about how your granddaughter", res.reply_text)
 
+    def test_a_time_word_on_the_family_question_still_checks_the_answer(self):
+        res, _ = self.turn("How is my grandson doing today?", "Recovering from cancer treatment.")
+        self.assertNotIn("cancer", res.reply_text)
+        res, _ = self.turn("What's on for today and how is my grandson doing?", "Today's schedule is light.")
+        self.assertIn("Today's schedule is light.", res.reply_text)
+
     def test_a_briefed_fact_with_no_name_answers_the_question(self):
         self.store.add("Leo is recovering from surgery", source="caregiver_memo", supersede=False)
         res, _ = self.turn("How is my grandson doing?", "Recovering from surgery, according to the notes.")
