@@ -2149,17 +2149,20 @@ BUSY_NOTICE_JS = r"""
     return false;
   }
 
+  // Hides matching toasts only while the banner shows; a toast group stays
+  // visible as long as any message in it is unrelated, even one added later.
   function hideToasts() {
+    var busy = !!(state.banner && state.banner.style.display === "block");
     var bodies = d.querySelectorAll('[data-testid="toast-body"], .toast-body');
     for (var i = 0; i < bodies.length; i++) {
       var body = bodies[i], items = body.querySelectorAll(".toast-message-item"), shown = 0;
       if (items.length) {
         for (var j = 0; j < items.length; j++) {
-          if (matches(items[j].textContent)) items[j].style.display = "none";
+          if (busy && matches(items[j].textContent)) items[j].style.display = "none";
           else if (items[j].style.display !== "none") shown += 1;
         }
-        if (!shown) body.style.display = "none";
-      } else if (matches(body.textContent)) {
+        body.style.display = shown ? "" : "none";
+      } else if (busy && matches(body.textContent)) {
         body.style.display = "none";
       }
     }
@@ -2205,7 +2208,7 @@ BUSY_NOTICE_JS = r"""
 
   if (w.MutationObserver) {
     var watch = function () {
-      new w.MutationObserver(function () { if (state.banner && state.banner.style.display === "block") hideToasts(); })
+      new w.MutationObserver(function () { if (state.failures) hideToasts(); })
         .observe(d.body || d.documentElement, { childList: true, subtree: true });
     };
     if (d.body) watch(); else d.addEventListener("DOMContentLoaded", watch);

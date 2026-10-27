@@ -49,10 +49,15 @@ function el(tag) {
 }
 const parseToast = el("div"); parseToast.textContent = "Error Could not parse server response: SyntaxError: Unexpected token '<'";
 const busyToast = el("div"); busyToast.textContent = "Error This application is currently busy. Please try again.";
+const group = el("div"); group.items = [];
+group.querySelectorAll = (sel) => sel === ".toast-message-item" ? group.items : [];
+const item = (text) => { const e = el("div"); e.textContent = text; group.items.push(e); return e; };
+item("Could not parse server response: SyntaxError"); item("This application is currently busy. Please try again.");
+let observed = null;
 const realToast = el("div"); realToast.textContent = "Error Something else went wrong";
 const body = el("body");
 const document = { body, createElement: el, documentElement: body, addEventListener() {},
-                   querySelectorAll(sel) { return sel.includes("toast-body") ? [parseToast, busyToast, realToast] : []; } };
+                   querySelectorAll(sel) { return sel.includes("toast-body") ? [parseToast, busyToast, realToast, group] : []; } };
 class Headers { constructor(h) { this.h = {}; for (const k in (h || {})) this.h[k.toLowerCase()] = h[k]; }
                 get(k) { return this.h[k.toLowerCase()] || null; } }
 class Response { constructor(body, init) { this.body = body; this.status = init.status;
@@ -69,6 +74,7 @@ class XMLHttpRequest {
 }
 const window = {
   fetch: () => Promise.resolve(next), Response, XMLHttpRequest,
+  MutationObserver: class { constructor(f) { observed = f; } observe() {} },
   setTimeout(f, ms) { timers.push({ f, ms }); return timers.length; }, clearTimeout(id) { if (timers[id - 1]) timers[id - 1].f = null; },
 };
 let reject = null;
@@ -101,6 +107,10 @@ const banner = () => body.children.find(c => c.attrs.role === "status");
   results.banner_display = banner().style.display;
   results.parse_toast_hidden = parseToast.style.display === "none";
   results.busy_toast_hidden = busyToast.style.display === "none";
+  results.group_hidden = group.style.display === "none";
+  const later = item("Microphone permission denied");
+  observed();
+  results.group_shown_for_unrelated = group.style.display !== "none" && later.style.display !== "none";
   results.real_toast_kept = realToast.style.display !== "none";
 
   next = { status: 502, headers: new Headers({ "content-type": "text/html" }) };
@@ -161,6 +171,10 @@ class BusyNoticeBehaviourTest(unittest.TestCase):
         self.assertTrue(self.r["parse_toast_hidden"])
         self.assertTrue(self.r["busy_toast_hidden"])
         self.assertTrue(self.r["real_toast_kept"])
+
+    def test_grouped_toast_hidden_until_an_unrelated_message_joins(self):
+        self.assertTrue(self.r["group_hidden"])
+        self.assertTrue(self.r["group_shown_for_unrelated"])
 
     def test_banner_clears_after_the_last_failure(self):
         self.assertEqual(self.r["live_timers"], 1)
