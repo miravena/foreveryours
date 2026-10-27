@@ -54,6 +54,7 @@ import contextlib
 import datetime
 import functools
 import html
+import json
 import os
 
 if __name__ == "__main__":
@@ -2094,6 +2095,127 @@ PAGE_CSS = """
 footer { display: none !important; }
 """
 
+# One plain notice instead of a stack of "Could not parse server response"
+# toasts (#246). When the hosting proxy, not this app, answers a Gradio API
+# request with an HTML error page (throttling, a restart, a gateway error),
+# the Gradio client fails to parse it as JSON and toasts once per failed
+# request: the 2-second caregiver poll alone fires three requests a tick, so a
+# short outage stacks a dozen toasts and the reply's voice never loads. This
+# script, loaded in the page head, (1) turns such an HTML answer into a JSON
+# error carrying BUSY_MESSAGE, (2) shows one banner with BUSY_MESSAGE while
+# failures keep coming, also when the reply audio (fetched over XHR) fails, and
+# (3) hides, while the banner shows, the parse-error, busy and connection
+# toasts it already explains.
+BUSY_MESSAGE = "The companion is busy, please try again in a moment."
+BUSY_NOTICE_HIDE_MS = 8000  # the banner stays this long after the last failed request
+
+BUSY_NOTICE_JS = r"""
+(function (w, d) {
+  if (w.__fyBusyNotice) return;
+  var MSG = __MSG__, HIDE_MS = __HIDE_MS__, API = "/gradio_api/";
+  // The parse error, plus what the Gradio client itself says for a 503 and for
+  // a dropped connection: the banner explains all three, once.
+  var PATTERNS = ["Could not parse server response", "This application is currently busy",
+                  "Connection errored out", MSG];
+  var state = w.__fyBusyNotice = { failures: 0, timer: null, banner: null };
+
+  function isApi(url) { return typeof url === "string" && url.indexOf(API) !== -1; }
+  function isHtml(ct) { return (ct || "").toLowerCase().indexOf("text/html") !== -1; }
+
+  function banner() {
+    if (state.banner) return state.banner;
+    var b = d.createElement("div");
+    b.id = "fy-busy-notice";
+    b.setAttribute("role", "status");
+    b.setAttribute("aria-live", "polite");
+    b.textContent = MSG;
+    b.style.cssText = "display:none;position:fixed;top:12px;left:50%;transform:translateX(-50%);" +
+      "z-index:10000;background:#fff7e6;color:#5c3b00;border:1px solid #f0b429;" +
+      "border-radius:8px;padding:10px 16px;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.15);";
+    (d.body || d.documentElement).appendChild(b);
+    return (state.banner = b);
+  }
+
+  function showBusy() {
+    state.failures += 1;
+    banner().style.display = "block";
+    if (state.timer) w.clearTimeout(state.timer);
+    state.timer = w.setTimeout(function () { banner().style.display = "none"; state.timer = null; }, HIDE_MS);
+    hideToasts();
+  }
+
+  function matches(text) {
+    for (var i = 0; i < PATTERNS.length; i++) if ((text || "").indexOf(PATTERNS[i]) !== -1) return true;
+    return false;
+  }
+
+  function hideToasts() {
+    var bodies = d.querySelectorAll('[data-testid="toast-body"], .toast-body');
+    for (var i = 0; i < bodies.length; i++) {
+      var body = bodies[i], items = body.querySelectorAll(".toast-message-item"), shown = 0;
+      if (items.length) {
+        for (var j = 0; j < items.length; j++) {
+          if (matches(items[j].textContent)) items[j].style.display = "none";
+          else if (items[j].style.display !== "none") shown += 1;
+        }
+        if (!shown) body.style.display = "none";
+      } else if (matches(body.textContent)) {
+        body.style.display = "none";
+      }
+    }
+  }
+
+  var realFetch = w.fetch;
+  if (realFetch) {
+    w.fetch = function (input, init) {
+      var url = typeof input === "string" ? input : (input && input.url) || "";
+      return realFetch.apply(this, arguments).then(function (res) {
+        if (!isApi(url) || !isHtml(res.headers && res.headers.get("content-type"))) return res;
+        showBusy();
+        var body = JSON.stringify({ error: MSG, detail: MSG });
+        return new w.Response(body, {
+          status: res.status >= 400 ? res.status : 503,
+          headers: { "Content-Type": "application/json" }
+        });
+      }, function (err) {
+        if (isApi(url)) showBusy();
+        throw err;
+      });
+    };
+  }
+
+  var XHR = w.XMLHttpRequest;
+  if (XHR && XHR.prototype) {
+    var open = XHR.prototype.open, send = XHR.prototype.send;
+    XHR.prototype.open = function (method, url) { this.__fyUrl = String(url); return open.apply(this, arguments); };
+    XHR.prototype.send = function () {
+      var xhr = this;
+      if (isApi(xhr.__fyUrl)) {
+        var aborted = false;  // a player stopping its own download is not an outage
+        xhr.addEventListener("abort", function () { aborted = true; });
+        xhr.addEventListener("loadend", function () {
+          if (aborted) return;
+          if (xhr.status === 0 || xhr.status >= 400 || isHtml(xhr.getResponseHeader("content-type"))) showBusy();
+        });
+      }
+      return send.apply(this, arguments);
+    };
+  }
+
+  if (w.MutationObserver) {
+    var watch = function () {
+      new w.MutationObserver(function () { if (state.banner && state.banner.style.display === "block") hideToasts(); })
+        .observe(d.body || d.documentElement, { childList: true, subtree: true });
+    };
+    if (d.body) watch(); else d.addEventListener("DOMContentLoaded", watch);
+  }
+})(window, document);
+"""
+BUSY_NOTICE_HEAD = "<script>" + (
+    BUSY_NOTICE_JS.replace("__MSG__", json.dumps(BUSY_MESSAGE))
+    .replace("__HIDE_MS__", str(BUSY_NOTICE_HIDE_MS))
+) + "</script>"
+
 
 def _build_line(path: Path = BUILD_INFO_PATH) -> str:
     """"Build: <sha7>" when a deploy wrote BUILD_INFO next to this file, else ""."""
@@ -2188,6 +2310,7 @@ def build_demo() -> gr.Blocks:
         # passed only to launch() never reaches the hosted page (Codex review,
         # #83 PR #85).
         css=PAGE_CSS,
+        head=BUSY_NOTICE_HEAD,  # one busy banner, not a toast stack (#246)
     ) as demo:
         gr.Markdown(
             "# ForeverYours\n"
