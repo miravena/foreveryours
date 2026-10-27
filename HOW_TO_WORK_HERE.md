@@ -121,9 +121,13 @@ deploys it by hand: `.github/workflows/deploy-space.yml` does, so a collaborator
 - **Every deploy runs the live suite,** releases included, so a release cannot pass on stubbed
   tests and API reachability alone.
 - **By hand, if Actions is unavailable:** from a clean, pushed `main`,
-  `HF_TOKEN=... NEBIUS_API_KEY= python scripts/deploy_hf_space.py elevenbaselab/foreveryours --hardware zero-a10g`
+  `HF_TOKEN=... NEBIUS_API_KEY= python scripts/deploy_hf_space.py elevenbaselab/foreveryours --hardware cpu-basic`
   then `python scripts/verify_space_sha.py elevenbaselab/foreveryours --wait 900 --smoke`.
   The deploy script refuses a dirty tree, so the recorded sha is always a real commit.
+- **Hardware is one setting:** the repo variable `SPACE_HARDWARE` (default `cpu-basic`; ADR-017).
+  Change it to `cpu-upgrade`, or back to `zero-a10g`, and re-run the workflow. `cpu-*` needs a
+  PRO account; the deploy stops at once, with a message, if the account is not PRO or has no
+  card, instead of waiting out the 900 s build check.
 
 ## After every Space deploy: the live judge check
 

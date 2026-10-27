@@ -6,6 +6,9 @@
     python scripts/deploy_hf_space.py <user>/<space> --dry-run   # stage only, no upload
     python scripts/deploy_hf_space.py <user>/<space> --hardware zero-a10g   # free-account path
 
+The hardware is ONE setting: --hardware, else the SPACE_HARDWARE environment variable
+(the deploy workflow sets it from the repo variable SPACE_HARDWARE), else cpu-basic.
+
 What it does, in order:
 1. Stages only what the Space needs (app code, samples, requirements.txt,
    packages.txt, LICENSE) into a temp folder -- never .env, data/, out/,
@@ -25,12 +28,15 @@ Why a script instead of "push app.py to a Space": the Space needs a config
 header our GitHub README shouldn't carry, and the key must go in as a
 secret. Doing either by hand at deadline time is where mistakes happen.
 
-Hardware: since mid-2026 Hugging Face only lets PRO accounts (or Team/Enterprise
-orgs) run a Gradio Space on cpu-basic. A free account older than 30 days with a
-verified email can still host up to 2 ZeroGPU Spaces, so --hardware zero-a10g
-deploys there. The app is CPU-only; ZeroGPU just needs one @spaces.GPU function
-to boot, which app.py provides. Hardware is set when the Space is created, and
-requested again if an existing Space is on something else.
+Hardware: Hugging Face only lets PRO accounts (or Team/Enterprise orgs) run a
+Gradio Space on cpu-basic or cpu-upgrade; the deploy checks that first and stops
+with a clear message instead of waiting for a build that can never start
+(ADR-017). A free account older than 30 days with a verified email can host up to
+2 ZeroGPU Spaces, so --hardware zero-a10g still works there. The app is CPU-only;
+ZeroGPU just needs one @spaces.GPU function to boot, which app.py provides (it is a
+no-op elsewhere), and `spaces` is added to the Space's requirements only for zero-*
+hardware. Hardware is set when the Space is created, and requested again if an
+existing Space is on something else.
 
 Free CPU Spaces sleep after ~48h without traffic; the first click after that
 waits on a cold start (faster-whisper model download + espeak). A daily
@@ -66,6 +72,49 @@ SAMPLE_SCRIPT = "samples/generate_samples.py"
 
 HARDWARE_CHOICES = ["cpu-basic", "zero-a10g", "cpu-upgrade"]
 ZEROGPU_REQUIREMENT = "spaces  # ZeroGPU runtime; app.py registers its @spaces.GPU marker with it\n"
+
+DEFAULT_HARDWARE = "cpu-basic"
+PAID_CPU = ("cpu-basic", "cpu-upgrade")
+
+
+def default_hardware(environ=os.environ) -> str:
+    """The one hardware setting: SPACE_HARDWARE if set and non-empty, else cpu-basic."""
+    return (environ.get("SPACE_HARDWARE") or "").strip() or DEFAULT_HARDWARE
+
+
+class HardwareNotAvailable(Exception):
+    """The account cannot run the requested hardware; the message says what to do."""
+
+
+def check_hardware_allowed(api, hardware: str) -> None:
+    """Fail early, before any upload or 900 s build wait, when `hardware` cannot run.
+
+    cpu-basic / cpu-upgrade need a PRO personal account or an org on a paid plan; an
+    account with no payment method on file cannot start paid hardware at all. ZeroGPU is
+    left to the API: its eligibility (free-account Space limit) is not in whoami.
+    """
+    if hardware not in PAID_CPU:
+        return
+    try:
+        who = api.whoami()
+    except Exception as exc:  # token invalid or Hub unreachable
+        raise HardwareNotAvailable(
+            f"Cannot read the Hugging Face account ({type(exc).__name__}); not deploying "
+            f"to {hardware} blind.") from exc
+    name = who.get("name", "?")
+    paid_org = any(o.get("isEnterprise") or o.get("plan") in ("team", "enterprise", "plus")
+                   for o in who.get("orgs") or [])
+    if not (who.get("isPro") or paid_org):
+        raise HardwareNotAvailable(
+            f"Account '{name}' is not PRO (and has no Team/Enterprise org), so Hugging Face "
+            f"will not run {hardware}. Activate PRO, or set SPACE_HARDWARE=zero-a10g "
+            "to deploy to ZeroGPU. Nothing was uploaded.")
+    if who.get("canPay") is False:
+        raise HardwareNotAvailable(
+            f"Account '{name}' has no payment method on file (canPay is false), so "
+            f"{hardware} cannot start. Add a card at huggingface.co/settings/billing. "
+            "Nothing was uploaded.")
+
 
 SPACE_VARIABLES = {
     "ASR_BACKEND": "whisper_local",  # Token Factory has no transcription endpoint (PR #25)
@@ -155,9 +204,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("space_id", help="<user-or-org>/<space-name>")
     parser.add_argument("--dry-run", action="store_true", help="stage and list files, upload nothing")
-    parser.add_argument("--hardware", choices=HARDWARE_CHOICES, default="cpu-basic",
-                        help="Space hardware (default cpu-basic, which needs PRO; "
-                             "zero-a10g works on an eligible free account)")
+    parser.add_argument("--hardware", choices=HARDWARE_CHOICES, default=default_hardware(),
+                        help="Space hardware (default: $SPACE_HARDWARE, else cpu-basic, which "
+                             "needs PRO; zero-a10g works on an eligible free account)")
     parser.add_argument("--private", action="store_true", help="create the Space private (judges can't reach it)")
     parser.add_argument("--gradio-version", default=None, help="sdk_version for the Space (default: installed gradio)")
     parser.add_argument("--keep-stage", type=Path, default=None, help="also copy the staged folder here")
@@ -206,13 +255,26 @@ def main() -> int:
         from huggingface_hub import HfApi
 
         api = HfApi(token=token)
-        api.create_repo(args.space_id, repo_type="space", space_sdk="gradio",
-                        space_hardware=args.hardware, private=args.private, exist_ok=True)
-        runtime = api.get_space_runtime(args.space_id)
-        # exist_ok=True leaves an existing Space's hardware alone. A pending request
-        # wins over the current hardware, so compare against that first.
-        if (runtime.requested_hardware or runtime.hardware) != args.hardware:
-            api.request_space_hardware(args.space_id, args.hardware)
+        try:
+            check_hardware_allowed(api, args.hardware)
+            api.create_repo(args.space_id, repo_type="space", space_sdk="gradio",
+                            space_hardware=args.hardware, private=args.private, exist_ok=True)
+            runtime = api.get_space_runtime(args.space_id)
+            # exist_ok=True leaves an existing Space's hardware alone. A pending request
+            # wins over the current hardware, so compare against that first.
+            if (runtime.requested_hardware or runtime.hardware) != args.hardware:
+                api.request_space_hardware(args.space_id, args.hardware)
+        except HardwareNotAvailable as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 3
+        except Exception as exc:  # the API itself refused the hardware request
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status in (400, 402, 403):
+                print(f"error: Hugging Face rejected hardware {args.hardware} (HTTP {status}: "
+                      f"{type(exc).__name__}). The account likely lacks PRO or a payment "
+                      "method. Nothing was uploaded.", file=sys.stderr)
+                return 3
+            raise
         if nebius_key:
             api.add_space_secret(args.space_id, "NEBIUS_API_KEY", nebius_key)
         for key, value in SPACE_VARIABLES.items():
