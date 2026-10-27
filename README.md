@@ -193,6 +193,25 @@ cp .env.example .env   # fill in NEBIUS_API_KEY for the full pipeline; works wit
 # open http://localhost:7860
 ```
 
+### Hosting for the judging period
+
+**Requirement.** The rules ask that the demo stay free and unrestricted for judges until judging
+ends (2026-12-15 12:00 PT; `docs/HACKATHON_RULES.md`). Judges may test it at any time from
+submission until then.
+
+**Choices considered** (prices checked 2026-10-27, full table in
+[`docs/incidents/2026-10-27-space-outage.md`](docs/incidents/2026-10-27-space-outage.md)):
+free ZeroGPU (no cost, no guarantee); Hugging Face PRO with `cpu-basic` ($9/month); paid
+`cpu-upgrade` ($0.03/hour); a team organisation ($20/month); a small VM outside Hugging Face.
+
+**Decision** ([ADR-017](docs/decisions/ADR-017-judging-period-hosting.md)): the app needs no GPU,
+so it runs on `cpu-basic` under a PRO account, after free ZeroGPU stopped scheduling it on
+2026-10-27. `cpu-upgrade` is the fallback; the hardware is one setting (`SPACE_HARDWARE`). After
+the winners announcement the Space moves back to free ZeroGPU and PRO is cancelled (#259).
+
+**Uptime.** A scheduled GitHub Actions check (see *Uptime monitor* above) opens an Issue for both
+maintainers if the demo stops answering, and closes it when it recovers.
+
 ### Cloudflare & Cloud Hosting
 
 - **Cloudflare Pages**: Deploys the landing page and presentation directly from `docs/index.html` with zero build commands.
