@@ -551,9 +551,15 @@ def family_grounding(memory_texts: list[str], transcript: str, history: list[dic
     return FamilyGrounding(frozenset(people), relatives, display, frozenset(stems))
 
 
+def _name_parts(g: FamilyGrounding) -> set[str]:
+    """Every family name and each piece of one ("jean-luc" -> "jean", "luc")."""
+    return set(g.people) | {p for n in g.people for p in re.split(r"[-']", n) if p}
+
+
 def _family_ref(text: str, g: FamilyGrounding) -> bool:
     words = set(_detail_words(text))
-    return bool(words & g.people or words & set(_KIN_FORMS) or _FAMILY_WORD_RE.search(text))
+    names = {_name_key(n) for n in _NAME_RE.findall(text)}  # whole: "Jean-Luc", "O'Brien"
+    return bool(names & g.people or words & g.people or words & set(_KIN_FORMS) or _FAMILY_WORD_RE.search(text))
 
 
 _TAG_QUESTION_RE = re.compile(
@@ -588,6 +594,7 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
     if not statement.strip():
         return False
     about = follows_family or _family_ref(statement, g)
+    name_parts = _name_parts(g)
     previous = False
     for clause in _DETAIL_CLAUSE_RE.split(statement):
         # Only what comes before the companion's own act is checked: "I let
@@ -611,7 +618,7 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
             continue
         for w in _detail_words(clause):
             if (w in STOPWORDS or w in _NOT_NAME_WORDS or w in _CHAT_WORDS or w in _CONTRACTION_BITS
-                    or w in _ADDRESS_WORDS or w in g.people or w in _KIN_FORMS
+                    or w in _ADDRESS_WORDS or w in name_parts or w in _KIN_FORMS
                     or _THIRD_PERSON_RE.fullmatch(w) or _FAMILY_WORD_RE.fullmatch(w)):
                 continue
             if _stem(w) not in g.stems:
@@ -1503,8 +1510,8 @@ def run_turn(
     # about the family") gets the asked relative's briefed facts first, plus a
     # no-news instruction, so THINK never has to guess how someone is.
     family_question = asks_about_family(transcript) and not fast.triggered
+    kin_asked = {_KIN_FORMS[w] for w in _WORD_RE.findall(transcript.lower()) if w in _KIN_FORMS}
     if family_question:
-        kin_asked = {_KIN_FORMS[w] for w in _WORD_RE.findall(transcript.lower()) if w in _KIN_FORMS}
         anyone = not kin_asked or bool(_FAMILY_WORD_RE.search(transcript))
         named = {_name_key(n) for n in _NAME_RE.findall(transcript)}
         family_facts = [
@@ -1704,7 +1711,10 @@ def run_turn(
             if dropped_detail:
                 print(f"[orchestrator] dropped {len(dropped_detail)} sentence(s) with family detail no memo grounds (#245)",
                       file=sys.stderr)
-            missing = [n for n in asked if n.lower() not in reply_text.lower()]
+            # "Your grandson is ..." answers "How is my grandson?" as well as
+            # his name does.
+            kin_said = {_KIN_FORMS[w] for w in _WORD_RE.findall(reply_text.lower()) if w in _KIN_FORMS}
+            missing = [] if kin_said & kin_asked else [n for n in asked if n.lower() not in reply_text.lower()]
             if missing and reply_text.strip() and not dropped_hotline and not driving_guard:
                 # Asked how a briefed relative is and the reply never named
                 # them: answer the question honestly (T23).

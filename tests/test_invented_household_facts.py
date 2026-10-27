@@ -368,6 +368,12 @@ class TestInventedFamilyDetail(unittest.TestCase):
             with self.subTest(reply=reply):
                 self.assertEqual(self.reads(reply), [])
 
+    def test_a_hyphenated_family_name_is_still_family(self):
+        g = orchestrator.family_grounding(["His grandson is named Jean-Luc"], "How is Jean-Luc?", None, "Sarah")
+        reply = "Jean-Luc has a soccer game on Saturday."
+        self.assertTrue(orchestrator.invented_family_detail(reply, g))
+        self.assertFalse(orchestrator.invented_family_detail("Jean-Luc is your grandson.", g))
+
     def test_the_companions_own_act_does_not_clear_a_family_claim(self):
         for reply in ["Your grandson Leo has a soccer game on Saturday, so I'll let Sarah know you asked.",
                       "Leo has a soccer game on Saturday so I\u2019ll tell Sarah."]:
@@ -442,6 +448,11 @@ class TestDetailGuardInRunTurn(_TurnBase):
         res, _ = self.turn("How is my grandson doing?", "Sarah mentioned you love jazz, shall we talk about that?")
         self.assertIn("Leo", res.reply_text)
         self.assertTrue(res.reply_text.endswith(orchestrator._NO_NEWS_LINE.format(name="Leo")))
+
+    def test_an_answer_naming_the_relation_gets_no_contradicting_line(self):
+        self.store.add("Leo is recovering from surgery", source="caregiver_memo", supersede=False)
+        res, _ = self.turn("How is my grandson doing?", "Your grandson is recovering from surgery.")
+        self.assertEqual(res.reply_text, "Your grandson is recovering from surgery.")
 
     def test_family_question_reaches_think_with_the_relative_and_the_note(self):
         _res, stream = self.turn("How is my grandson doing?",
