@@ -33,7 +33,7 @@ This folder is the **decision log**: *why* we made each major choice. Use it whe
 | [ADR-014](ADR-014-outbound-notification.md) | One outbound caregiver notification: SMTP e-mail by default, webhook second, off when unset and always off on the hosted Space; fixed-text body, per-household hourly cap | Accepted (founder 2026-10-23; teammate review open) | 2026-10-23 |
 | [ADR-015](ADR-015-judging-window-deploys.md) | During judging only `v1.0.x` patches deploy (safety exception), each a published Release; rollback by re-running the previous tag (amends ADR-003) | Accepted (founder 2026-10-23; teammate review open) | 2026-10-23 |
 | [ADR-016](ADR-016-audit-model-super.md) | AUDIT default moves to Nemotron 3 Super 120B; THINK stays on Nano (amends ADR-010 and ADR-002) | Accepted | 2026-10-23 |
-| [ADR-017](ADR-017-judging-period-hosting.md) | Judging-period hosting: HF PRO + `cpu-basic` (one `SPACE_HARDWARE` setting, fail-early preflight), `cpu-upgrade` fallback; supersedes the hosting part of ADR-003 | Proposed | 2026-10-27 |
+| [ADR-017](ADR-017-judging-period-hosting.md) | Judging-period hosting: HF PRO + `cpu-basic` (one `SPACE_HARDWARE` setting, fail-early preflight), `cpu-upgrade` fallback; supersedes the hosting part of ADR-003 | Accepted | 2026-10-27 |
 
 ## Superseded / reconsidered
 
