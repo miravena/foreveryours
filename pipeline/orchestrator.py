@@ -846,10 +846,14 @@ def family_people_in(text: str, g: FamilyGrounding, caregiver_name: str) -> list
 _FAMILY_QUESTION_RE = re.compile(
     r"\bhow(?:'s|\s+is|\s+are|\s+has|\s+have)\s+(?:(?:my|our|the)\s+(?:\w+\s+)?(?:" + _KIN_ALT + r"|family)\b(?!')"
     r"|everyone|everybody|(?-i:[A-Z][a-z]+)(?:\s+(?:doing|getting|keeping|been)\b|\s*(?:[?!.,]|$)))"
+    r"|^\W*(?:and\s+)?(?:is|has)\s+(?:(?:my|our)\s+(?:\w+\s+)?)?(?:(?-i:[A-Z][a-z]+)|" + _KIN_ALT + r")\s+"
+    r"(?:okay|ok|alright|all\s+right|well|sick|ill|unwell|feeling|been|busy|coming|home|better)\b"
     r"|\b(?:hear|news|heard|updates?)\b[^.?!]{0,40}\b(?:family|" + _KIN_ALT + r")\b"
     r"|\bwhat(?:'s|\s+is|\s+has)\s+(?:my\s+" + _KIN_ALT + r"|(?-i:[A-Z][a-z]+))\s+(?:been\s+)?up\s+to\b",
     re.IGNORECASE,
 )
+_EMERGENCY_ADVICE_RE = re.compile(
+    r"\b(?:911|999|112|ambulance|emergency\s+(?:services|number|line|button|alert|help))\b", re.IGNORECASE)
 _DAY_QUESTION_RE = re.compile(
     r"\b(?:today|tonight|tomorrow|this\s+(?:morning|afternoon|evening|week)|schedule|plans?|happening|on\s+for)\b",
     re.IGNORECASE)
@@ -1851,6 +1855,10 @@ def run_turn(
                     # that opens with a pronoun ("She is bringing soup.").
                     is_safety = (fast.triggered or _hotline_match(s) is not None
                                  or _OTHER_EMERGENCY_RE.search(s))
+                    # Advice, not news: "call 911", "an ambulance", but not "Leo
+                    # had emergency surgery yesterday".
+                    detail_safety = (fast.triggered or _hotline_match(s) is not None
+                                     or _EMERGENCY_ADVICE_RE.search(s))
                     mentions_stranger = bool(strangers & {_name_key(n) for n in _NAME_RE.findall(s)})
                     if not is_safety and (unbriefed_relative(s, known_household) or mentions_stranger
                                           or (follows_dropped and _PRONOUN_START_RE.match(s))):
@@ -1863,7 +1871,7 @@ def run_turn(
                     lift_offer = driving_guard and _REAL_ALTERNATIVE_RE.search(s)
                     about_relative = bool(people) or follows_relative or any(
                         w in _KIN_FORMS for w in _WORD_RE.findall(s.lower()))
-                    if (not readout and not is_safety and not lift_offer
+                    if (not readout and not detail_safety and not lift_offer
                             and (caregiver_checked or about_relative)
                             and invented_family_detail(s, family, follows_family, follows_relative)):
                         dropped_detail.append(s)

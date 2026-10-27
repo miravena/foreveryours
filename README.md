@@ -48,8 +48,10 @@ Written down on purpose: a judge or a family should know where this stops.
 - Replies the rules do not cover are written by the model. It is told to use only what the family
   briefed or what Dad said. A sentence that names a relative nobody briefed, or says something about
   a family member that no memo and nothing Dad said contains, is dropped before it is spoken, and a
-  "no news" line takes its place. The check compares words, not meaning: it can drop a warm, true
-  paraphrase, and an invented detail made only of words the memos happen to contain still passes.
+  "no news" line takes its place. Sentences about the caregiver herself are checked only when Dad
+  asks about the family or the day, so her privacy and fall-alert answers are never cut. The check
+  compares words, not meaning: it can drop a warm, true paraphrase, and an invented detail made only
+  of words the memos happen to contain still passes.
 - On the hosted demo the alert stays on the caregiver's half of the screen. Nothing reaches a phone.
 - A flag is marked "Dad was told" once the spoken line is synthesised, not once it is heard; a
   browser that blocks autoplay still shows it as told.

@@ -670,6 +670,17 @@ class TestDetailGuardInRunTurn(_TurnBase):
         res, _ = self.turn("How is my grandson doing?", "Recovering from surgery, according to the notes.")
         self.assertNotIn("don't have any news", res.reply_text)
 
+    def test_is_sarah_okay_is_a_family_question(self):
+        for q in ("Is Sarah okay?", "Is my grandson feeling better?", "Has Leo been well?"):
+            self.assertTrue(orchestrator.asks_about_family(q), q)
+        self.assertFalse(orchestrator.asks_about_family("Is Sarah listening to us?"))
+        res, _ = self.turn("Is Sarah okay?", "Sarah has cancer.")
+        self.assertNotIn("cancer", res.reply_text)
+
+    def test_the_word_emergency_does_not_exempt_family_news(self):
+        res, _ = self.turn("How is my grandson doing?", "Leo had emergency surgery yesterday.")
+        self.assertNotIn("surgery", res.reply_text)
+
     def test_a_typed_lowercase_name_is_a_family_question(self):
         res, _ = self.turn("how is leo doing?", "He's doing great at school and has a soccer game on Saturday.")
         self.assertNotIn("soccer", res.reply_text)
