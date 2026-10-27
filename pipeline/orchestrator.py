@@ -524,6 +524,19 @@ class FamilyGrounding:
 
 
 _SENIOR_QUESTION_RE = re.compile(r"[^.!?]*\?")
+# Capitalised words that are not a person: days, months, titles.
+_NOT_PERSON_WORDS = set("""
+monday tuesday wednesday thursday friday saturday sunday january february march april may june july august
+september october november december dr mr mrs ms miss prof doctor
+""".split())
+# The name a relation word is bound to in a memo: "grandson Leo", "grandson
+# is named leo" (a caregiver may type lowercase), "Leo, his grandson", "Leo is
+# his grandson". "His grandson Leo visits Dr. Tan" binds Leo, not Tan.
+_KIN_BINDS_NAME_RE = re.compile(
+    r"\b" + _KIN_ALT + r"(?:['\u2019]s\s+name)?\s+(?:(?:is|was)\s+)?(?:(?:named|called)\s+([A-Za-z][a-z'\u2019-]*)|(" + _NAME + r"))"
+    r"|\b(" + _NAME + r"),?\s+(?:is\s+|was\s+)?(?:his|her|their|the|your|my|our)\s+" + _KIN_ALT + r"\b",
+    re.IGNORECASE,
+)
 
 
 def family_grounding(memory_texts: list[str], transcript: str, history: list[dict] | None,
@@ -549,9 +562,15 @@ def family_grounding(memory_texts: list[str], transcript: str, history: list[dic
         kin = {_KIN_FORMS[w] for w in _WORD_RE.findall(line.lower()) if w in _KIN_FORMS}
         if not kin:
             continue
-        written = {_name_key(n): re.sub(r"['\u2019]s$", "", n) for n in _NAME_RE.findall(line)}
-        names = set(written) - (_NOT_NAME_WORDS | _OPENER_WORDS | _ADDRESS_WORDS | set(_KIN_FORMS))
-        display.update({n: written[n] for n in names if n not in display})
+        bound = [n for m in _KIN_BINDS_NAME_RE.finditer(line) for n in m.groups() if n]
+        if not bound:  # no binding to read: one capitalised name in the line is its person
+            loose = [n for n in _NAME_RE.findall(line) if _name_key(n) not in _NOT_PERSON_WORDS
+                     | _NOT_NAME_WORDS | _OPENER_WORDS | _ADDRESS_WORDS | set(_KIN_FORMS)]
+            bound = loose if len(loose) == 1 else []
+        written = {_name_key(n): re.sub(r"['\u2019]s$", "", n) for n in bound}
+        names = set(written) - (_NOT_NAME_WORDS | _OPENER_WORDS | _ADDRESS_WORDS | _NOT_PERSON_WORDS | set(_KIN_FORMS))
+        for n in names:
+            display.setdefault(n, written[n].capitalize() if written[n].islower() else written[n])
         people |= names
         for k in kin:
             relatives.setdefault(k, set()).update(names)
@@ -578,6 +597,21 @@ _TAG_QUESTION_RE = re.compile(
     re.IGNORECASE,
 )
 _QUESTION_BREAK_RE = re.compile(r"[,;:\u2014\u2013]|\u2026|\.\.\.")
+
+
+def _names_someone_else(text: str, g: FamilyGrounding) -> bool:
+    """`text` names a person outside the family ("Ella Fitzgerald was a
+    wonderful singer"): a capitalised word that is no family name and no
+    common word, mid-sentence or followed by another capitalised word."""
+    for m in _NAME_RE.finditer(text):
+        key = _name_key(m.group(0))
+        if (key in g.people or key in _NOT_PERSON_WORDS or key in _NOT_NAME_WORDS or key in _OPENER_WORDS
+                or key in _ADDRESS_WORDS or key in STOPWORDS or key in _KIN_FORMS or key in _CHAT_WORDS):
+            continue
+        initial = not text[:m.start()].strip(" \"'(\u201c")
+        if not initial or _NAME_RE.match(text, m.end() + 1):
+            return True
+    return False
 
 
 def _question_cut(sentence: str) -> str:
@@ -619,7 +653,7 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         elif _THIRD_PERSON_RE.search(clause):
             is_family = about
         else:
-            is_family = previous and not _OWN_SUBJECT_RE.search(clause)
+            is_family = previous and not _OWN_SUBJECT_RE.search(clause) and not _names_someone_else(clause, g)
         previous = is_family
         if not is_family:
             continue
@@ -653,6 +687,8 @@ def family_thread(sentence: str, g: FamilyGrounding, caregiver_name: str,
     for invented_family_detail(). A relative is a family member other than
     the caregiver: by name, by relation word, or carried on by "he"/"she" or a
     sentence with no subject of its own."""
+    if _names_someone_else(sentence, g) and not _family_ref(sentence, g):
+        return False, False  # a change of subject: "Ella Fitzgerald was a wonderful singer."
     lowered = sentence.lower()
     named = bool(family_people_in(sentence, g, caregiver_name)) or any(
         w in _KIN_FORMS for w in _WORD_RE.findall(lowered))

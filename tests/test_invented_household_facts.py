@@ -403,6 +403,23 @@ class TestInventedFamilyDetail(unittest.TestCase):
         self.assertEqual(self.reads("Sarah is dropping off groceries at 4 PM. Jazz always lifts the spirits."), [])
         self.assertEqual(self.reads("Leo is your grandson. That must make you proud."), [])
 
+    def test_a_named_outsider_ends_the_family_thread(self):
+        self.assertEqual(self.reads("Leo is your grandson. Ella Fitzgerald was a wonderful singer. "
+                                    "She recorded so many great songs."), [])
+
+    def test_a_lowercase_memo_name_is_still_family(self):
+        g = orchestrator.family_grounding(["His grandson is named leo"], "How is my grandson?", None, "Sarah")
+        self.assertTrue(orchestrator.invented_family_detail("Leo has cancer.", g))
+        self.assertEqual(orchestrator.asked_relatives("How is my grandson doing?", g, "Sarah"), ["Leo"])
+
+    def test_only_the_bound_name_is_the_relative(self):
+        g = orchestrator.family_grounding(["His grandson Leo visits Dr. Tan on Thursday"], "", None, "Sarah")
+        self.assertEqual(orchestrator.asked_relatives("How is my grandson doing?", g, "Sarah"), ["Leo"])
+        for memo in ["Leo, his grandson, lives in Leeds", "Leo is his grandson", "His grandson's name is Leo"]:
+            with self.subTest(memo=memo):
+                g = orchestrator.family_grounding([memo], "", None, "Sarah")
+                self.assertEqual(orchestrator.asked_relatives("How is my grandson doing?", g, "Sarah"), ["Leo"])
+
     def test_a_question_the_senior_asks_grounds_nothing(self):
         self.assertEqual(self.reads("Leo has cancer.", "Does Leo have cancer?"), ["Leo has cancer."])
         self.assertEqual(self.reads("Leo has a soccer game on Saturday.",
