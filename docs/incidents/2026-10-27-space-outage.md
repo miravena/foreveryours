@@ -167,8 +167,8 @@ is 49 days, 1,176 hours. Every paid option needs a credit card on the account fi
 | Option | Price | Through 2026-12-15 | Reliability for judges | Effort | Notes |
 |---|---|---|---|---|---|
 | (a) Wait and retry on free ZeroGPU | $0 | $0 | Lowest: no SLA, outage ongoing, any redeploy re-enters the failing queue | none | What failed. PRO does not fix ZeroGPU scheduling either (PRO Spaces failed in the sample). |
-| (b) HF PRO, same Space on `cpu-basic` | $9/month | $18 (2 billing months) | Good: leaves the GPU pool; same URL; sleeps after 48 h idle, which the keep-awake covers | 10 min: subscribe, set hardware, one deploy with `--hardware cpu-basic` | PRO also brings the [documented](https://huggingface.co/docs/hub/billing) monthly compute credits and Dev Mode. |
-| (c) `cpu-upgrade` (8 vCPU, 32 GB), always on | $0.03/hour | about $35, plus $18 if PRO is needed (question 2), so $35 to $53 | Best on HF: paid hardware never sleeps by default | same as (b) | 4x the CPU of `cpu-basic`. |
+| (b) HF PRO, same Space on `cpu-basic` | $9/month | $18 (2 billing months) | Good: leaves the GPU pool; same URL; sleeps after 48 h idle, which the keep-awake covers | 10 min plus one small PR: subscribe, and change `--hardware zero-a10g` to `cpu-basic` in `deploy-space.yml` in the same change. `deploy_hf_space.py` re-requests whatever hardware it is given, so a Settings-only switch reverts to ZeroGPU on the next deploy | PRO also brings the [documented](https://huggingface.co/docs/hub/billing) monthly compute credits and Dev Mode. |
+| (c) `cpu-upgrade` (8 vCPU, 32 GB), always on | $0.03/hour | about $35, plus $18 if PRO is needed (question 2), so $35 to $53 | Best on HF: paid hardware never sleeps by default | same as (b), with `--hardware cpu-upgrade` in the workflow | 4x the CPU of `cpu-basic`. |
 | (c') `cpu-upgrade` with a sleep time | $0.03/hour awake | a few dollars; depends on traffic | Worse than (c): the first judge after a sleep waits on a cold start (model download) | same | The keep-awake would wake it twice a day and cancel most of the saving. |
 | (d) Team organisation | $20/user/month | $40 for one user | Same as (b) | Moves the Space to an organisation, which changes the URL already submitted | No advantage over (b) for one Space. |
 | (e) Second host outside HF (Nebius AI Cloud CPU VM, or any small VM) | Nebius CPU-only VMs "from $0.06" per hour; a small VM elsewhere is typically $5 to $10 a month | about $70 on Nebius at the lowest listed rate; less elsewhere | Independent of HF; only useful as a backup link | 2 to 4 hours: container, HTTPS, Nebius secret, keep it patched until 12-15 | Nebius AI Cloud is named in the rules, so it fits the "runs on Nebius" story. The submitted link stays the HF one. |
@@ -199,7 +199,8 @@ Process fixes (f):
 ## Follow-ups
 
 - Record the decision in an ADR that supersedes ADR-003's hosting choice (#253).
-- Drop `zero-a10g` and the `spaces` requirement from the deploy once the Space is off ZeroGPU.
+- Change the workflow's `--hardware` in the same PR as the hardware switch (see option (b)); the
+  `spaces` requirement and the `@spaces.GPU` marker are then only needed for ZeroGPU and can go.
 - Add the alerting uptime check through 2026-12-15.
 - Re-check the ZeroGPU and Spaces overview pages before judging starts in case the free tier
   changes.
