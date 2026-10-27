@@ -114,7 +114,8 @@ const banner = () => body.children.find(c => c.attrs.role === "status");
   results.real_toast_kept = realToast.style.display !== "none";
 
   next = { status: 502, headers: new Headers({ "content-type": "text/html" }) };
-  await window.fetch("https://x.hf.space/gradio_api/queue/join", {});
+  const viaUrl = await window.fetch(new URL("https://x.hf.space/gradio_api/queue/data?session_hash=s"));
+  results.url_object_rewritten = viaUrl !== next && viaUrl.status === 502;
   await window.fetch("https://x.hf.space/gradio_api/queue/join", {});
   results.banner_count = body.children.filter(c => c.attrs.role === "status").length;
 
@@ -161,6 +162,9 @@ class BusyNoticeBehaviourTest(unittest.TestCase):
         self.assertEqual(self.r["rewritten_status"], 429)
         self.assertEqual(self.r["rewritten_body"]["error"], webapp.BUSY_MESSAGE)
         self.assertEqual(self.r["rewritten_ct"], "application/json")
+
+    def test_url_object_requests_are_handled_too(self):
+        self.assertTrue(self.r["url_object_rewritten"])
 
     def test_one_banner_with_the_plain_message(self):
         self.assertEqual(self.r["banner_text"], webapp.BUSY_MESSAGE)

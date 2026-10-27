@@ -2171,7 +2171,8 @@ BUSY_NOTICE_JS = r"""
   var realFetch = w.fetch;
   if (realFetch) {
     w.fetch = function (input, init) {
-      var url = typeof input === "string" ? input : (input && input.url) || "";
+      // A string, a URL object (Gradio's stream client passes one) or a Request.
+      var url = input && typeof input === "object" && typeof input.url === "string" ? input.url : String(input);
       return realFetch.apply(this, arguments).then(function (res) {
         if (!isApi(url) || !isHtml(res.headers && res.headers.get("content-type"))) return res;
         showBusy();
