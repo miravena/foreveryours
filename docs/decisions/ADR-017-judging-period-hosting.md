@@ -1,6 +1,6 @@
 # ADR-017: Host the judge demo on HF PRO with `cpu-basic` through the judging period
 
-**Status:** Proposed
+**Status:** Accepted (2026-10-27: HF PRO active on the account; the Space runs on `cpu-basic` and passed the live judge check 22/22 on build f73fc44, deploy run 40462553852. Wind-down after the winners announcement: #259.)
 **Date:** 2026-10-27
 **Decided by:** Account owner (the card and the PRO subscription are theirs); maintainers review
 **Affects:** `.github/workflows/deploy-space.yml`, `scripts/deploy_hf_space.py`, `HOW_TO_WORK_HERE.md`, `README.md`
