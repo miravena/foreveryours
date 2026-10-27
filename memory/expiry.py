@@ -44,7 +44,7 @@ _MONTHS = {
 _MONTH_RE = "|".join(sorted(_MONTHS, key=len, reverse=True))
 _WEEKDAY_RE = "|".join(list(_WEEKDAYS) + list(_WEEKDAY_ALIASES))
 _ORD = r"(?:st|nd|rd|th)?"
-_PAST_WORDING = re.compile(r"\b(?:was|were|had|went|saw|ago|yesterday|last|earlier)\b")
+_PAST_WORDING = re.compile(r"\b(?:was|were|had|went|saw|ago|yesterday|earlier)\b")
 
 _DATE_AFTER_WEEKDAY = re.compile(
     rf"\s*,?\s*(?:the\s+)?(?:\d{{1,2}}{_ORD}\s+(?:of\s+)?(?:{_MONTH_RE})\b|(?:{_MONTH_RE})\b\.?\s+\d|\d{{4}}-)"
@@ -121,9 +121,10 @@ def future_days(text: str, today: dt.date) -> list[dt.date]:
         qualifier, name = m[1], m[2]
         if qualifier in ("last", "past") or _RECURRING.search(t[: m.start()]):
             continue
-        # "Thursday 22 October" is one date: when it is past, the weekday word
-        # beside it must not revive it. A weekday elsewhere in the text stands.
-        if not named and _DATE_AFTER_WEEKDAY.match(t, m.end()):
+        # "Thursday 22 October" is one date: the date decides, so a weekday
+        # written against it neither revives a past date nor overrides a future
+        # one. A weekday elsewhere in the text stands.
+        if _DATE_AFTER_WEEKDAY.match(t, m.end()):
             continue
         target = _WEEKDAYS.index(name) if name in _WEEKDAYS else _WEEKDAY_ALIASES[name]
         if qualifier == "next":  # that weekday of NEXT calendar week (Mon-Sun)

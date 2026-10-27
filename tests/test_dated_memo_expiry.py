@@ -85,6 +85,11 @@ class DatedExpiryRule(unittest.TestCase):
             self.expiry("Check-up moved from October 20 to Thursday at 10 AM"), end_of(2026, 10, 29)
         )
         self.assertIsNone(self.expiry("Check-up was on the 20th at 2 PM"))
+        self.assertEqual(
+            self.expiry("Appointment moved from last Thursday to the 30th at 10 AM"), end_of(2026, 10, 30)
+        )
+        # a weekday written against a date does not override it
+        self.assertEqual(self.expiry("Check-up next Thursday 29 October 2026 at 10 AM"), end_of(2026, 10, 29))
 
     def test_year_after_a_comma_without_a_space(self):
         self.assertEqual(self.expiry("Check-up on October 30,2027 at 10 AM"), end_of(2027, 10, 30))
