@@ -22,7 +22,9 @@ Format: newest first. One entry per session: date, who, what, result, next.
   week's, the later of two readings; recurring wording ("every Thursday", "Thursdays") and past
   wording ("last Thursday") name no day; the result is never shorter than 24 h. Scope is still
   decided by the existing time-marker check, so a recurring or birthday fact without a clock time
-  stays Permanent. Numeric dates ("30/10") are not parsed (day/month order is ambiguous).
+  stays Permanent. A stored "tomorrow" keeps its wording and can be read back on the day itself
+  (before: up to 24 h of that, now up to the end of the named day); anchoring the text was tried and
+  dropped because it rewrote the caregiver's words and broke repeat-save dedupe. Numeric dates ("30/10") are not parsed (day/month order is ambiguous).
 - **Check:** `tests/test_dated_memo_expiry.py` (frozen clock), full suite.
 
 ### 2026-10-26 (#5: demo video v2, VIDEO_SCRIPT appointment line check)

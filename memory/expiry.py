@@ -50,7 +50,7 @@ _TOMORROW = re.compile(r"\b(day\s+after\s+)?tomorrow\b")
 _IN_DAYS = re.compile(r"\bin\s+(\d{1,2})\s+days?\b")
 _WEEK = re.compile(r"\b(this|next)\s+week\b")
 _ISO = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
-_YEAR = r"(?:,?\s+(20\d{2})\b)?"
+_YEAR = r"(?:(?:,\s*|\s+)(20\d{2})\b)?"
 _MONTH_DAY = re.compile(rf"\b({_MONTH_RE})\.?\s+(\d{{1,2}}){_ORD}\b(?!\s*(?::|am|pm|a\.m|p\.m)){_YEAR}")
 _DAY_MONTH = re.compile(rf"\b(\d{{1,2}}){_ORD}\s+(?:of\s+)?({_MONTH_RE})\b{_YEAR}")
 _BARE_ORDINAL = re.compile(r"\b(?:on\s+)?the\s+(\d{1,2})(?:st|nd|rd|th)\b")
@@ -66,6 +66,10 @@ def _safe_date(year: int, month: int, day: int) -> dt.date | None:
         return dt.date(year, month, day)
     except ValueError:
         return None
+
+
+def _has_explicit_date(text: str) -> bool:
+    return bool(_ISO.search(text) or _MONTH_DAY.search(text) or _DAY_MONTH.search(text))
 
 
 def _named_dates(text: str, today: dt.date) -> list[dt.date]:
@@ -107,7 +111,11 @@ def future_days(text: str, today: dt.date) -> list[dt.date]:
         days.append(today + dt.timedelta(days=2 if m[1] else 1))
     for m in _IN_DAYS.finditer(t):
         days.append(today + dt.timedelta(days=int(m[1])))
-    for m in _WEEKDAY.finditer(t):
+    named = _named_dates(t, today)
+    # "Thursday 22 October" is one date: a past explicit date is not revived by
+    # the weekday word beside it.
+    past_date_only = _has_explicit_date(t) and not named
+    for m in ([] if past_date_only else _WEEKDAY.finditer(t)):
         qualifier, name = m[1], m[2]
         if qualifier in ("last", "past") or _RECURRING.search(t[: m.start()]):
             continue
@@ -119,7 +127,7 @@ def future_days(text: str, today: dt.date) -> list[dt.date]:
     for m in _WEEK.finditer(t):
         sunday = today + dt.timedelta(days=6 - today.weekday())
         days.append(sunday + dt.timedelta(days=7 if m[1] == "next" else 0))
-    days.extend(_named_dates(t, today))
+    days.extend(named)
     return [d for d in days if d >= today]
 
 
@@ -157,3 +165,4 @@ def expiry_label(expires_at: float, now: float, tz_name: str = "UTC") -> str:
     today = dt.datetime.fromtimestamp(now, tz).date()
     day = at.strftime("%a") if (at.date() - today).days < 7 else at.strftime("%a %d %b").replace(" 0", " ")
     return f"{day} {at:%H:%M}"
+
