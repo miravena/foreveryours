@@ -23,6 +23,7 @@ rename `Unreleased` to the version and date, then tag it.
 
 ### Fixed
 - Clicking the "Try this first" chip or a sample-clip chip now runs the turn like Send, instead of only filling the input (#239).
+- When the host answers the page with an HTML error page, the page shows one "The companion is busy, please try again in a moment." banner instead of a stack of "Could not parse server response" toasts, also when the reply audio fails to load (#246).
 - "I'm on the floor and can't reach the phone" (and "I fell and can't get to the phone", "I've been
   on the floor for hours", a fall plus "can't get up") now hits the safety rules before the model:
   the reply says to press the medical alert or call 911 and that the family is being told, the

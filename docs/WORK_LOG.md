@@ -9,6 +9,23 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-27 (#246: stacked "Could not parse server response" toasts)
+- **What happened:** three fresh sessions run in parallel from one headless browser host got
+  up to 15 stacked toasts and an empty reply audio player, while the reply text kept streaming.
+- **Where the HTML came from:** not the app. Every Gradio API error the app can raise is JSON;
+  the app has no HTML error handler. The toast is the Gradio client failing to parse an HTML
+  body on a POST (`post_data`), and the reply text kept arriving over the already-open event
+  stream while it happened, so the container was up. The Space proxy serves `text/html` for
+  responses it makes itself (seen on 2026-10-27: a POST to `queue/join` while the Space was in
+  error got `503 text/html`). The caregiver poll (`gr.Timer(2)` with three ticks) sends three
+  POSTs every 2 s per tab, which is why one outage makes a toast stack. The Space log keeps only
+  the current container, so the exact trigger (throttling or a gateway error) is not recoverable.
+- **Changed:** `webapp.BUSY_NOTICE_HEAD`: one busy banner, HTML API answers turned into a JSON
+  error, the toasts it explains hidden, reply-audio failures included; `docs/STANDARDS.md`
+  (Errors); `tests/test_busy_notice.py` (served config carries the script; Node runs it).
+- **Checked:** a local browser with `queue/join` forced to answer `503 text/html`: one banner,
+  no visible toasts, banner gone after recovery.
+
 ### 2026-10-26 (#5: demo video v2, VIDEO_SCRIPT appointment line check)
 
 - **What:** Rebuilt the demo video from live-Space captures with an AI narrator (Kokoro af_heart)
