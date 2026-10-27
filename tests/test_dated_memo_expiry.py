@@ -75,6 +75,14 @@ class DatedExpiryRule(unittest.TestCase):
         self.assertEqual(self.expiry("Check-up on March 3 at 10 AM"), end_of(2027, 3, 3))
         self.assertIsNone(self.expiry("Check-up was on Oct 20 at 10 AM"))
 
+    def test_explicit_year_is_taken_as_written(self):
+        self.assertEqual(self.expiry("Eye test on 30 October 2027 at 2 PM"), end_of(2027, 10, 30))
+        self.assertEqual(self.expiry("Eye test on October 30, 2027 at 2 PM"), end_of(2027, 10, 30))
+
+    def test_a_full_date_is_not_also_a_bare_ordinal(self):
+        now = at(2026, 10, 30, 12)
+        self.assertIsNone(dated_expiry("Eye test was on the 20th of October at 2 PM", now, TZ_NAME))
+
     def test_week_wording_is_generous(self):
         self.assertEqual(self.expiry("Physio this week at 3 PM"), end_of(2026, 11, 1))
         self.assertEqual(self.expiry("Physio next week at 3 PM"), end_of(2026, 11, 8))

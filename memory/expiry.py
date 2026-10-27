@@ -50,8 +50,9 @@ _TOMORROW = re.compile(r"\b(day\s+after\s+)?tomorrow\b")
 _IN_DAYS = re.compile(r"\bin\s+(\d{1,2})\s+days?\b")
 _WEEK = re.compile(r"\b(this|next)\s+week\b")
 _ISO = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
-_MONTH_DAY = re.compile(rf"\b({_MONTH_RE})\.?\s+(\d{{1,2}}){_ORD}\b(?!\s*(?::|am|pm|a\.m|p\.m))")
-_DAY_MONTH = re.compile(rf"\b(\d{{1,2}}){_ORD}\s+(?:of\s+)?({_MONTH_RE})\b")
+_YEAR = r"(?:,?\s+(20\d{2})\b)?"
+_MONTH_DAY = re.compile(rf"\b({_MONTH_RE})\.?\s+(\d{{1,2}}){_ORD}\b(?!\s*(?::|am|pm|a\.m|p\.m)){_YEAR}")
+_DAY_MONTH = re.compile(rf"\b(\d{{1,2}}){_ORD}\s+(?:of\s+)?({_MONTH_RE})\b{_YEAR}")
 _BARE_ORDINAL = re.compile(r"\b(?:on\s+)?the\s+(\d{1,2})(?:st|nd|rd|th)\b")
 
 
@@ -73,16 +74,19 @@ def _named_dates(text: str, today: dt.date) -> list[dt.date]:
         d = _safe_date(int(m[1]), int(m[2]), int(m[3]))
         if d and d >= today:
             out.append(d)
-    pairs = [(_MONTHS[m[1]], int(m[2])) for m in _MONTH_DAY.finditer(text)]
-    pairs += [(_MONTHS[m[2]], int(m[1])) for m in _DAY_MONTH.finditer(text)]
-    for month, day in pairs:
-        d = _safe_date(today.year, month, day)
-        if d is None:
-            continue
-        if d < today - dt.timedelta(days=14):
-            d = _safe_date(today.year + 1, month, day)  # a named month long gone means next year's
+    triples = [(_MONTHS[m[1]], int(m[2]), m[3]) for m in _MONTH_DAY.finditer(text)]
+    triples += [(_MONTHS[m[2]], int(m[1]), m[3]) for m in _DAY_MONTH.finditer(text)]
+    for month, day, year in triples:
+        if year:  # an explicit year is taken as written
+            d = _safe_date(int(year), month, day)
+        else:
+            d = _safe_date(today.year, month, day)
+            if d and d < today - dt.timedelta(days=14):
+                d = _safe_date(today.year + 1, month, day)  # a named month long gone means next year's
         if d and d >= today:
             out.append(d)
+    # "the 20th of October" is one date, not also a bare "the 20th"
+    text = _DAY_MONTH.sub(" ", _MONTH_DAY.sub(" ", text))
     for m in _BARE_ORDINAL.finditer(text):
         day = int(m[1])
         year, month = today.year, today.month
