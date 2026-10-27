@@ -274,7 +274,7 @@ class TestHardwarePreflight(unittest.TestCase):
         api.upload_folder.assert_called_once()
 
     def test_paid_org_counts_as_paid(self):
-        rc, api, _ = self._run("cpu-basic", who={"name": "me", "isPro": False, "canPay": True,
+        rc, api, _ = self._run("cpu-basic", who={"name": "me", "isPro": False, "canPay": False,
                                                  "orgs": [{"name": "t", "plan": "team"}]})
         self.assertEqual(rc, 0)
 

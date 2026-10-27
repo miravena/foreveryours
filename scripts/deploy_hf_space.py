@@ -109,7 +109,8 @@ def check_hardware_allowed(api, hardware: str) -> None:
             f"Account '{name}' is not PRO (and has no Team/Enterprise org), so Hugging Face "
             f"will not run {hardware}. Activate PRO, or set SPACE_HARDWARE=zero-a10g "
             "to deploy to ZeroGPU. Nothing was uploaded.")
-    if who.get("canPay") is False:
+    # An org on a paid plan has its own billing; the token owner's personal card is irrelevant.
+    if who.get("canPay") is False and not paid_org:
         raise HardwareNotAvailable(
             f"Account '{name}' has no payment method on file (canPay is false), so "
             f"{hardware} cannot start. Add a card at huggingface.co/settings/billing. "
