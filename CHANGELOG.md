@@ -11,6 +11,8 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Added
+- Space hardware is one setting (repo variable `SPACE_HARDWARE`, default `cpu-basic`), and the deploy
+  stops early with a clear message when the account cannot run it (not PRO, no card); proposed in ADR-017 (#253).
 - Hosted page names which model does what in an always-visible footer, and each caregiver flag
   says which layer raised it (safety rules, Nemotron backstop, or repeated-question check);
   `CaregiverFlag` gains a persisted `source` field, old flag files load as unknown (#214).

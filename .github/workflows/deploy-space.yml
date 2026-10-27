@@ -44,6 +44,10 @@ concurrency:
 env:
   SPACE_ID: elevenbaselab/foreveryours
   FREEZE_UTC: "2026-10-30T17:00:00Z"  # after this, a push to main no longer deploys
+  # The ONE hardware setting (ADR-017): repo variable SPACE_HARDWARE (Settings > Variables),
+  # else cpu-basic. Fall back to cpu-upgrade or back to zero-a10g by editing the variable;
+  # no code change. cpu-* needs a PRO account: the deploy fails early if it is not.
+  SPACE_HARDWARE: ${{ vars.SPACE_HARDWARE || 'cpu-basic' }}
   LIVE_CHECK_MAX_CALLS: "25"          # one live suite run per deploy (Nebius credit)
 
 jobs:
@@ -127,7 +131,7 @@ jobs:
         if: steps.gate.outputs.mode == 'deploy'
         env:
           NEBIUS_API_KEY: ""  # explicitly empty: keeps the Space's existing Nebius secret untouched
-        run: python scripts/deploy_hf_space.py "$SPACE_ID" --hardware zero-a10g
+        run: python scripts/deploy_hf_space.py "$SPACE_ID" --hardware "$SPACE_HARDWARE"
 
       - name: Wait for the new build, verify its sha, smoke the API
         if: steps.gate.outputs.mode == 'deploy'
