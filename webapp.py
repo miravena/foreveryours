@@ -93,6 +93,7 @@ from caregiver import (
     split_memo_facts,
     validate_sample_profile,
 )
+from memory.expiry import expiry_label
 from memory.store import CAREGIVER_SOURCES, MemoryScope, MemoryStore, PrivacyLevel
 import notify
 from pipeline import hear
@@ -1214,9 +1215,8 @@ def _format_caregiver_panel(session_id: str | None) -> str:
                 badge = "⌛ _[Expired]_ "
                 desc = f"~~{item.text}~~"
             else:
-                mins = max(1, int(remaining // 60))
-                time_str = f"{mins}m" if mins < 60 else f"{mins // 60}h {mins % 60}m"
-                badge = f"🕒 **[Temporary — expires in {time_str}]** "
+                when = expiry_label(item.expires_at, now, SENIOR_TIMEZONE)
+                badge = f"🕒 **[Temporary — expires {when}]** "
                 desc = item.text
         elif item.scope == MemoryScope.HISTORICAL.value:
             badge = "📜 _[Historical]_ "

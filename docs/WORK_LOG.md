@@ -9,6 +9,26 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-27 (#248: a dated memo no longer expires in 24 hours)
+
+- **What:** `MemoryStore.add` gave every time-marked fact a flat 24 h life, so "Dr. Tan on Thursday
+  at 10 AM" saved on Monday was gone by Tuesday noon. New `memory/expiry.py::dated_expiry` reads
+  the day words in the text (weekday, "next <weekday>", tomorrow, "in N days", explicit dates,
+  "this/next week") and expires the fact at the end of the latest named day in the household's
+  timezone (`SENIOR_TIMEZONE`); no named future day keeps 24 h. The rule is deterministic, so the
+  extractor's label is not trusted. The panel label is `expires Thu 23:59` beyond 24 h and the
+  countdown inside it.
+- **Choices:** a weekday equal to today means today (24 h); "next <weekday>" is next calendar
+  week's, the later of two readings; recurring wording ("every Thursday", "Thursdays") and past
+  wording ("last Thursday") name no day; the result is never shorter than 24 h. Scope is still
+  decided by the existing time-marker check, so a recurring or birthday fact without a clock time
+  stays Permanent. A stored "tomorrow" keeps its wording and can be read back on the day itself
+  (before: up to 24 h of that, now up to the end of the named day); anchoring the text was tried and
+  dropped because it rewrote the caregiver's words and broke repeat-save dedupe. Tense is read best-effort ("was", "had", "saw" before a named month, "last <weekday>"); an
+  ambiguous sentence errs towards keeping the fact, since a stale reminder costs less than a lost one.
+  Numeric dates ("30/10") are not parsed (day/month order is ambiguous).
+- **Check:** `tests/test_dated_memo_expiry.py` (frozen clock), full suite.
+
 ### 2026-10-27 (#246: stacked "Could not parse server response" toasts)
 - **What happened:** three fresh sessions run in parallel from one headless browser host got
   up to 15 stacked toasts and an empty reply audio player, while the reply text kept streaming.
@@ -886,6 +906,7 @@ One line each; the reasoning is in the ADR.
 | Build vs reuse | Keep privacy layer, fast-path, voice loop; licence check on `piper-tts`; trial embedding retrieval (Proposed, review #114) | 10-09 | [009](decisions/ADR-009-build-vs-reuse.md) |
 | AUDIT model eval | Nano kept for AUDIT under the fixed rule; Super recall 1.00 vs Nano 0.63, both 0/17 false flags | 10-22 | [010](decisions/ADR-010-audit-model-eval.md) |
 | AUDIT model: Super | AUDIT default moves to Nemotron 3 Super (live 43-row eval: recall 1.00 vs Nano 0.88, 0/17 false flags each); THINK stays on Nano; amends 010 and 002 | 10-23 | [016](decisions/ADR-016-audit-model-super.md) |
+| Judging-period hosting (proposed) | HF PRO + `cpu-basic` via one `SPACE_HARDWARE` setting, `cpu-upgrade` fallback; supersedes the hosting part of 003 | 10-27 | [017](decisions/ADR-017-judging-period-hosting.md) |
 | Outbound caregiver notification | SMTP e-mail default, webhook second, off when unset and on the hosted Space; fixed-text body, hourly cap | 10-23 | [014](decisions/ADR-014-outbound-notification.md) |
 
 ## How to update this
