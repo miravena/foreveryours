@@ -670,6 +670,13 @@ class TestDetailGuardInRunTurn(_TurnBase):
         res, _ = self.turn("How is my grandson doing?", "Recovering from surgery, according to the notes.")
         self.assertNotIn("don't have any news", res.reply_text)
 
+    def test_no_news_is_said_once_and_the_question_after_it_kept(self):
+        res, _ = self.turn("What's on for today? And how is my grandson doing?",
+                           "Leo is doing well. I don\u2019t have any news about how he\u2019s doing\u2014have you "
+                           "heard from him lately?")
+        self.assertEqual(res.reply_text.count("news about"), 1, res.reply_text)
+        self.assertIn("Have you heard from him lately?", res.reply_text)
+
     def test_a_question_without_a_question_mark_grounds_nothing(self):
         for q in ("Does Leo have cancer", "does leo have cancer", "Leo is fine. Does he have cancer"):
             g = orchestrator.family_grounding(["His grandson is named Leo"], q, None, "Sarah")

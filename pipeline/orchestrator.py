@@ -1897,17 +1897,25 @@ def run_turn(
                         elif _mentions_caregiver(s, caregiver_name):
                             last_person = None
                         continue
-                    no_news = not is_safety and "?" not in s and bool(_KIN_NEGATION_RE.search(s) and _NO_NEWS_RE.search(s))
+                    stated = _question_cut(s)  # "I have no news about him -- have you heard?"
+                    no_news = not is_safety and bool(
+                        stated.strip() and _KIN_NEGATION_RE.search(stated) and _NO_NEWS_RE.search(stated))
                     pointed = people or ([last_person] if last_person and _THIRD_PERSON_RE.search(s) else [])
                     if no_news and pointed and pointed[0] in replaced_for:
                         # The no-news line already said it ("I don't have any
                         # other news about him."), but what follows a "but" may
                         # be the rest of the answer: "..., but Sarah is
                         # dropping off groceries at 4 PM."
-                        rest = _NO_NEWS_BUT_RE.search(s)
+                        rest = _NO_NEWS_BUT_RE.search(stated)
                         rest = rest.group(1) if rest else ""
                         if (not rest or _THIRD_PERSON_RE.search(rest) or family_people_in(rest, family, caregiver_name)
                                 or invented_family_detail(rest, family, follows_family)):
+                            rest = ""
+                        # ... and so may a question after it ("-- have you heard
+                        # from him lately?").
+                        asking = s[len(stated):].lstrip(" ,;:\u2014\u2013-") if len(stated) < len(s) else ""
+                        rest = " ".join(x for x in (rest, asking) if x)
+                        if not rest:
                             continue
                         s = rest[0].upper() + rest[1:]
                         people = []
