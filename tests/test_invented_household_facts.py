@@ -755,6 +755,12 @@ class TestDetailGuardInRunTurn(_TurnBase):
         res, _ = self.turn("how is sarah doing?", "Sarah has cancer.")
         self.assertNotIn("cancer", res.reply_text)
 
+    def test_what_is_leo_doing_and_tell_me_about_my_grandson_are_family_questions(self):
+        for q in ("What is Leo doing?", "Tell me about my grandson.", "what's leo doing these days?"):
+            res, _ = self.turn(q, "He's doing great at school and has a soccer game on Saturday.")
+            self.assertNotIn("soccer", res.reply_text, q)
+        self.assertFalse(orchestrator.asks_about_family("Tell me about Ella Fitzgerald."))
+
     def test_how_is_leo_drops_an_invented_reply(self):
         res, _ = self.turn("How is Leo?", "He's doing great at school and has a soccer game on Saturday.")
         self.assertNotIn("soccer", res.reply_text)

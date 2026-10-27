@@ -882,7 +882,8 @@ _FAMILY_QUESTION_RE = re.compile(
     r"|^\W*(?:and\s+)?(?:is|has)\s+(?:(?:my|our)\s+(?:\w+\s+)?)?(?:(?-i:[A-Z][a-z]+)|" + _KIN_ALT + r")\s+"
     r"(?:okay|ok|alright|all\s+right|well|sick|ill|unwell|feeling|been|busy|coming|home|better)\b"
     r"|\b(?:hear|news|heard|updates?)\b[^.?!]{0,40}\b(?:family|" + _KIN_ALT + r")\b"
-    r"|\bwhat(?:'s|\s+is|\s+has)\s+(?:my\s+" + _KIN_ALT + r"|(?-i:[A-Z][a-z]+))\s+(?:been\s+)?up\s+to\b",
+    r"|\bwhat(?:'s|\s+is|\s+has)\s+(?:my\s+" + _KIN_ALT + r"|(?-i:[A-Z][a-z]+))\s+(?:(?:been\s+)?up\s+to|doing)\b"
+    r"|\btell\s+me\s+(?:about|how)\s+(?:my|our|the)\s+(?:\w+\s+)?(?:" + _KIN_ALT + r"|family)\b",
     re.IGNORECASE,
 )
 _EMERGENCY_ADVICE_RE = re.compile(
