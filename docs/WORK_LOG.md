@@ -40,6 +40,13 @@ Format: newest first. One entry per session: date, who, what, result, next.
   tags, a driving turn emptied by the guard) is a test in `tests/test_invented_household_facts.py`
   or `tests/test_live_judge_check.py`.
 
+### 2026-10-27 (#252: uptime monitor)
+Added `.github/workflows/uptime.yml` and `scripts/uptime_check.py`. The Space runtime endpoint
+(`huggingface.co/api/spaces/<id>/runtime`) answers without a token for a public Space, so no
+secret is needed. Chose the Issue itself as the state store (an open Issue labelled `outage`
+means "down"), which also lets a hand-labelled Issue be adopted. Gotcha: Actions cron can run
+late and is disabled after 60 days of repo inactivity.
+
 ### 2026-10-27 (#248: a dated memo no longer expires in 24 hours)
 
 - **What:** `MemoryStore.add` gave every time-marked fact a flat 24 h life, so "Dr. Tan on Thursday
@@ -59,6 +66,23 @@ Format: newest first. One entry per session: date, who, what, result, next.
   ambiguous sentence errs towards keeping the fact, since a stale reminder costs less than a lost one.
   Numeric dates ("30/10") are not parsed (day/month order is ambiguous).
 - **Check:** `tests/test_dated_memo_expiry.py` (frozen clock), full suite.
+
+### 2026-10-27 (#246: stacked "Could not parse server response" toasts)
+- **What happened:** three fresh sessions run in parallel from one headless browser host got
+  up to 15 stacked toasts and an empty reply audio player, while the reply text kept streaming.
+- **Where the HTML came from:** not the app. Every Gradio API error the app can raise is JSON;
+  the app has no HTML error handler. The toast is the Gradio client failing to parse an HTML
+  body on a POST (`post_data`), and the reply text kept arriving over the already-open event
+  stream while it happened, so the container was up. The Space proxy serves `text/html` for
+  responses it makes itself (seen on 2026-10-27: a POST to `queue/join` while the Space was in
+  error got `503 text/html`). The caregiver poll (`gr.Timer(2)` with three ticks) sends three
+  POSTs every 2 s per tab, which is why one outage makes a toast stack. The Space log keeps only
+  the current container, so the exact trigger (throttling or a gateway error) is not recoverable.
+- **Changed:** `webapp.BUSY_NOTICE_HEAD`: one busy banner, HTML API answers turned into a JSON
+  error, the toasts it explains hidden, reply-audio failures included; `docs/STANDARDS.md`
+  (Errors); `tests/test_busy_notice.py` (served config carries the script; Node runs it).
+- **Checked:** a local browser with `queue/join` forced to answer `503 text/html`: one banner,
+  no visible toasts, banner gone after recovery.
 
 ### 2026-10-26 (#5: demo video v2, VIDEO_SCRIPT appointment line check)
 
@@ -900,6 +924,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
 - **Playwright + Gradio audio upload:** click `button[aria-label='Upload file']`, then `set_input_files` on `[data-testid=file-upload]`.
 - **Pull before you trust status:** your teammate may have pushed to `main`. `git pull` before trusting what you remember of the app.
 - **Free HF Spaces sleep:** keep the Space awake before judging; a cold first click can hang.
+- **ZeroGPU can stop scheduling the Space:** on 2026-10-27 every redeploy waited for a machine that never came, and a push to `main` (even docs-only) redeploys. Analysis and options: [`incidents/2026-10-27-space-outage.md`](incidents/2026-10-27-space-outage.md) (#252).
 - **A worktree needs its own `.venv`:** `.githooks/pre-push` runs `$ROOT/.venv/bin/python`, so a fresh worktree silently falls back to system `python3`, which lacks gradio — the hook then reports "unit tests fail" when really the runner has no dependencies. Build one per worktree (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`).
 - **Tests spend the demo's quota:** the suite increments the live daily counter 11x per run (see #53). A day of local testing will make webapp tests fail with a message about the daily cap, and can deny a real judge their turn.
 - **Direct commits to `main` bypass `REVIEW.md`:** ADR-006 permits them, but the review passes only ever run on PRs — nine landed in one day with no review anywhere (found by diffing `main..origin/main` after a fast-forward). Review the commit log between PR merges, not just `gh pr list`.
@@ -920,6 +945,7 @@ One line each; the reasoning is in the ADR.
 | Build vs reuse | Keep privacy layer, fast-path, voice loop; licence check on `piper-tts`; trial embedding retrieval (Proposed, review #114) | 10-09 | [009](decisions/ADR-009-build-vs-reuse.md) |
 | AUDIT model eval | Nano kept for AUDIT under the fixed rule; Super recall 1.00 vs Nano 0.63, both 0/17 false flags | 10-22 | [010](decisions/ADR-010-audit-model-eval.md) |
 | AUDIT model: Super | AUDIT default moves to Nemotron 3 Super (live 43-row eval: recall 1.00 vs Nano 0.88, 0/17 false flags each); THINK stays on Nano; amends 010 and 002 | 10-23 | [016](decisions/ADR-016-audit-model-super.md) |
+| Judging-period hosting (proposed) | HF PRO + `cpu-basic` via one `SPACE_HARDWARE` setting, `cpu-upgrade` fallback; supersedes the hosting part of 003 | 10-27 | [017](decisions/ADR-017-judging-period-hosting.md) |
 | Outbound caregiver notification | SMTP e-mail default, webhook second, off when unset and on the hosted Space; fixed-text body, hourly cap | 10-23 | [014](decisions/ADR-014-outbound-notification.md) |
 
 ## How to update this

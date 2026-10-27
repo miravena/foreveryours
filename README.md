@@ -56,6 +56,19 @@ Written down on purpose: a judge or a family should know where this stops.
   took several seconds in our checks). No hosted latency figure is claimed.
 - English only. Not a medical device, not a diagnosis, not an emergency dispatcher.
 
+## Uptime monitor
+
+`.github/workflows/uptime.yml` checks the hosted demo every 30 minutes (and on demand from the
+Actions tab, with an optional dry run). A check passes when the Space runtime stage is `RUNNING`
+and the app's `/config` answers 200; it counts as down only when two checks a few minutes apart
+both fail. On down it opens an Issue labelled `outage`, assigned to both maintainers so GitHub
+emails them; while that Issue stays open it adds at most one comment every 6 hours, and when
+the checks pass again it comments how long the demo was down and closes it. An open Issue you
+label `outage` by hand is adopted instead of a second one being opened. To silence it, disable
+the workflow in the Actions tab, or close the Issue (the next failed check opens a fresh one).
+Logic and tests: `scripts/uptime_check.py`, `tests/test_uptime_check.py`. It stops checking
+after 2027-01-15.
+
 ## Pipeline
 
 THINK and AUDIT run on Nebius Token Factory with open-weight NVIDIA Nemotron models; speech-to-text
@@ -186,9 +199,11 @@ cp .env.example .env   # fill in NEBIUS_API_KEY for the full pipeline; works wit
   stages `app.py` + pipeline + `requirements.txt`/`packages.txt` with the Spaces config header
   and uploads them. `HF_TOKEN=... NEBIUS_API_KEY=... python scripts/deploy_hf_space.py <user>/<space>`;
   `--dry-run` builds the staging folder without uploading. The key goes in as a Space *secret*,
-  never a file. Hugging Face now needs a PRO account for a Gradio Space on the default
-  `cpu-basic` hardware; on a free account (verified email, older than 30 days) add
-  `--hardware zero-a10g` (ADR-003). Each visitor gets an isolated, auto-deleted session (see `SAFETY_AND_PRIVACY.md`).
+  never a file. Hugging Face needs a PRO account for a Gradio Space on the default
+  `cpu-basic` hardware (ADR-017; the hardware is the `SPACE_HARDWARE` setting); on a free account
+  (verified email, older than 30 days) add `--hardware zero-a10g` (ADR-003). The ZeroGPU outage of
+  2026-10-27 and the hosting options are in
+  [`docs/incidents/2026-10-27-space-outage.md`](docs/incidents/2026-10-27-space-outage.md). Each visitor gets an isolated, auto-deleted session (see `SAFETY_AND_PRIVACY.md`).
 - **Cloudflare Tunnel (`cloudflared`)**: Exposes a running `webapp.py` to a secure public HTTPS URL via `cloudflared tunnel --url http://localhost:7860`.
 
 Works the same with or without a key: without one, a distress/confusion phrase still gets the

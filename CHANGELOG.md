@@ -11,11 +11,16 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Added
+- Uptime monitor: a scheduled workflow checks the hosted demo every 30 minutes and opens, updates and closes an `outage` Issue assigned to both maintainers (#252).
+- Space hardware is one setting (repo variable `SPACE_HARDWARE`, default `cpu-basic`), and the deploy
+  stops early with a clear message when the account cannot run it (not PRO, no card); proposed in ADR-017 (#253).
 - Hosted page names which model does what in an always-visible footer, and each caregiver flag
   says which layer raised it (safety rules, Nemotron backstop, or repeated-question check);
   `CaregiverFlag` gains a persisted `source` field, old flag files load as unknown (#214).
 
 ### Changed
+- A push to `main` that only changes `docs/**`, `*.md` or `video/**` no longer redeploys the
+  Space, so docs merges stop restarting it (#252).
 - AUDIT's default model is now `nvidia/nemotron-3-super-120b-a12b` (recall 1.00 vs Nano 0.88 on the 43-row eval, 0/17 false flags each); THINK stays on Nano. ADR-016 amends ADR-010 and ADR-002; ADR-012 to ADR-015 are Accepted (#200).
 - Hosted page puts the action first: a bold "Try this first" line with a one-click example that
   fills the type box, one-line AI notice with the privacy link, plain sample clip names, and the
@@ -33,6 +38,7 @@ rename `Unreleased` to the version and date, then tag it.
   same-day errands ("4 PM today") keep the 24-hour life, and the caregiver panel says when it goes
   ("expires Thu 23:59") instead of a countdown that was wrong by days (#248).
 - Clicking the "Try this first" chip or a sample-clip chip now runs the turn like Send, instead of only filling the input (#239).
+- When the host answers the page with an HTML error page, the page shows one "The companion is busy, please try again in a moment." banner instead of a stack of "Could not parse server response" toasts, also when the reply audio fails to load (#246).
 - "I'm on the floor and can't reach the phone" (and "I fell and can't get to the phone", "I've been
   on the floor for hours", a fall plus "can't get up") now hits the safety rules before the model:
   the reply says to press the medical alert or call 911 and that the family is being told, the
@@ -51,6 +57,8 @@ rename `Unreleased` to the version and date, then tag it.
   counts as a schedule question, so the caregiver updates reach the reply (#189).
 
 ### Docs
+- `docs/incidents/2026-10-27-space-outage.md`: why the live Space stopped being scheduled on
+  ZeroGPU, its uptime history, and hosting options with costs through judging (#252, #253).
 - Demo video v2: shots 3-4 now brief and ask about a Dr. Tan appointment (verified 3/3 on the live Space), AI narration (Kokoro af_heart), and reproducible capture and assembly scripts in `video/v2/` (#5).
 - Final Devpost text in `docs/DEVPOST_DRAFT.md` (#20), re-checked on the live Space build `bb1a021`:
   the backstop on Nemotron 3 Super, flag origin, model footer, notification preview marked not sent,

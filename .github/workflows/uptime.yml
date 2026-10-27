@@ -1,0 +1,42 @@
+name: uptime
+
+# Watches the hosted demo and opens an Issue (assigned to both maintainers, so both
+# get an email) when it is down. See README -> "Uptime monitor".
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Probe and read GitHub, write nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Stops checking after 2027-01-15 (the script also guards on the date).
+    if: github.repository == 'miravena/foreveryours' && github.event.repository.fork == false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the Space, then open / update / close the outage Issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$(date -u +%Y%m%d)" -gt 20270115 ]; then
+            echo "Past the monitoring window; nothing to do."
+            exit 0
+          fi
+          args=""
+          if [ "$DRY_RUN" = "true" ]; then args="--dry-run"; fi
+          python3 scripts/uptime_check.py $args
