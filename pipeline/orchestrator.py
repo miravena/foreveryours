@@ -797,7 +797,14 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
             at = neg.start()
             while at and clause[at - 1].isalpha():  # the whole word: "can't", not "n't"
                 at -= 1
-            if _NO_NEWS_RE.search(clause, at) or _CANNOT_PERCEIVE_RE.search(_plain(clause[at:])):
+            # "I haven't heard" and "Sarah hasn't mentioned" are no news; "Leo
+            # hasn't told anyone about his cancer" is news about Leo.
+            pre = clause[:at]
+            pre_words = set(_detail_words(pre)) - _NOT_NAME_WORDS - _NOT_PERSON_WORDS
+            by_relative = bool(_THIRD_PERSON_RE.search(pre) or _THEY_START_RE.match(pre)
+                               or (pre_words & g.people) - g.caregiver or pre_words & set(_KIN_FORMS))
+            if ((_NO_NEWS_RE.search(clause, at) and not by_relative)
+                    or _CANNOT_PERCEIVE_RE.search(_plain(clause[at:]))):
                 # Only the denial itself is let through: "Sarah can't hear
                 # us and Leo has cancer" still checks "Leo has cancer".
                 rest = _AFTER_DENIAL_RE.search(clause, at)

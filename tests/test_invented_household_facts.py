@@ -625,6 +625,14 @@ class TestDetailGuardInRunTurn(_TurnBase):
             self.assertTrue(orchestrator.invented_family_detail(s, g), s)
         self.assertFalse(orchestrator.invented_family_detail("Has Leo got a new puppy?", g))
 
+    def test_a_relative_keeping_news_quiet_is_still_news(self):
+        g = orchestrator.family_grounding(["His grandson is named Leo"], "How is my grandson doing?", None, "Sarah")
+        for s in ("Leo hasn't told anyone about his cancer.", "Your grandson didn't mention his surgery."):
+            self.assertTrue(orchestrator.invented_family_detail(s, g, True, True), s)
+        for s in ("I haven't heard anything about Leo lately.", "Sarah hasn't mentioned how Leo is doing.",
+                  "There's nothing in my notes about how he's doing."):
+            self.assertFalse(orchestrator.invented_family_detail(s, g, True, True), s)
+
     def test_what_follows_a_hope_or_suggestion_is_still_checked(self):
         g = orchestrator.family_grounding(["His grandson is named Leo"], "", None, "Sarah")
         for s in ("I hope you're well and Leo is recovering from surgery.",
