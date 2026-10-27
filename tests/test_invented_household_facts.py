@@ -625,6 +625,16 @@ class TestDetailGuardInRunTurn(_TurnBase):
             self.assertTrue(orchestrator.invented_family_detail(s, g), s)
         self.assertFalse(orchestrator.invented_family_detail("Has Leo got a new puppy?", g))
 
+    def test_what_follows_a_hope_or_suggestion_is_still_checked(self):
+        g = orchestrator.family_grounding(["His grandson is named Leo"], "", None, "Sarah")
+        for s in ("I hope you're well and Leo is recovering from surgery.",
+                  "You could call Leo because he has cancer.",
+                  "I'll let Sarah know, and Leo has a game on Saturday."):
+            self.assertTrue(orchestrator.invented_family_detail(s, g), s)
+        for s in ("I hope he's doing well and that you hear from him soon.",
+                  "You could call Leo and say hello."):
+            self.assertFalse(orchestrator.invented_family_detail(s, g), s)
+
     def test_what_follows_a_denial_is_still_checked(self):
         g = orchestrator.family_grounding(["His grandson is named Leo"], "", None, "Sarah")
         self.assertTrue(orchestrator.invented_family_detail("Sarah can't hear us and Leo has cancer.", g))

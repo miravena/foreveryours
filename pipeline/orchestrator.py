@@ -785,6 +785,11 @@ def invented_family_detail(sentence: str, g: FamilyGrounding, follows_family: bo
         for cut in (_COMPANION_ACT_RE.search(plain), _SUGGESTION_RE.search(plain), _HEDGE_RE.search(clause),
                     _REFERRAL_RE.search(plain), _RECALLED_QUESTION_RE.search(plain)):
             if cut:
+                # A claim joined on after it is its own: "I hope you're well
+                # and Leo is recovering from surgery" still checks the surgery.
+                rest = _AFTER_DENIAL_RE.search(clause, cut.end())
+                if rest and invented_family_detail(rest.group(1), g, about, False):
+                    return True
                 clause = clause[:cut.start()]
         neg = _KIN_NEGATION_RE.search(clause)
         if neg:
