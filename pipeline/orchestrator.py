@@ -266,7 +266,7 @@ _NAME_BEFORE_RE = re.compile(r"\b(" + _NAME + r"),\s+$")
 _KIN_CLAUSE_BREAK_RE = re.compile(r"[,;:\u2014]|\bbut\b", re.IGNORECASE)
 _KIN_NEGATION_RE = re.compile(
     r"\b(?:no|not|never|nothing|without|don't|do not|doesn't|does not|haven't|have not|hasn't|didn't|"
-    r"isn't|aren't|wasn't)\b|n['\u2019]t\b", re.IGNORECASE)
+    r"isn't|aren't|wasn't|cannot)\b|n['\u2019]t\b", re.IGNORECASE)
 
 
 # A real question opens like one; "Your granddaughter will call, won't she?"
@@ -533,8 +533,8 @@ september october november december dr mr mrs ms miss prof doctor
 # is named leo" (a caregiver may type lowercase), "Leo, his grandson", "Leo is
 # his grandson". "His grandson Leo visits Dr. Tan" binds Leo, not Tan.
 _KIN_BINDS_NAME_RE = re.compile(
-    r"\b" + _KIN_ALT + r"(?:['\u2019]s\s+name)?\s+(?:(?:is|was)\s+)?(?:(?:named|called)\s+([A-Za-z][a-z'\u2019-]*)|(" + _NAME + r"))"
-    r"|\b(" + _NAME + r"),?\s+(?:is\s+|was\s+)?(?:his|her|their|the|your|my|our)\s+" + _KIN_ALT + r"\b",
+    r"\b(" + _KIN_ALT + r")(?:['\u2019]s\s+name)?\s+(?:(?:is|was)\s+)?(?:(?:named|called)\s+([A-Za-z][a-z'\u2019-]*)|((?-i:" + _NAME + r")))"
+    r"|\b((?-i:" + _NAME + r")),?\s+(?:is\s+|was\s+)?(?:his|her|their|the|your|my|our)\s+(" + _KIN_ALT + r")\b",
     re.IGNORECASE,
 )
 
@@ -562,18 +562,22 @@ def family_grounding(memory_texts: list[str], transcript: str, history: list[dic
         kin = {_KIN_FORMS[w] for w in _WORD_RE.findall(line.lower()) if w in _KIN_FORMS}
         if not kin:
             continue
-        bound = [n for m in _KIN_BINDS_NAME_RE.finditer(line) for n in m.groups() if n]
-        if not bound:  # no binding to read: one capitalised name in the line is its person
+        # (relation, name) pairs; "grandson is named Leo and granddaughter is
+        # named Maya" binds each name to its own relation.
+        pairs = [(_KIN_FORMS[(m.group(1) or m.group(5)).lower()], m.group(2) or m.group(3) or m.group(4))
+                 for m in _KIN_BINDS_NAME_RE.finditer(line)]
+        if not pairs:  # no binding to read: one capitalised name in the line is its person
             loose = [n for n in _NAME_RE.findall(line) if _name_key(n) not in _NOT_PERSON_WORDS
                      | _NOT_NAME_WORDS | _OPENER_WORDS | _ADDRESS_WORDS | set(_KIN_FORMS)]
-            bound = loose if len(loose) == 1 else []
-        written = {_name_key(n): re.sub(r"['\u2019]s$", "", n) for n in bound}
+            pairs = [(k, loose[0]) for k in kin] if len(loose) == 1 else []
+        written = {_name_key(n): re.sub(r"['\u2019]s$", "", n) for _k, n in pairs}
         names = set(written) - (_NOT_NAME_WORDS | _OPENER_WORDS | _ADDRESS_WORDS | _NOT_PERSON_WORDS | set(_KIN_FORMS))
         for n in names:
             display.setdefault(n, written[n].capitalize() if written[n].islower() else written[n])
         people |= names
-        for k in kin:
-            relatives.setdefault(k, set()).update(names)
+        for k, n in pairs:
+            if _name_key(n) in names:
+                relatives.setdefault(k, set()).add(_name_key(n))
     for group in _DETAIL_GROUPS:
         group_stems = {_stem(w) for w in group}
         if stems & group_stems:

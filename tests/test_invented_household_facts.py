@@ -403,6 +403,15 @@ class TestInventedFamilyDetail(unittest.TestCase):
         self.assertEqual(self.reads("Sarah is dropping off groceries at 4 PM. Jazz always lifts the spirits."), [])
         self.assertEqual(self.reads("Leo is your grandson. That must make you proud."), [])
 
+    def test_each_name_is_bound_to_its_own_relation(self):
+        g = orchestrator.family_grounding(["His grandson is named Leo and his granddaughter is named Maya"],
+                                          "", None, "Sarah")
+        self.assertEqual(orchestrator.asked_relatives("How is my granddaughter doing?", g, "Sarah"), ["Maya"])
+        self.assertEqual(orchestrator.asked_relatives("How is my grandson doing?", g, "Sarah"), ["Leo"])
+
+    def test_rule_19s_own_wording_is_kept(self):
+        self.assertEqual(self.reads("Sarah cannot hear our conversation."), [])
+
     def test_a_named_outsider_ends_the_family_thread(self):
         self.assertEqual(self.reads("Leo is your grandson. Ella Fitzgerald was a wonderful singer. "
                                     "She recorded so many great songs."), [])
