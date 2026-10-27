@@ -102,7 +102,8 @@ deploys it by hand: `.github/workflows/deploy-space.yml` does, so a collaborator
 - **Before the freeze** (the `FREEZE_UTC` date in the workflow): every push to `main` runs the
   tests, deploys that commit, waits for the Space to come up, checks the deployed sha, smokes the
   Gradio API and runs the live judge check suite (`scripts/live_judge_check.py`) with a small
-  call cap.
+  call cap. A push that only changes `docs/**`, `*.md` or `video/**` does not deploy (the Space
+  ships none of them, and each redeploy re-enters Hugging Face's hardware scheduling, #252).
 - **After the freeze:** a push to `main` only runs the tests. Deploy by publishing a GitHub
   Release (see *Releases*) or by *Run workflow* with `action=deploy`. Rollback = publish or re-run
   the workflow on the previous tag. Nothing deploys automatically.
