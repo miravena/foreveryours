@@ -11,6 +11,10 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-28
+
+The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track). During judging only `v1.0.x` patches deploy (ADR-015).
+
 ### Docs
 - Devpost draft names the four gallery files and their order (#218); image 4 is the stack card without a burned-in caption. Only the video link placeholder remains.
 - `docs/FEEDBACK.md` matches the Devpost feedback text (#204): the backstop runs on Nemotron 3 Super (ADR-016), Nano's measured backstop recall (12 of 19, then 0.88) against Super's, `enable_thinking: false` named as the setting that matters most for voice, the command-line-only latency figure, and Nano's occasional invented detail.
@@ -501,5 +505,7 @@ demo and the Gradio web demo).
 - Safety fast-path false positives ("I fell" vs "I fell asleep") (#29).
 - `.env` loading for the Hugging Face Spaces wrapper (`app.py`) (#31).
 
-[Unreleased]: ../../compare/v0.1.0...HEAD
+[Unreleased]: ../../compare/v1.0.0...HEAD
+[1.0.0]: ../../compare/v0.2.0...v1.0.0
+[0.2.0]: ../../compare/v0.1.0...v0.2.0
 [0.1.0]: ../../releases/tag/v0.1.0
