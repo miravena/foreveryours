@@ -1,12 +1,12 @@
 {
   "2": {
-    "text": "ForeverYours is a voice companion for an older parent that his family briefs, and that never tells them anything it hasn't first told him. Unlike a general voice assistant, it knows what his daughter told it, it alerts her only for a fall or a crisis, and it says so to him out loud.",
-    "spoken_text": "ForeverYours is a voice companion for an older parent that his family briefs, and that never tells them anything it hasn't first told him. Unlike a general voice assistant, it knows what his daughter told it, it alerts her only for a fall or a crisis, and it says so to him out loud.",
+    "text": "ForeverYours is a voice companion for an older parent that his family briefs, and that never tells them anything it hasn't first told him. Unlike a general voice assistant, it knows what his daughter told it, it alerts her only when his safety is at stake, and it says so to him out loud.",
+    "spoken_text": "ForeverYours is a voice companion for an older parent that his family briefs, and that never tells them anything it hasn't first told him. Unlike a general voice assistant, it knows what his daughter told it, it alerts her only when his safety is at stake, and it says so to him out loud.",
     "file": "narration_v3/shot2.wav",
-    "duration_s": 17.21,
-    "window_s": 17,
-    "window": "0:13-0:30",
-    "fits": false,
+    "duration_s": 17.23,
+    "window_s": 19,
+    "window": "0:13-0:32",
+    "fits": true,
     "voice": "af_heart",
     "speed": 0.95
   },
@@ -16,7 +16,7 @@
     "file": "narration_v3/shot3.wav",
     "duration_s": 2.01,
     "window_s": 13,
-    "window": "0:30-0:43",
+    "window": "0:32-0:45",
     "fits": true,
     "voice": "af_heart",
     "speed": 0.95
@@ -27,7 +27,7 @@
     "file": "narration_v3/shot4.wav",
     "duration_s": 2.22,
     "window_s": 18,
-    "window": "0:43-1:01",
+    "window": "0:45-1:03",
     "fits": true,
     "voice": "af_heart",
     "speed": 0.95
@@ -37,8 +37,8 @@
     "spoken_text": "What he says in private stays private. Danger is different.",
     "file": "narration_v3/shot5.wav",
     "duration_s": 3.77,
-    "window_s": 43,
-    "window": "1:01-1:44",
+    "window_s": 39,
+    "window": "1:03-1:42",
     "fits": true,
     "voice": "af_heart",
     "speed": 0.95
@@ -49,7 +49,7 @@
     "file": "narration_v3/shot6.wav",
     "duration_s": 2.69,
     "window_s": 10,
-    "window": "1:44-1:54",
+    "window": "1:42-1:52",
     "fits": true,
     "voice": "af_heart",
     "speed": 0.95
@@ -59,9 +59,9 @@
     "spoken_text": "NVIDIA Nemo-tron three Nano on Nebius Token Factory writes the replies, and Nemo-tron three Super is the safety backstop. Hearing and voice run on the app's own server, so his voice recording never goes to Nebius.",
     "file": "narration_v3/shot7.wav",
     "duration_s": 14.54,
-    "window_s": 13,
-    "window": "1:54-2:07",
-    "fits": false,
+    "window_s": 16,
+    "window": "1:52-2:08",
+    "fits": true,
     "voice": "af_heart",
     "speed": 0.95
   },
@@ -71,7 +71,7 @@
     "file": "narration_v3/shot8.wav",
     "duration_s": 9.21,
     "window_s": 13,
-    "window": "2:07-2:20",
+    "window": "2:08-2:21",
     "fits": true,
     "voice": "af_heart",
     "speed": 0.95

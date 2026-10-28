@@ -24,7 +24,7 @@ alert come first, with shorter narration. The v2 script is this file at the v2 b
 | Time | Screen | Narrator (AI voice, Kokoro af_heart) |
 |---|---|---|
 | 0:00-0:13 | Senior side, the line already typed: "I fell down earlier and I'm scared.", sent at 0:01. The Caregiver side lights up at 0:04 (3.9 s): the safety flag, labelled a simulated caregiver alert shown on this demo panel (no message leaves the demo), and **✅ Dad was told**. The companion's reply is cut after "I'm letting your family know right now so someone can check on you." | (silent; the companion's voice carries the shot) |
-| 0:13-0:32 | Hold on the split screen, then a slow zoom on the panel's own "Dad was told" line. | "ForeverYours is a voice companion for an older parent that his family briefs, and that never tells them anything it hasn't first told him. Unlike a general voice assistant, it knows what his daughter told it, it alerts her only for a fall or a crisis, and it says so to him out loud." |
+| 0:13-0:32 | Hold on the split screen, then a slow zoom on the panel's own "Dad was told" line. | "ForeverYours is a voice companion for an older parent that his family briefs, and that never tells them anything it hasn't first told him. Unlike a general voice assistant, it knows what his daughter told it, it alerts her only when his safety is at stake, and it says so to him out loud." |
 | 0:32-0:45 | Caregiver side: the daughter types the memo "Dad has a check-up with Dr. Tan on Thursday at 10 AM." and clicks Save Text Memo. The briefed memory shows it added. | "His daughter briefs it once, from work." |
 | 0:45-1:03 | Same session, Senior side: the senior types the line from "Senior line" below and clicks Send. The companion's reply names Dr. Tan, Thursday, 10 AM. | "So when Dad asks, it already knows." |
 | 1:03-1:42 | Senior side: "I feel lonely since my wife died." The companion answers warmly; the Caregiver side shows no new flag and does not show what he said. Then: "I want to end my life." The safety fast path answers with the 988 referral and the Caregiver side shows the crisis flag; the reply is cut after "I am also letting your family know you are in distress." | "What he says in private stays private. Danger is different." |
@@ -103,7 +103,7 @@ Checked against #264's criteria, the issue #5 rules, [`SELF_JUDGING.md`](SELF_JU
 
 - Opens on the product moment within 5 seconds: the line is sent at 0:01 and the caregiver flag and "Dad was told" are on screen at 0:04; no title card.
 - Narrative order: fall hook, one-sentence thesis, caregiver briefing, ordinary recall, private boundary, crisis/988, next-day recall, stack/privacy/URL close.
-- No broad claim about other assistants: the comparison names what this one does in this scenario (briefed by his daughter, alerts only for a fall or a crisis, says so to him); no product is named.
+- No broad claim about other assistants: the comparison names what this one does in this scenario (briefed by his daughter, alerts only when his safety is at stake, such as a fall, a crisis, confusion or a medical emergency, and says so to him); no product is named.
 - One "Dad was told" overlay, aligned with the flag; the crisis shot relies on the panel's own line.
 - Hosted and local evidence labelled where they appear: LIVE HOSTED SPACE on shots 1-5, LOCAL PERSISTENCE TEST on shot 6.
 - Day-2 shot 15 seconds or less: 10 seconds.

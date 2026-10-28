@@ -9,6 +9,19 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-28 (#264: demo video v3 recut)
+- **What:** Recut the v2 footage as v3 (`video/v3/`), with no new capture. Built at 140.8 s
+  (2:21), -16.1 LUFS, true peak -5.0 dBTP. The caregiver flag and the single "Dad was told"
+  label appear at 3.92 s.
+- **Checks:** frames at 0:00, at the flag, at each label and on both cards; a faster-whisper
+  pass over the final mix heard every line in order, with no talk-over and both replies ending
+  on their disclosure sentence.
+- **Gotchas:** the fall clip greys out for about a second after Send, while the Space is
+  working; that is the real UI and is left in. Shots 3-4 still show the
+  pre-fix "expires in 23h 59m" memo label (#261). `render.py` used to take the first nine
+  `| m:ss-m:ss |` rows in the script, which picked up the captions table once the shot list
+  dropped to eight rows; it now reads only the shot-list table.
+
 ### 2026-10-27 (Caregiver research synthesis: #219)
 - **What:** Synthesized anonymized notes from three real caregiver conversations for the README
   and Devpost Inspiration draft. Details that could identify a participant are left out.

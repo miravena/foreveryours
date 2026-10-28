@@ -16,7 +16,7 @@ import phonemizer.backend.espeak.api as A
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.abspath(os.environ.get("FY_VIDEO_BUILD", os.path.join(HERE, "../../../../video-build")))
 OUT = f"{BUILD}/" + os.environ.get("FY_NARR_DIR", "narration")   # video v3: FY_NARR_DIR=narration_v3
-SCRIPT = os.path.join(HERE, "../../../docs/VIDEO_SCRIPT.md")
+SCRIPT = os.environ.get("FY_VIDEO_SCRIPT", os.path.join(HERE, "../../../docs/VIDEO_SCRIPT.md"))
 LINES = os.environ.get("FY_LINES_JSON", os.path.join(HERE, "lines.json"))
 VOICE, SPEED = "af_heart", 0.95   # chosen voice (see README.md)
 CANDIDATES = ["af_heart", "am_michael", "bf_emma"]
