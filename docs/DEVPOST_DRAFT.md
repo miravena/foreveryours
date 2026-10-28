@@ -3,8 +3,8 @@
 <!-- What this file is: the Devpost text that #20 asks for, written against the LIVE Space, not
 against the repo alone. Paste only the prose under each heading into the Devpost form; HTML
 comments and the "Reviewer notes" section at the end are evidence for the two reviewers and are
-never pasted. Two placeholders must be filled before submitting: the video link (#5) and the
-gallery images (#218). Search this file for "PLACEHOLDER".
+never pasted. One placeholder must be filled before submitting: the video link (#5). Search this file
+for "PLACEHOLDER". The gallery files are named in "Form fields" (#218).
 
 Checked on 2026-10-26 against the live Space, build `bb1a021` (the "Build:" line in the Space's
 "About this demo household" accordion), which is the same commit as `main`, through the Space's
@@ -263,13 +263,13 @@ so everything in this entry was built during it.
 | Space page | https://huggingface.co/spaces/elevenbaselab/foreveryours |
 | Repository | https://github.com/miravena/foreveryours (MIT) |
 | Video | **PLACEHOLDER (#5): public YouTube link, under 3 minutes. Do not submit with this line.** |
-| Gallery images | **PLACEHOLDER (#218): four 1080p screenshots from the live Space, captions below. Do not submit without them.** |
+| Gallery images | Upload four 1920x1080 files from the `gallery-draft` release (collaborators only; #218), in this order: `01-fall.png`, `02-briefed-memory.png`, `03-crisis.png`, `04c-stack-card-clean.png`. Captions below. |
 | Representative | SirTehTarik (decided in #6; enters the submission) |
 
 <!-- Track docs/HACKATHON_RULES.md "Personal AI". Both URLs answered on 2026-10-26; the direct
 *.hf.space address is listed first per the #20 coverage-check comment. -->
 
-### Gallery captions (PLACEHOLDER until #218 picks the final images)
+### Gallery captions (one per image, same order)
 
 1. Dad says he fell. The companion tells him his family is being told, and the caregiver's side
    shows the flag marked "Dad was told", raised by the safety rules before the model.
@@ -279,8 +279,9 @@ so everything in this entry was built during it.
    backstop, both on Nebius Token Factory; faster-whisper hears and Piper speaks, on the app's
    own server.
 
-<!-- Captions follow the four candidates posted on #218 (fall, briefed memory, crisis, stack line);
-replace with the final picks. Images are uploaded to the Devpost form, not kept in the repo. -->
+<!-- Captions follow the final four on #218 (fall, briefed memory, crisis, stack card). Image 4 is the
+v4 video's stack card rendered without its burned-in caption; 04-stack.png (the page footer) is
+unreadable at thumbnail size. Images are uploaded to the Devpost form, not kept in the repo. -->
 
 ## Testing instructions
 
