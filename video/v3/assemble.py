@@ -78,9 +78,6 @@ def main():
     man = json.load(open(os.path.join(CAP, "manifest.json")))["shots"]
     cache_p = os.path.join(WORK, "align.json")
     cache = json.load(open(cache_p)) if os.path.exists(cache_p) else {}
-    old = os.path.join(BUILD, "_assemble", "align.json")   # reuse v2's word timings for the same WAVs
-    if os.path.exists(old):
-        cache = {**json.load(open(old)), **cache}
     tl = v2.Timeline()
     seg = lambda name: os.path.join(WORK, f"seg_{len(tl.segments):02d}_{name}.mp4")  # noqa: E731
 

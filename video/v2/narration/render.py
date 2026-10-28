@@ -19,6 +19,7 @@ OUT = f"{BUILD}/" + os.environ.get("FY_NARR_DIR", "narration")   # video v3: FY_
 SCRIPT = os.environ.get("FY_VIDEO_SCRIPT", os.path.join(HERE, "../../../docs/VIDEO_SCRIPT.md"))
 LINES = os.environ.get("FY_LINES_JSON", os.path.join(HERE, "lines.json"))
 VOICE, SPEED = "af_heart", 0.95   # chosen voice (see README.md)
+SPEEDS = json.loads(os.environ.get("FY_NARR_SPEEDS", "{}"))   # per-shot speed, e.g. {"2": 0.8}
 CANDIDATES = ["af_heart", "am_michael", "bf_emma"]
 
 # Phonetic respelling applied to the render input ONLY; captions stay verbatim.
@@ -79,13 +80,15 @@ def main():
         meta = {}
         for n, s in shots.items():
             raw = f"/tmp/shot{n}_raw.wav"; dst = f"{OUT}/shot{n}.wav"
-            sf.write(raw, synth(s["text"], VOICE), 24000); norm(raw, dst)
+            sp = SPEEDS.get(str(n), SPEED)
+            sf.write(raw, synth(s["text"], VOICE, sp), 24000); norm(raw, dst)
             d = sf.info(dst).duration
             meta[str(n)] = dict(text=s["text"], spoken_text=spoken(s["text"]), file=os.path.relpath(dst, BUILD),
                                 duration_s=round(d, 2), window_s=s["window"],
-                                window=s["window_label"], fits=d <= s["window"], voice=VOICE, speed=SPEED)
+                                window=s["window_label"], fits=d <= s["window"], voice=VOICE, speed=sp,
+                                wpm=round(len(s["text"].split()) * 60 / d))
             open(f"{OUT}/shot{n}.caption.txt", "w").write(s["text"] + "\n")
         json.dump(meta, open(LINES, "w"), indent=2)
-        for n, m in meta.items(): print(n, m["duration_s"], "/", m["window_s"], "OK" if m["fits"] else "OVER")
+        for n, m in meta.items(): print(n, m["duration_s"], "/", m["window_s"], "OK" if m["fits"] else "OVER", m["wpm"], "wpm")
 
 main()

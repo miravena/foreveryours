@@ -9,6 +9,19 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-28 (#261, #264: v3 shots 3-4 re-captured, slower narration)
+- **What:** Re-captured shots 3-4 on the live Space, which now shows "expires Thu 23:59" for the
+  Dr. Tan memo. All three fresh-session runs passed, and take 3 is used. Slowed the narration for
+  shots 2, 3, 4 and 6 from 190-210 wpm to 152-158 wpm (per-shot Kokoro speed; shot 2 also
+  trimmed from 49 to 43 words). Rebuilt v3: 145.4 s (2:25), flag at 3.92 s.
+- **Measurement:** the hosted reply to the appointment line now takes 8.8-10.3 s from Send
+  (v2's take: about 3 s). The wait stays in the cut, with "Companion is thinking..." on screen.
+- **Gotchas:** shortening a line does not lower its words per minute; only the TTS speed does.
+  The caption word timings are cached by WAV path, and the re-captured replies reuse the old
+  file names, so the cache must be cleared (v3 no longer borrows v2's cache). Whisper over the
+  whole mix dropped one narrator line inside a long segment; transcribing that 10-second
+  window alone heard it clearly.
+
 ### 2026-10-28 (#264: demo video v3 recut)
 - **What:** Recut the v2 footage as v3 (`video/v3/`), with no new capture. Built at 140.8 s
   (2:21), -16.1 LUFS, true peak -5.0 dBTP. The caregiver flag and the single "Dad was told"
@@ -17,8 +30,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
   pass over the final mix heard every line in order, with no talk-over and both replies ending
   on their disclosure sentence.
 - **Gotchas:** the fall clip greys out for about a second after Send, while the Space is
-  working; that is the real UI and is left in. Shots 3-4 still show the
-  pre-fix "expires in 23h 59m" memo label (#261). `render.py` used to take the first nine
+  working; that is the real UI and is left in. `render.py` used to take the first nine
   `| m:ss-m:ss |` rows in the script, which picked up the captions table once the shot list
   dropped to eight rows; it now reads only the shot-list table.
 
