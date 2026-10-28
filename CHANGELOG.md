@@ -56,6 +56,10 @@ rename `Unreleased` to the version and date, then tag it.
   on the floor for hours", a fall plus "can't get up") now hits the safety rules before the model:
   the reply says to press the medical alert or call 911 and that the family is being told, the
   caregiver flag is raised, and the 988 crisis line is never spoken on that turn (#242).
+- "I'm stuck on the floor" (and "I'm stuck on the bathroom floor", "I got stuck on the ground",
+  "I'm trapped on the floor") now gets the same reply as "I'm on the floor and can't reach the
+  phone": press your medical alert button or call 911, with the family being told, and never 988.
+  "The second floor", "the ground floor", "floor plan" and a third person stuck still do not (#244).
 - "Is anyone coming by today?" is answered from the caregiver's visit updates (e.g. Sarah at 4 PM),
   so the companion can no longer invent a visitor or drop the time; an emotional "is anyone coming?"
   still gets a warm reply (#229).
