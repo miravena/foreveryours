@@ -1,7 +1,9 @@
 # Demo video v2
 
-The submission video (under 3:00) described shot by shot in
-[`docs/VIDEO_SCRIPT.md`](../../docs/VIDEO_SCRIPT.md). Everything on screen is real: shots 1-5
+The v2 demo video (2:57), now superseded by the v3 recut in [`../v3/`](../v3/README.md), which
+reuses these captures; `docs/VIDEO_SCRIPT.md` holds the v3 script, so to re-render the v2 narration
+run step 4 with `FY_VIDEO_SCRIPT` pointing at the pre-#264 script:
+`git show f6b6567:docs/VIDEO_SCRIPT.md > /tmp/v2_script.md` and `FY_VIDEO_SCRIPT=/tmp/v2_script.md`. Everything on screen is real: shots 1-5
 are browser sessions on the live Space, https://elevenbaselab-foreveryours.hf.space (shots 1, 2
 and 5 at build `ed85efc`, shots 3-4 at build `f768c65`), recorded by a script that types and
 clicks; shot 6 is one local run of
