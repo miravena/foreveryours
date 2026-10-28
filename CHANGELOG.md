@@ -11,7 +11,7 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Docs
-- Demo video v3 (#264): the v2 footage recut so the fall, the caregiver alert and "Dad was told" are on screen within 4 seconds; scenario-specific thesis instead of a competitor claim, one disclosure label, LIVE HOSTED SPACE / LOCAL PERSISTENCE TEST labels, shorter narration, 2:21. Pipeline in `video/v3/`, script in `docs/VIDEO_SCRIPT.md`.
+- Demo video v3 (#264): the v2 footage recut so the fall, the caregiver alert and "Dad was told" are on screen within 4 seconds; scenario-specific thesis instead of a competitor claim, one disclosure label, LIVE HOSTED SPACE / LOCAL PERSISTENCE TEST labels, shorter narration at 150-160 words per minute, shots 3-4 re-captured so the memo shows "expires Thu 23:59" (#261), 2:25. Pipeline in `video/v3/`, script in `docs/VIDEO_SCRIPT.md`.
 - Added an anonymized synthesis of three caregiver conversations to the README and the Devpost
   Inspiration draft (#219).
 ### Added
