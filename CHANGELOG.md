@@ -12,6 +12,7 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Docs
+- `docs/FEEDBACK.md` matches the Devpost feedback text (#204): the backstop runs on Nemotron 3 Super (ADR-016), Nano's measured backstop recall (12 of 19, then 0.88) against Super's, `enable_thinking: false` named as the setting that matters most for voice, the command-line-only latency figure, and Nano's occasional invented detail.
 - Demo video v3 (#264): the v2 footage recut so the fall, the caregiver alert and "Dad was told" are on screen within 4 seconds; scenario-specific thesis instead of a competitor claim, one disclosure label, LIVE HOSTED SPACE / LOCAL PERSISTENCE TEST labels, shorter narration at 150-160 words per minute, shots 3-4 re-captured so the memo shows "expires Thu 23:59" (#261), 2:25. Pipeline in `video/v3/`, script in `docs/VIDEO_SCRIPT.md`.
 - Added an anonymized synthesis of three caregiver conversations to the README and the Devpost
   Inspiration draft (#219).
