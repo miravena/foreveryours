@@ -9,6 +9,40 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-28 (#264: v4 cut, no silent waits, natural narration, product name on the close)
+- **What:** Reviewed v3 on the file itself (frames, loudness, silence map, faster-whisper
+  transcript) and rebuilt it as v4 in `video/v4/` (same footage, new edit): the narrator now
+  speaks over the memo being typed and over the nine-second hosted wait, naming the model and
+  the wait; one Kokoro speed (0.9, 0.4 s sentence gap) instead of v3's 0.76-0.83; shot 5's two
+  sentences placed before the private line and on the freeze; the day-2 terminal ends at 7.6 s
+  (before the local run's audit line); captions no longer break after "Dr."; the last card
+  carries the product name and tagline. Draft release only; no YouTube, no link changes.
+- **Measured on v3 (`foreveryours_demo_v3.mp4`, 145.4 s):** 56 s of silence longer than 1.5 s
+  (38%), the longest 14.0 s on "Companion is thinking..." and 12.1 s while the memo was typed;
+  the day-2 shot captioned "Companion: Your grandson's name is Leo." over 6.5 s with no audio
+  (the terminal cast has none); the SRT cue "Companion: You have a check-up with Dr." / "Tan on
+  Thursday at 10 AM."; the word ForeverYours never on screen except inside the URL; the narrator
+  at speed 0.76-0.83 (per-shot) to hit a wpm target.
+- **v4 result:** 137.8 s (2:18), flag and "Dad was told" at 3.92 s, -16.1 LUFS, true peak
+  -5.0 dBTP, 82 SRT cues, last cue ends at 2:15.9. Silence longer than 1.5 s: 38.6 s total,
+  longest 7.3 s (the split-screen reframe before Dad types) and 6.2 s (freeze plus the crisis
+  line being typed); every remaining stretch has the screen changing under a caption.
+  faster-whisper heard every narrator and companion line in order, no talk-over.
+- **Gotchas:** Kokoro's venv from the v2/v3 builds was gone (it lived in a temporary
+  session); `python3 -m venv <build>/kokoro-venv && pip install kokoro-onnx soundfile numpy`
+  rebuilds it in about two minutes on oracle. Bare "Nemotron" (without "3") is read "Nemetron";
+  the renderer now respells it. Splitting a narration WAV at a sentence boundary must pick the
+  sentence-final word, not its first occurrence ("in private stays private."), and the second
+  part needs a 0.15 s lead-in or whisper hears "The answer is different" for "Danger is
+  different". `render_terminal.py` needs `pyte`, which only the system python3 has; leave
+  `FY_TERM_PYTHON` unset. The Space's own reply in the private-line clip says "you're
+  re-feeling that way" (a Piper join artefact in the capture, `crisis_reply_1.wav`), unchanged
+  since v2; a re-capture of shot 5 would fix it.
+- **Next:** founder and teammate watch v4 (draft release on #264) and pick a narrator voice by
+  ear from `narration_v4/candidates/` (seven Kokoro voices on the thesis line), or the founder
+  records the eight lines (`video/v4/README.md`, "Human narrator"), then YouTube upload from a
+  desktop browser and the #5/#20 links.
+
 ### 2026-10-28 (#261, #264: v3 shots 3-4 re-captured, slower narration)
 - **What:** Re-captured shots 3-4 on the live Space, which now shows "expires Thu 23:59" for the
   Dr. Tan memo. All three fresh-session runs passed, and take 3 is used. Slowed the narration for

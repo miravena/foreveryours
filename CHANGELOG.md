@@ -5,6 +5,7 @@ All notable changes to ForeverYours are recorded here. Format follows
 on `main` and published as [GitHub Releases](../../releases).
 
 **How to update:** add a line under `## [Unreleased]` in the PR that makes the
+- Demo video v4 (`video/v4/`, #264): the v3 cut with the narrator over the memo and the hosted wait instead of silence, one natural narration speed, sentence-safe captions, the day-2 terminal cut before its audit line, and a closing card that names the product. `video/v2/narration/render.py` gains `FY_NARR_GAP`, `FY_NARR_CANDIDATES` and respellings for "Dr." and bare "Nemotron".
 change (group under Added / Changed / Fixed / Docs). When we cut a release,
 rename `Unreleased` to the version and date, then tag it.
 
