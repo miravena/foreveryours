@@ -15,8 +15,9 @@ import phonemizer.backend.espeak.api as A
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.abspath(os.environ.get("FY_VIDEO_BUILD", os.path.join(HERE, "../../../../video-build")))
-OUT = f"{BUILD}/narration"
+OUT = f"{BUILD}/" + os.environ.get("FY_NARR_DIR", "narration")   # video v3: FY_NARR_DIR=narration_v3
 SCRIPT = os.path.join(HERE, "../../../docs/VIDEO_SCRIPT.md")
+LINES = os.environ.get("FY_LINES_JSON", os.path.join(HERE, "lines.json"))
 VOICE, SPEED = "af_heart", 0.95   # chosen voice (see README.md)
 CANDIDATES = ["af_heart", "am_michael", "bf_emma"]
 
@@ -39,10 +40,10 @@ K = Kokoro(f"{BUILD}/kokoro/kokoro-v1.0.onnx", f"{BUILD}/kokoro/voices-v1.0.bin"
 def parse():
     """Shot table rows -> {shot: (start, end, window_s, text)}; shot 1 is silent."""
     shots = {}
-    for row in re.findall(r"^\| (\d+:\d+)-(\d+:\d+) \|.*\| \"(.*)\" \|$", open(SCRIPT).read(), re.M):
-        pass
-    rows = [l for l in open(SCRIPT).read().splitlines() if re.match(r"\| \d+:\d+-\d+:\d+ \|", l)]
-    for i, l in enumerate(rows[:9], 1):
+    text = open(SCRIPT).read()
+    table = text[text.index("## Shot list"):].split("\n\n|", 1)[1].split("\n\n", 1)[0]   # the first table only
+    rows = [l for l in ("|" + table).splitlines() if re.match(r"\| \d+:\d+-\d+:\d+ \|", l)]
+    for i, l in enumerate(rows, 1):
         t0, t1 = re.match(r"\| (\d+:\d+)-(\d+:\d+)", l).groups()
         sec = lambda t: int(t.split(":")[0]) * 60 + int(t.split(":")[1])
         cell = l.rsplit("|", 2)[1].strip()
@@ -84,7 +85,7 @@ def main():
                                 duration_s=round(d, 2), window_s=s["window"],
                                 window=s["window_label"], fits=d <= s["window"], voice=VOICE, speed=SPEED)
             open(f"{OUT}/shot{n}.caption.txt", "w").write(s["text"] + "\n")
-        json.dump(meta, open(os.path.join(HERE, "lines.json"), "w"), indent=2)
+        json.dump(meta, open(LINES, "w"), indent=2)
         for n, m in meta.items(): print(n, m["duration_s"], "/", m["window_s"], "OK" if m["fits"] else "OVER")
 
 main()
