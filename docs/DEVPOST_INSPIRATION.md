@@ -1,10 +1,10 @@
 # Devpost Inspiration
 
-We spoke with three caregivers supporting older adults from a distance, while balancing work,
-children, and daily responsibilities. They consistently wanted context-aware companionship and
-high-confidence safety support, but rejected anything that felt like surveillance: one wanted
-non-urgent updates batched into a caregiver digest, another stressed that the tool should bridge
-quiet hours rather than replace family contact, and another said it must feel like the older
-adult's companion first, not a monitoring device. These conversations changed our direction:
-ForeverYours should clearly disclose when an alert is sent, keep ordinary private conversations
-private, and let families configure what non-safety information is shared.
+During the hackathon we talked with three family caregivers. All three wanted the companion to know
+the family's context and to speak up about a real safety problem, and none wanted it to feel like
+monitoring: one said it has to be the older adult's companion first, one said it should fill quiet
+hours rather than replace calls from family, and one asked for non-urgent news to arrive in a
+batch rather than as alerts. Three conversations are not a study, but they point the same way as
+the design: the senior is told every time an alert is sent, ordinary conversation stays private, and the
+caregiver sees only short safety and wellbeing flags. A batched digest and family-chosen sharing
+settings are not built yet.

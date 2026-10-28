@@ -11,11 +11,10 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ### 2026-10-27 (Caregiver research synthesis: #219)
 - **What:** Synthesized anonymized notes from three real caregiver conversations for the README
-  and Devpost Inspiration draft. The conversations covered long-distance caregiving, sandwich
-  generation caregiving, and co-residing care.
-- **Result:** The shared finding is that caregivers want context and high-confidence safety help
-  without turning the companion into surveillance. The resulting copy emphasizes disclosure,
-  private ordinary conversation, and configurable non-safety sharing.
+  and Devpost Inspiration draft. Details that could identify a participant are left out.
+- **Result:** All three wanted context and high-confidence safety help
+  without turning the companion into surveillance. The copy says what three people said, not a
+  general finding, and names the digest and sharing settings they asked for as not built (#266).
 
 ### 2026-10-27 (#245: no invented household facts)
 
