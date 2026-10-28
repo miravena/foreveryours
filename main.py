@@ -25,6 +25,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import os
+import threading
 import time
 SENIOR_TIMEZONE = os.environ.get('SENIOR_TIMEZONE', 'Asia/Kuala_Lumpur')
 from pathlib import Path
@@ -37,7 +38,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
 
 from envload import load_repo_env
 
-from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags
+from caregiver import DEFAULT_CAREGIVER_NAME, DEFAULT_PROFILE_ID, DEMO_MEMO, CaregiverFlags, split_memo_facts
 from memory.store import MemoryStore
 from pipeline import hear, speak
 from pipeline.orchestrator import run_turn
@@ -75,9 +76,16 @@ def beat1_caregiver_memo(audio_in: Path | None = None) -> None:
 
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR, timezone_str=SENIOR_TIMEZONE)
     saved = 0
-    for line in memo.split(". "):
-        line = line.strip().rstrip(".")
-        if line and store.add(line, source="caregiver_memo"):
+    facts = split_memo_facts(memo)  # one shared splitter
+    # The canned fallback is a seed, like the webapp pre-brief: it never
+    # re-adds a line already in the store (superseded included), so a re-run
+    # cannot revert a caregiver's update. A real memo (--audio) is a
+    # caregiver submission and may supersede.
+    seen = {i.text for i in store.all() if i.source == "caregiver_memo"} if audio_in is None else set()
+    for line in facts:  # facts of one memo never supersede each other
+        if line in seen:
+            continue
+        if store.add(line, source="caregiver_memo", keep_texts=facts, supersede=audio_in is not None):
             saved += 1
     print(f"Caregiver memo saved ({saved} new facts; re-running this beat won't duplicate them).")
     _print_memory_panel(store, CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR))
@@ -270,6 +278,9 @@ if __name__ == "__main__":
     print("\n[TRANSPARENCY NOTICE] You are interacting with ForeverYours, an AI companion. This is not a human.")
     print("[PRIVACY NOTICE] By speaking into the microphone, you consent to your voice being recorded and transcribed locally.\n")
     load_repo_env()
+    speak.reload_tts_timeout()  # pipeline.speak was imported before .env was loaded
+    # Load the Piper voice while the beat sets up (#207).
+    threading.Thread(target=speak.warm_up, name="piper-warm-up", daemon=True).start()
     args = sys.argv[1:]
     if not args:
         print(__doc__)

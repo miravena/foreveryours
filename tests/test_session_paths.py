@@ -11,6 +11,9 @@ from unittest.mock import patch
 
 import webapp
 
+# Gradio hands over uploads under the temp dir; webapp refuses audio paths outside it.
+FAKE_UPLOAD = os.path.join(tempfile.gettempdir(), "fake.wav")
+
 
 class TestSessionPaths(unittest.TestCase):
 
@@ -522,7 +525,7 @@ class TestBadSessionIdNeverBlocksCrisisFastPath(unittest.TestCase):
 
         try:
             with patch.object(webapp.hear, "transcribe", return_value="Dad has physio Tuesday."):
-                voice_result = webapp.save_caregiver_voice_memo("fake.wav", "../x")
+                voice_result = webapp.save_caregiver_voice_memo(FAKE_UPLOAD, "../x")
         except Exception as exc:
             self.fail(f"save_caregiver_voice_memo raised on a malformed session id: {exc!r}")
         self.assertIsInstance(voice_result[0], str)

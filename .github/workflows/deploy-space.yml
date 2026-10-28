@@ -1,0 +1,155 @@
+# Deploys the judge-facing demo to the Hugging Face Space elevenbaselab/foreveryours
+# (issue #11) so that fixes merged to main actually reach judges, and records the
+# deployed commit sha on the Space (BUILD_INFO + BUILD_SHA, shown as "Build: <sha7>").
+#
+# When it runs:
+#   push to main        (unless it only changes docs/**, *.md or video/**; see paths-ignore)
+#                       until the freeze (FREEZE_UTC below): tests -> deploy -> sha check
+#                       -> live judge check suite with a small call cap. After the freeze a
+#                       push to main only runs the tests; nothing deploys automatically.
+#   release published   deploys the tagged commit, then the sha check, API smoke and the
+#                       live judge check suite (every deploy runs it).
+#                       Rollback = publish/re-run the workflow on the previous tag.
+#   workflow_dispatch   "Run workflow" by a collaborator: action=check only proves the
+#                       token works and the Space is reachable; action=deploy deploys the
+#                       chosen ref and runs the live suite.
+# Never on pull_request: a fork's PR must never see the Space token.
+#
+# Secret: HF_TOKEN_FY_SPACE, a fine-grained Hugging Face token with write access to this
+# one Space, exported as HF_TOKEN for scripts/deploy_hf_space.py. If it is missing the
+# deploy is skipped with a notice rather than failing. The value is never printed.
+name: deploy-space
+
+on:
+  push:
+    branches: [main]
+    # A push that only touches these never redeploys: the Space does not ship them, and every
+    # redeploy sends the Space back into hardware scheduling (outage #252).
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "**/*.md"
+      - "video/**"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "check = token + Space reachability only; deploy = deploy this ref and run the live suite"
+        type: choice
+        options: [check, deploy]
+        default: check
+
+permissions:
+  contents: read
+
+# One deploy at a time, never cancelled half-way: two overlapping uploads would race
+# on the Space's revision.
+concurrency:
+  group: deploy-space-elevenbaselab-foreveryours
+  cancel-in-progress: false
+
+env:
+  SPACE_ID: elevenbaselab/foreveryours
+  FREEZE_UTC: "2026-10-30T17:00:00Z"  # after this, a push to main no longer deploys
+  # The ONE hardware setting (ADR-017): repo variable SPACE_HARDWARE (Settings > Variables),
+  # else cpu-basic. Fall back to cpu-upgrade or back to zero-a10g by editing the variable;
+  # no code change. cpu-* needs a PRO account: the deploy fails early if it is not.
+  SPACE_HARDWARE: ${{ vars.SPACE_HARDWARE || 'cpu-basic' }}
+  LIVE_CHECK_MAX_CALLS: "25"          # one live suite run per deploy (Nebius credit)
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: System packages (TTS)
+        run: sudo apt-get update && sudo apt-get install -y espeak-ng
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run tests (no API key needed)
+        run: python -m unittest discover tests -v
+
+  deploy:
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN_FY_SPACE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Decide what this run does
+        id: gate
+        env:
+          REQUESTED: ${{ github.event.inputs.action }}
+        run: |
+          mode=skip
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::notice::Repo secret HF_TOKEN_FY_SPACE is not set; skipping the Space deploy."
+          else
+            case "$GITHUB_EVENT_NAME" in
+              push)
+                now=$(date -u +%s); freeze=$(date -u -d "$FREEZE_UTC" +%s)
+                if [ "$now" -lt "$freeze" ]; then mode=deploy
+                else echo "::notice::Past the freeze ($FREEZE_UTC): a push to main no longer deploys. Publish a Release or use Run workflow."; fi ;;
+              release) mode=deploy ;;
+              workflow_dispatch) mode="${REQUESTED:-check}" ;;
+            esac
+          fi
+          echo "mode=$mode" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Token check (whoami + Space runtime readable)
+        if: steps.gate.outputs.mode != 'skip'
+        run: |
+          python - <<'PY'
+          import os, sys
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          try:
+              who = api.whoami()
+          except Exception as exc:
+              sys.exit(f"HF_TOKEN_FY_SPACE is not a valid Hugging Face token ({type(exc).__name__}). "
+                       "Create a fine-grained token with write access to the Space and update the repo secret.")
+          print(f"token belongs to: {who.get('name', '?')} ({who.get('type', '?')})")
+          try:
+              rt = api.get_space_runtime(os.environ["SPACE_ID"])
+          except Exception as exc:
+              sys.exit(f"token cannot read the runtime of {os.environ['SPACE_ID']} ({type(exc).__name__}); "
+                       "give it access to that Space.")
+          print(f"{os.environ['SPACE_ID']}: stage {rt.stage}, hardware {rt.hardware}")
+          PY
+
+      - name: Fetch the Piper voice (ships with the Space; the demo never downloads at runtime)
+        if: steps.gate.outputs.mode == 'deploy'
+        run: bash scripts/get_piper_voice.sh
+
+      - name: Deploy ${{ github.sha }} to the Space
+        if: steps.gate.outputs.mode == 'deploy'
+        env:
+          NEBIUS_API_KEY: ""  # explicitly empty: keeps the Space's existing Nebius secret untouched
+        run: python scripts/deploy_hf_space.py "$SPACE_ID" --hardware "$SPACE_HARDWARE"
+
+      - name: Wait for the new build, verify its sha, smoke the API
+        if: steps.gate.outputs.mode == 'deploy'
+        run: python scripts/verify_space_sha.py "$SPACE_ID" --sha "$GITHUB_SHA" --wait 900 --smoke
+
+      - name: Live judge check suite (small call cap)
+        if: steps.gate.outputs.mode == 'deploy'
+        run: |
+          if [ ! -f scripts/live_judge_check.py ]; then
+            echo "::notice::scripts/live_judge_check.py is not in this ref yet; skipping the live suite."
+            exit 0
+          fi
+          python scripts/live_judge_check.py --space "$SPACE_ID" --max-calls "$LIVE_CHECK_MAX_CALLS"

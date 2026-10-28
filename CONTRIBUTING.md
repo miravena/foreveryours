@@ -237,7 +237,7 @@ Cost-estimate: unknown
 - **A review** uses `Reviewed-by: <AGENT>:<MODEL> [tools]` in place of `Assisted-by` on line
   1, with the same `Assisted-meta`/`Cost-estimate` lines ([`REVIEW.md`](REVIEW.md)).
 - **A merge commit made by an agent carries the same three trailers** — it is as much an
-  AI-produced artifact as any other commit (a trailer-less merge bounced review on #14294).
+  AI-produced artifact as any other commit (a trailer-less merge bounced review).
 - Take the model id, provider and effort from the tool's own config or session record
   (`/model`, `codex exec`'s header, the session log), not from the model's description of
   itself.

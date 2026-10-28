@@ -148,5 +148,37 @@ class TestRetentionNoticeWording(unittest.TestCase):
         )
 
 
+    def test_webapp_notice_grammar_and_reply_audio_in_cache(self):
+        """Fixes #176 and #177: grammar regression check and reply audio cache coverage."""
+        self.assertNotIn(
+            "removed about the session cleanup timer runs",
+            self.notice_text,
+            "webapp notice has ungrammatical 'removed about the session cleanup timer runs' (#177)",
+        )
+        self.assertIn(
+            "removed when the session cleanup timer runs",
+            self.notice_text,
+            "webapp notice should say 'removed when the session cleanup timer runs' (#177)",
+        )
+        self.assertIn(
+            "cached copies of reply audio",
+            self.notice_text,
+            "webapp notice does not mention Gradio's cached copies of reply audio (#176)",
+        )
+
+    def test_privacy_docs_cover_reply_audio_cache(self):
+        """Fixes #176: both docs/PRIVACY.md and docs/SAFETY_AND_PRIVACY.md name reply audio."""
+        self.assertIn(
+            "reply audio",
+            self.privacy_md.lower(),
+            "docs/PRIVACY.md does not mention reply audio in Gradio cache (#176)",
+        )
+        self.assertIn(
+            "reply audio",
+            self.safety_md.lower(),
+            "docs/SAFETY_AND_PRIVACY.md does not mention reply audio in Gradio cache (#176)",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

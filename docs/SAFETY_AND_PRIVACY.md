@@ -9,14 +9,21 @@ conversation — `CaregiverFlags.add()` takes `disclosed_to_senior` as a
 required argument, not a default, specifically so this can't quietly drift
 from true to false:
 
-- **Fast-path flags** (`safety/fastpath.py`) are always disclosed — the
-  immediate reply the senior hears ("I'm letting your family know right now
-  so someone can check on you.") *is* the disclosure, spoken before anything
-  else happens.
+- **Fast-path flags** (`safety/fastpath.py`) are always recorded, and
+  disclosed whenever speech works — the immediate reply the senior hears
+  ("I'm letting your family know right now so someone can check on you.")
+  *is* the disclosure, spoken before anything else happens. If speech
+  synthesis fails or times out (`TTS_TIMEOUT_S`), the flag is still recorded
+  with `disclosed_to_senior: False` and "spoken disclosure failed; shown as
+  text only", and the same sentence reaches the senior as text.
 - **Audit flags** (`pipeline/audit.py`, see below) try to disclose via a
   spoken follow-up line after the fact. If that follow-up fails for some
   reason, the flag is recorded as `disclosed_to_senior=False` — honestly,
-  not papered over — rather than assumed to have succeeded.
+  not papered over — rather than assumed to have succeeded. "Told" means the
+  browser actually received the line's audio: the streaming turn keeps
+  listening after its reply until the audit finishes (bounded), and a line
+  that arrives after the browser stopped listening is recorded undisclosed.
+  The same rule gates lifestyle notes.
 
 The senior is never meant to be monitored silently behind their back; the
 code's job is to make that true in both cases above, not just the easy one.
@@ -29,6 +36,27 @@ only caregiver-authored memos/notes and non-EMOTIONAL conversation facts
 `docs/PRD.md` describes) must be built the same way: only from counters
 and disclosed flags, never from model-written free text about the
 conversation.
+
+Facts are replaced, never stacked. A caregiver update
+supersedes the earlier caregiver fact with the same subject — the same
+words once clock times and standalone numbers are blanked out
+(`caregiver.fact_subject_key`), same source and privacy level — so saving
+"I'm dropping off groceries at 6 PM today" over the 4 PM line leaves one
+active grocery fact for the model, with the old one struck through as
+*Superseded*. Facts saved in the same memo never supersede each other, a
+re-run seed never brings back a line the caregiver replaced, and when two
+live facts share the subject (two pill times) nothing is superseded,
+because dropping the wrong reminder is worse than listing one extra. A senior's correction of a caregiver fact is shown to the
+caregiver only when the replacement itself has disclosure attestation:
+otherwise the panel shows the struck-through original and the Superseded
+badge, never the senior's replacement words.
+
+Flag *text* is minimised on the same principle: it is a fixed description
+of the trigger category — `safety/fastpath.py`'s `CAREGIVER_FLAG_TEXT` —
+and never contains the senior's utterance or the auditor's one-sentence
+reason. A flag says *what kind* of event happened (crisis, distress,
+confusion, unsafe advice), not what the senior said or what the model wrote
+about it, so the caregiver panel can never become a transcript leak.
 
 **Refinement (implemented 2026-10-03):** the fast-path reply today discloses this *one* instance ("I'm letting your family know right now so someone can check on you.") but also states the standing rule — i.e. when disclosure happens and when it doesn't. Spelling that rule out loud, e.g. *"I'll only tell them if I'm worried about your safety,"* answers the "elder surveillance" objection more directly than a single-instance disclosure can: it tells the senior the boundary up front, not just that this one thing got reported.
 
@@ -52,6 +80,9 @@ senior as a follow-up, not silently dropped.
    than ending the turn — a distress signal shouldn't make the companion go
    silent right after. Deliberately conservative patterns — a false positive
    here (an unnecessary caregiver note) is far cheaper than a false negative.
+   The public demo's daily request cap never blocks it: at the cap the
+   fast-path still speaks and flags, and only the paid THINK continuation is
+   withheld (`webapp._cap_decision`).
 2. **Audit** (`pipeline/audit.py`) — asynchronous, a second small-model pass
    over every *other* reply and the senior's transcript. It checks for
    medical-hallucination or unsafe-advice risk and provides a wider,
@@ -60,6 +91,44 @@ senior as a follow-up, not silently dropped.
    latency — it can only flag and disclose after the fact, not block in time.
    Empty, malformed, or failed audit responses are recorded as `unknown`, not
    treated as safe.
+
+Falls the senior words their own way (#198, [ADR-012](decisions/ADR-012-fall-long-tail.md)):
+the fast-path catches only first-person wording that is unambiguous ("I hit the floor", "my legs
+gave way", "I went down in the garden"); thinner phrasings ("I went down", "I'm terrified", "I
+feel dizzy") are left to the audit, whose prompt reads the senior's transcript as its subject. A
+backstop flag reaches the senior on the next turn through the late-disclosure path, and
+`disclosed_to_senior` records what was actually spoken.
+
+Which crisis phrases belong to which layer, and how the 988 line is given
+once, is recorded in [ADR-013](decisions/ADR-013-crisis-tiers.md): explicit
+first-person statements are fast-path, euphemism and context-dependent talk is
+the audit's. A `CRISIS` verdict from the audit is carried into the next turn,
+which offers the 988 line (US only; see #89) once, or not at all if it was
+already given, and a reply never repeats it.
+
+988 is the crisis line for suicidal ideation and severe depression, never for
+a medical emergency (#211). Chest pain, trouble breathing, bleeding or a call
+for 911 gets its own fast-path reply telling the senior to call 911, or to ask
+someone nearby to call, because a caregiver flag is a notification and not a
+911 call. A report that carries both a crisis phrase and one of these stays a
+crisis and its reply names both numbers. THINK's PHYSICAL EMERGENCY rule says
+the same, with no diagnosis or treatment advice.
+
+A senior who is down and cannot summon help is a physical emergency too (#242).
+"On the floor", "fell" or "down here" together with "can't reach (or get to)
+the phone", "can't call anyone", "can't get up", or "been on the floor for
+hours" gets its own fast-path reply: press the medical alert button or call 911
+if you can, and the family is being told right now (the senior may not be able
+to reach a phone, so the reply does not depend on it). The caregiver flag says
+the senior may be on the floor and unable to get up or call for help. On any
+911 fast-path turn THINK's reply has no 988 budget: a sentence of its reply that
+names 988 or the crisis line is dropped before it is spoken (the canned reply
+already gave 911), unless a 988 line is still owed from a previous turn's
+crisis verdict. Benign
+floor talk ("on the floor watching telly", "can't reach the phone charger from
+the sofa") does not fire; a near-miss that names a fall or the floor together
+with an unreachable phone does, because a needless flag is cheap and a missed
+one is not.
 
 Neither layer is a substitute for the other. The fast-path is a narrow net
 for the highest-urgency, most time-critical cases; the audit pass is a wider
@@ -94,7 +163,7 @@ visitor opens the demo after a process restart.
 
 - **Hosted web demo (`webapp.py`).** Each browser tab is its own throwaway
   household under `FY_SESSIONS_DIR`. The reply WAVs from one turn are deleted
-  at the start of the next; the whole household (memory, flags, reply audio)
+  at the start of the next; the whole household (memory, flags)
   is deleted about an hour (3600s) after the tab disconnects — Gradio's
   `gr.State` `delete_callback` (`_end_session`) fires once Gradio's own
   closed-session timer expires, which is a fixed 3600s in the installed
@@ -105,10 +174,15 @@ visitor opens the demo after a process restart.
   recorded input clips and served reply audio separately pass through
   Gradio's own file cache (`delete_cache=GRADIO_CACHE_SWEEP`), which is swept
   every `GRADIO_CACHE_SWEEP[0]` seconds (600s) and drops files older than
-  `GRADIO_CACHE_SWEEP[1]` seconds (`SESSION_TTL_S`), so an input clip can
+  `GRADIO_CACHE_SWEEP[1]` seconds (`SESSION_TTL_S`), so a clip can
   live up to roughly `SESSION_TTL_S + 600` seconds (~70 minutes by default).
   This cache cleanup is separate from removal of the household session
-  directory; closing a tab does not itself delete cached input audio.
+  directory; closing a tab does not itself delete cached input or reply audio.
+  A deleted household stays deleted: a caregiver memo saved after its
+  session was removed is refused, written nowhere, and answered by a fresh
+  household with the "reset after a period of inactivity" notice (the typed
+  text stays in the box to resubmit). A memo save in progress counts as
+  activity, so the household is not deleted under it.
   No other visitor can see another tab's household.
 - **Local CLI (`main.py`).** Reply audio stays in `out/audio/` and memory in
   `data/` until you delete them. That's your own machine, and keeping them is
@@ -118,6 +192,23 @@ visitor opens the demo after a process restart.
   (what the hosted demo runs; Token Factory has no transcription endpoint,
   PR #25), speech recognition is local, so raw audio is never sent to a
   model provider.
+
+## What leaves the system when a flag is raised
+
+Off by default (#201, [ADR-014](decisions/ADR-014-outbound-notification.md)). With
+`FY_NOTIFY_CHANNEL` unset, nothing leaves the machine because of a flag and the caregiver panel
+shows no notification status. With `smtp` or `webhook` set, each safety flag (fast-path, repeated
+question, AUDIT) sends **one** message, after the flag is persisted, from a background thread, to
+the recipient the household's own `.env` names (the caregiver's mailbox, or a webhook the
+caregiver runs). The message holds: the fixed category text from `CAREGIVER_FLAG_TEXT`, the
+severity, whether the senior was told ("yes" or "not yet confirmed"), a household label and a
+UTC time. It never holds the transcript, senior free text, the auditor's reason, a session id or a
+key; a redaction pass removes anything key-shaped, and a test asserts both. A per-household cap
+(default 6 an hour) stops a loop from spamming a phone. The result is recorded on the flag
+(`notified`, and the exception type name only on failure) and the panel shows "notified" or
+"notification failed". The hosted Space never sends: the variable is unset there and the code
+refuses to build a sender when `SPACE_ID` is set. It is a notification, not emergency dispatch,
+and "notified" means the mail server or webhook accepted it, not that a person read it.
 
 ## What this is not
 

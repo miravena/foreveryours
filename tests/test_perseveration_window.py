@@ -254,8 +254,12 @@ class TestPerseverationWindow(unittest.TestCase):
         self.assertEqual(self._perseveration_flags(), [])
         self.assertNotIn("make a note for your family", res.reply_text)
 
-    def test_verbatim_repeat_without_tts_audio_stays_undisclosed(self, mock_stream_reply, mock_speak_turn, mock_fastpath_check):
-        # #88: a disclosure is not attested when no spoken audio was delivered.
+    def test_verbatim_repeat_flags_even_with_no_tts_audio(self, mock_stream_reply, mock_speak_turn, mock_fastpath_check):
+        # #159 (RULE 4): the flag must be recorded whether or
+        # not TTS produced audio -- the disclosure line is already in the
+        # text reply either way. A later unrelated PR (#88) regressed this
+        # to require delivered audio for disclosure; RULE 4 is authoritative
+        # for this specific perseveration flag.
         mock_speak_turn.return_value = ("spoken", [], 0.1)
         question = "What time is my appointment?"
         now = time.time()
@@ -264,7 +268,7 @@ class TestPerseverationWindow(unittest.TestCase):
 
         flagged = self._perseveration_flags()
         self.assertEqual(len(flagged), 1)
-        self.assertFalse(flagged[0].disclosed_to_senior)
+        self.assertTrue(flagged[0].disclosed_to_senior)
 
 
 if __name__ == "__main__":

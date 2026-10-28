@@ -41,6 +41,17 @@ enforced version is each Issue's *blocked by* relationship.
 
 Work completed before these milestones is recorded in [`CHANGELOG.md`](../CHANGELOG.md).
 
+## After the cutoff: the judging window, then the backlog
+
+Two windows with opposite rules, from the hackathon's own terms ([`HACKATHON_RULES.md`](HACKATHON_RULES.md)
+sections 4 and 5): after the Submission Period the entry cannot change but the Project may, and
+the demo must stay free and reachable until the Judging Period ends. So during judging only
+`v1.0.x` patches ship, each keeping a claim the frozen text already makes; everything else waits
+for `v1.1.0`. The label `judging-window` marks the first, `after-submission` the second. The
+reasoning, the owners and the per-issue PRDs are in
+[`plans/AFTER-SUBMISSION-PLAN-2026-10-23.md`](plans/AFTER-SUBMISSION-PLAN-2026-10-23.md); the
+deploy rule itself is [ADR-015](decisions/ADR-015-judging-window-deploys.md) ([#197](../../issues/197)).
+
 ## Staging: MVP1 → MVP2 → MVP3
 
 We deliver in three complete stages rather than one drop at the deadline. **A stage is a whole
@@ -136,7 +147,7 @@ deadline gets close:
 - A better TTS voice than espeak, if it isn't cheap enough to ride along with [#28](../../issues/28)
 - ~~NVIDIA NemoGuard as the AUDIT model~~ -- not served on Token Factory (checked 2026-10-07,
   see `VENDOR_DECISIONS.md`); the tech-score second-model goal instead points `AUDIT_MODEL` at a
-  different, larger Nemotron model
+  different, larger Nemotron model (done: Nemotron 3 Super, ADR-016)
 - Hosting on a Nebius AI Cloud VM instead of / in addition to Spaces
 - A caregiver-facing UI beyond the web page's caregiver column (see `PRD.md`'s non-goals — a
   full dashboard was deliberately cut once already; don't re-add it under time pressure)

@@ -29,6 +29,20 @@ class TestIntentDetection(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertEqual(detect_intent(phrase), Intent.LOGISTICAL)
 
+    def test_plural_schedule_nouns_are_logistical(self):
+        # #189: "\bappointment\b" missed "appointments", so the judge's
+        # "Do I have any appointments this week?" fell to CASUAL and THINK
+        # never saw the caregiver's Dr. Tan memo.
+        phrases = [
+            "Do I have any appointments this week?",
+            "Have I got any appointments?",
+            "Do I have any doctors appointments this week?",
+            "Any visits from the family this week?",
+        ]
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                self.assertEqual(detect_intent(phrase), Intent.LOGISTICAL)
+
     def test_memory_request_detection(self):
         phrases = [
             "what is my grandson's name",

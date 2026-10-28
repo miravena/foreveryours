@@ -8,6 +8,10 @@ Generates:
   - samples/senior_schedule.wav (public webapp first sample chip: a schedule
     question so beat 2 recalls the caregiver's groceries update, not a
     generic chatbot reply -- see #83, #80 3.C4)
+
+SAMPLES is also the single source for the webapp's sample-chip labels
+(webapp.SAMPLE_CLIP_LABELS), so change a clip's words here and regenerate.
+Keep this module import-safe: no third-party import at module level.
 """
 from pathlib import Path
 

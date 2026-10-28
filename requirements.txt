@@ -1,6 +1,7 @@
 openai>=1.40.0,<4        # OpenAI-compatible client, points at Nebius Token Factory base_url; majors pinned (#81 D1) so a fresh install matches the Space
 python-dotenv>=1.0.1
-piper-tts>=1.2.0         # optional offline neural TTS (preferred voice; auto-detected, falls back to espeak-ng/System.Speech/pyttsx3 if the CLI or voice model is absent)
+piper-tts>=1.8,<2        # optional offline neural TTS (preferred voice; auto-detected, falls back to espeak-ng/System.Speech/pyttsx3 if the voice model is absent). GPL-3.0-or-later, run as a separate program (ADR-011)
+flask>=3,<4              # Piper's warm loopback server (python -m piper.http_server, #207); without it Piper runs one CLI call per sentence
 pyttsx3>=2.90            # offline local TTS fallback (real audio, no API key needed)
 faster-whisper>=1.0.0    # ASR fallback if no NVIDIA/Nebius-hosted ASR model is reachable
 gradio>=4.44.0,<7        # judge-facing web demo (webapp.py); also the expected entrypoint shape for HF Spaces; majors pinned (#81 D1)

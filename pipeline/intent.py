@@ -31,7 +31,10 @@ LOGISTICAL_PATTERNS = [
     re.compile(r"\b(what\s+(things\s+)?do\s+i\s+have\s+to\s+do|what\s+am\s+i\s+doing|my\s+schedule|plans?\s+today|planned\s+today|my\s+day)\b", re.IGNORECASE),
     re.compile(r"\b(plan|plans|planned|planning|agenda|itinerary|schedule|scheduled)\b", re.IGNORECASE),
     re.compile(r"\b(what\s+time|when\s+is|when\s+are|is\s+.*coming|coming\s+today|coming\s+at|arriving|dropping\s+off)\b", re.IGNORECASE),
-    re.compile(r"\b(groceries|appointment|doctor|visit|visiting|calendar)\b", re.IGNORECASE),
+    # Plurals count (#189): "Do I have any appointments this week?" is the
+    # general schedule question, and a CASUAL turn reaches THINK with no
+    # caregiver updates at all.
+    re.compile(r"\b(groceries|appointments?|doctors?|visits?|visiting|calendar)\b", re.IGNORECASE),
 ]
 
 MEMORY_REQUEST_PATTERNS = [
@@ -41,10 +44,45 @@ MEMORY_REQUEST_PATTERNS = [
 ]
 
 
+# The senior hands the choice of subject to ForeverYours ("What should we talk
+# about?", "I've got nothing to talk about"). The orchestrator answers these
+# with one briefed anchor and today's updates so SYSTEM_PROMPT rule 21 has
+# something to offer; without it a CASUAL turn reaches THINK with no facts.
+TOPIC_INVITATION_PATTERNS = [
+    re.compile(r"\bwhat\s+(should|shall|can|could|do|would)\s+(we|i|you)\s+(want\s+to\s+)?(talk|chat)\s+about\b", re.IGNORECASE),
+    re.compile(r"\b(nothing|anything)\s+(much\s+)?to\s+(talk|chat)\s+about\b", re.IGNORECASE),
+    re.compile(r"\b(don't|do\s+not|dont)\s+know\s+what\s+to\s+(talk|chat)\s+about\b", re.IGNORECASE),
+]
+
+
+def is_topic_invitation(transcript: str) -> bool:
+    """True when the senior invites a topic without naming one of his own."""
+    return bool(transcript) and any(p.search(transcript) for p in TOPIC_INVITATION_PATTERNS)
+
+
+# "Is anyone coming by today?" and its phrasings (#229). The answer is a fact
+# the caregiver wrote down, so the orchestrator answers it from the caregiver
+# updates instead of letting THINK improvise a visitor.
+VISITOR_QUESTION_RE = re.compile(
+    r"\b(anyone|anybody|someone|somebody|who|visitors?)\b[^?.!]*"
+    r"\b(coming|comes?\s+(by|over|round|around|to\s+see)|visiting|visits?|stopping\s+(by|in)|stop\s+(by|in)|"
+    r"dropping\s+(by|in)|drop\s+(by|in)|popping\s+(by|in|round|over)|pop\s+(by|in|round|over)|arriving|expected)\b"
+    r"|\bany\s+(visitors?|company|guests?)\b",
+    re.IGNORECASE,
+)
+
+
+def is_visitor_question(transcript: str) -> bool:
+    """True when the senior asks who (if anyone) is visiting today."""
+    return bool(transcript) and bool(VISITOR_QUESTION_RE.search(transcript))
+
+
 def detect_intent(transcript: str) -> Intent:
     """Classifies the senior's utterance to gate memory retrieval and prompt construction."""
     if not transcript:
         return Intent.CASUAL
+    if is_visitor_question(transcript) and not any(p.search(transcript) for p in EMOTIONAL_PATTERNS):
+        return Intent.LOGISTICAL
 
     # Pure clock inquiries ("What time is it?") are factual/casual, not schedule retrieval
     if re.search(r"\b(what\s+time\s+is\s+it|what('s|\s+is)\s+the\s+time|do\s+you\s+have\s+the\s+time)\b", transcript, re.IGNORECASE):

@@ -4,7 +4,9 @@
 #   1. BLOCK if the unit tests fail.
 #   2. BLOCK if any commit being pushed lacks a "Fixes #N:" / "Refs #N" subject
 #      (a multi-issue ticket's "Fixes #N, #M: ..." or "Fixes #N/#M: ..." also counts).
-#   3. WARN (never block) if the pushed range has not been through the OpenAI review.
+#   3. BLOCK if any pushed commit message (subject or body) carries an internal tracker id
+#      (4-6 digit task ids; GitHub refs are #N). tests/test_no_internal_refs.py checks files.
+#   4. WARN (never block) if the pushed range has not been through the OpenAI review.
 # Bypass with `git push --no-verify` only on the founder's say-so. CI re-checks.
 # See AGENTS.md -> "Verify before reporting anything done".
 
@@ -23,6 +25,13 @@ while read -r _ local_sha _ remote_sha; do
   if [ -n "$bad" ]; then
     echo "pre-push: BLOCKED — commits without 'Fixes #N: <what and why>':" >&2
     printf '%s\n' "$bad" | sed 's/^/  /' >&2
+    status=1
+  fi
+
+  ids=$(git log --format='%h %B' "$range" 2>/dev/null | grep -inE "off""ice ?#[0-9]+|ticket #[0-9]{4,}|(^|[^0-9A-Za-z&#/])#[0-9]{4,6}([^0-9A-Za-z]|$)" || true)
+  if [ -n "$ids" ]; then
+    echo "pre-push: BLOCKED — internal tracker ids in commit messages (public repo; cite GitHub #N only):" >&2
+    printf '%s\n' "$ids" | sed 's/^/  /' >&2
     status=1
   fi
 done

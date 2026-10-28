@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -44,6 +45,21 @@ class TestHearFallback(unittest.TestCase):
                     patch.object(hear, "_transcribe_local", side_effect=ImportError("missing")):
                 with self.assertRaisesRegex(RuntimeError, "hosted ASR and local Whisper fallback both failed"):
                     hear.transcribe(audio)
+
+    def test_probe_duration_real_wav_and_garbage(self):
+        # probe_duration reads a real WAV's length and refuses garbage.
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "two.wav"
+            with wave.open(str(wav), "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(16000)
+                w.writeframes(b"\0\0" * 32000)
+            self.assertAlmostEqual(hear.probe_duration(wav), 2.0, delta=0.1)
+            garbage = Path(tmp) / "garbage.wav"
+            garbage.write_bytes(b"not audio at all" * 10)
+            with self.assertRaises(hear.AudioInputError):
+                hear.probe_duration(garbage)
 
 
 if __name__ == "__main__":

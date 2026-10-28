@@ -10,6 +10,12 @@ and regression tests.
 
 ### 1. No-silent-surveillance perseveration disclosure (#88)
 
+> **Superseded by the code (#173).** The plan below was not implemented as written. The shipped
+> behavior: the perseveration flag is persisted with `disclosed_to_senior=True` whenever the
+> check fires, whether or not text-to-speech produced audio, because the disclosure sentence is
+> always part of the returned text reply (#159). The "persist `False` on failed delivery" bullet
+> applies to fast-path, audit and lifestyle flags, not this one. Kept as the original plan.
+
 - Keep the existing repeated-question safeguards: matching intent, content
   overlap, distinguishing words, timestamps, and exclusion of proactive turns.
 - Make the confusion flag's disclosure state reflect actual delivery, not

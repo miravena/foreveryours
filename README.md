@@ -1,15 +1,27 @@
 # ForeverYours
 
-**ForeverYours is a purpose-built voice companion for older adults that combines life-context memory, proactive companionship, caregiver coordination, safety-aware escalation, and privacy-preserving family connection — designed to help seniors feel remembered without feeling monitored.**
+An older adult tells a general-purpose voice assistant "I fell earlier today and I'm scared." It
+answers with sympathy, the turn ends, and nobody in the family is told. The assistants that are good
+at conversation have no concept of the person who isn't in the room: the daughter who knows Dad
+loves jazz, that his grandson is Leo, that driving is a sore subject, and that she is dropping off
+groceries at 4 PM.
 
-We didn't want to build another generic chatbot that talks to seniors. ChatGPT already does that well. The question we asked was: *what happens when you design the entire AI system around one older adult's long-term life, relationships, autonomy, and wellbeing?*
+**ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
+there, and never reports anything to the family that it hasn't first said to him out loud.**
 
-ChatGPT is a general-purpose AI you talk to. ForeverYours is a relationship coordination system: a caregiver gives it context once (names, preferences, daily updates), and the senior gets a warm, low-friction voice conversation that actually uses that context — while the family stays connected without anyone being watched.
+It is a voice-first companion built for people who cannot or will not use a screen: no app to learn,
+no typing, no reading. The senior only talks. The caregiver briefs it once, sees what it knows and
+what it flagged, and the family stays connected without anyone being watched.
 
 Built for the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackathon.devpost.com/)
 (Personal AI track, which permits either Nebius Token Factory or Nebius AI Cloud). This project
 runs on Nebius Token Factory with open-weight NVIDIA Nemotron models; it does not use Nebius AI
 Cloud.
+
+**Live demo:** <https://huggingface.co/spaces/elevenbaselab/foreveryours>. No login: talk as the senior on the left (or click a
+sample clip) and watch the caregiver side on the right. Each visitor gets a private demo household,
+removed about an hour after the tab closes; recorded clips can stay in the web framework's cache
+for up to about 70 minutes ([PRIVACY.md](docs/PRIVACY.md)).
 
 ## What three caregivers told us
 
@@ -27,16 +39,55 @@ private, and let families configure what non-safety information is shared.
 1. **Caregiver memo.** "Dad loves jazz, his grandson is Leo, avoid talking about driving. I'm
    dropping off groceries at 4 PM."
 2. **Senior conversation.** Dad talks to the companion; it recalls Leo, avoids driving, mentions
-   the 4 PM groceries — with a live memory panel showing exactly what was retrieved and what's new.
+   the 4 PM groceries — and the caregiver column shows what it was briefed and what it flagged,
+   each item labelled permanent or temporary.
 3. **A worrying remark.** If Dad says something that sounds like distress or confusion, the
    companion speaks an immediate, honest reassurance **and tells Dad so, in the conversation**
    ("I'm letting your family know right now") — never a silent report behind his back — then the
    conversation keeps going instead of dead-ending there.
 
+## Known limitations
+
+Written down on purpose: a judge or a family should know where this stops.
+
+- A fall described in other words ("I'm on the floor and can't reach the phone") is not caught by
+  the rules. It depends on the background backstop, which runs after the reply and, on Nemotron 3
+  Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
+  including falls; [ADR-016](docs/decisions/ADR-016-audit-model-super.md)). A small labelled set is
+  not proof of coverage.
+- Some crisis paraphrases come back SAFE from the backstop; the rules catch the direct phrases.
+- Replies the rules do not cover are written by the model. It is told to use only what the family
+  briefed or what Dad said. A sentence that names a relative nobody briefed, or says something about
+  a family member that no memo and nothing Dad said contains, is dropped before it is spoken, and a
+  "no news" line takes its place. Sentences about the caregiver herself are checked only when Dad
+  asks about the family or the day, so her privacy and fall-alert answers are never cut. The check
+  compares words, not meaning: it can drop a warm, true paraphrase, and an invented detail made only
+  of words the memos happen to contain still passes.
+- On the hosted demo the alert stays on the caregiver's half of the screen. Nothing reaches a phone.
+- A flag is marked "Dad was told" once the spoken line is synthesised, not once it is heard; a
+  browser that blocks autoplay still shows it as told.
+- The hosted demo is slower than the command line (about 0.9 s to first audio there; a hosted turn
+  took several seconds in our checks). No hosted latency figure is claimed.
+- English only. Not a medical device, not a diagnosis, not an emergency dispatcher.
+
+## Uptime monitor
+
+`.github/workflows/uptime.yml` checks the hosted demo every 30 minutes (and on demand from the
+Actions tab, with an optional dry run). A check passes when the Space runtime stage is `RUNNING`
+and the app's `/config` answers 200; it counts as down only when two checks a few minutes apart
+both fail. On down it opens an Issue labelled `outage`, assigned to both maintainers so GitHub
+emails them; while that Issue stays open it adds at most one comment every 6 hours, and when
+the checks pass again it comments how long the demo was down and closes it. An open Issue you
+label `outage` by hand is adopted instead of a second one being opened. To silence it, disable
+the workflow in the Actions tab, or close the Issue (the next failed check opens a fresh one).
+Logic and tests: `scripts/uptime_check.py`, `tests/test_uptime_check.py`. It stops checking
+after 2027-01-15.
+
 ## Pipeline
 
 THINK and AUDIT run on Nebius Token Factory with open-weight NVIDIA Nemotron models; speech-to-text
-and text-to-speech are local (`faster-whisper` and `espeak-ng`) and run on neither Nebius service.
+and text-to-speech are local (`faster-whisper`, and Piper with `espeak-ng` as the fallback) and run
+on neither Nebius service.
 
 ```
 HEAR (speech-to-text via local faster-whisper, offline-resilient)
@@ -44,8 +95,8 @@ HEAR (speech-to-text via local faster-whisper, offline-resilient)
   -> RECALL (memory search, scoped by caregiver-supplied context)
   -> THINK (NVIDIA Nemotron 3 Nano via Nebius Token Factory, streamed)
   -> SPEAK (streamed TTS, starts on the first sentence)
-  -> [async, off the critical path] AUDIT (reply safety + transcript distress/crisis backstop) +
-     memory extraction (via Nebius Nemotron)
+  -> [async, off the critical path] AUDIT (NVIDIA Nemotron 3 Super: reply safety + transcript
+     distress/crisis backstop) + memory extraction (Nemotron 3 Nano)
 ```
 
 Latency is treated as a first-class judging risk: the fast-path skips the LLM entirely for
@@ -76,8 +127,8 @@ actually perceives). Time to first sound heard is measured from player construct
 of the first *successful* playback, and excludes speech-to-text (ASR happens before the player is
 constructed). On a box with no working audio player, the CLI reports **"No audio was played (no
 working audio player)"** and prints no number -- it never reports a fake near-zero reading for
-sound nobody heard ([#71](../../issues/71)). The browser demo still plays one combined clip;
-sentence-level browser streaming is tracked separately.
+sound nobody heard ([#71](../../issues/71)). The browser demo streams the reply too: each
+sentence's audio is sent to the page as soon as it is synthesized (`webapp.py`, `gr.Audio(streaming=True)`).
 
 ## Demo script
 
@@ -142,6 +193,7 @@ appear in the submission.
 
 [`webapp.py`](webapp.py) wraps the exact same pipeline in a one-page browser UI (mic in, reply
 audio out, live memory/flags panel) — no new pipeline logic, just a UI on top of `run_turn`.
+The page footer states which model does what, and each caregiver flag says whether the safety rules or the Nemotron backstop raised it.
 This is what we'll host as the "working demo" link the hackathon requires; see
 [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`VENDOR_DECISIONS.md`](VENDOR_DECISIONS.md) for why.
 
@@ -152,14 +204,39 @@ cp .env.example .env   # fill in NEBIUS_API_KEY for the full pipeline; works wit
 # open http://localhost:7860
 ```
 
+### Hosting for the judging period
+
+**Requirement.** The rules ask that the demo stay free and unrestricted for judges until judging
+ends (2026-12-15 12:00 PT; `docs/HACKATHON_RULES.md`). Judges may test it at any time from
+submission until then.
+
+**Choices considered** (prices checked 2026-10-27, full table in
+[`docs/incidents/2026-10-27-space-outage.md`](docs/incidents/2026-10-27-space-outage.md)):
+free ZeroGPU (no cost, no guarantee); Hugging Face PRO with `cpu-basic` ($9/month); paid
+`cpu-upgrade` ($0.03/hour); a team organisation ($20/month); a small VM outside Hugging Face.
+
+**Decision** ([ADR-017](docs/decisions/ADR-017-judging-period-hosting.md)): the app needs no GPU,
+so it runs on `cpu-basic` under a PRO account, after free ZeroGPU stopped scheduling it on
+2026-10-27. `cpu-upgrade` is the fallback; the hardware is one setting (`SPACE_HARDWARE`). After
+the winners announcement the Space moves back to free ZeroGPU and PRO is cancelled (#259).
+
+**Uptime.** A scheduled GitHub Actions check (see *Uptime monitor* above) opens an Issue for both
+maintainers if the demo stops answering, and closes it when it recovers.
+
 ### Cloudflare & Cloud Hosting
 
 - **Cloudflare Pages**: Deploys the landing page and presentation directly from `docs/index.html` with zero build commands.
-- **Hugging Face Spaces** (the judge-facing link, issue #11): `scripts/deploy_hf_space.py`
+- **Hugging Face Spaces** (the judge-facing link, issue #11): deploys run from GitHub Actions
+  (`.github/workflows/deploy-space.yml`, see `HOW_TO_WORK_HERE.md` -> *Deploying the Space*);
+  the Space shows the commit it runs as `Build: <sha7>`. Underneath, `scripts/deploy_hf_space.py`
   stages `app.py` + pipeline + `requirements.txt`/`packages.txt` with the Spaces config header
   and uploads them. `HF_TOKEN=... NEBIUS_API_KEY=... python scripts/deploy_hf_space.py <user>/<space>`;
   `--dry-run` builds the staging folder without uploading. The key goes in as a Space *secret*,
-  never a file. Each visitor gets an isolated, auto-deleted session (see `SAFETY_AND_PRIVACY.md`).
+  never a file. Hugging Face needs a PRO account for a Gradio Space on the default
+  `cpu-basic` hardware (ADR-017; the hardware is the `SPACE_HARDWARE` setting); on a free account
+  (verified email, older than 30 days) add `--hardware zero-a10g` (ADR-003). The ZeroGPU outage of
+  2026-10-27 and the hosting options are in
+  [`docs/incidents/2026-10-27-space-outage.md`](docs/incidents/2026-10-27-space-outage.md). Each visitor gets an isolated, auto-deleted session (see `SAFETY_AND_PRIVACY.md`).
 - **Cloudflare Tunnel (`cloudflared`)**: Exposes a running `webapp.py` to a secure public HTTPS URL via `cloudflared tunnel --url http://localhost:7860`.
 
 Works the same with or without a key: without one, a distress/confusion phrase still gets the
@@ -170,9 +247,16 @@ a short clip and hit Send; the memory panel updates live underneath.
 `MAX_DAILY_REQUESTS` (default **50**, keyed per browser session so one judge filling theirs up
 never blocks another judge's link) caps how many turns actually reach Nebius Token Factory per
 day once the app is public — an empty send, a turn that fails for lack of a key, and the offline
-safety fast-path never count against it. The deploy script and `docs/decisions/ADR-003-hosting.md`
+safety fast-path never count against it. The fast-path still answers at the cap: "I fell down" or
+"I can't breathe" still gets its spoken reassurance and the caregiver flag, and only the paid
+continuation after it is withheld (with a one-line cap notice); any other utterance at the cap
+gets the daily-cap message. The deploy script and `docs/decisions/ADR-003-hosting.md`
 use this same number. Bump it locally with `MAX_DAILY_REQUESTS=1000 .venv/bin/python webapp.py`
-if you're iterating and hitting it.
+if you're iterating and hitting it. Audio is bounded before any speech recognition runs:
+an upload over `MAX_AUDIO_UPLOAD_BYTES` (default 25 MB, also passed to Gradio as
+`max_file_size`) or a recording longer than `MAX_AUDIO_SECONDS` (default 120) is refused, and a
+recording that can't be decoded or transcribed gets a short "record again, or type instead"
+reply that keeps the session; none of these count against the daily cap.
 
 ### Nebius access
 
@@ -180,6 +264,42 @@ Get a free key at [Nebius AI Studio](https://studio.nebius.ai/) (Token Factory).
 offers $25 in sponsor credits via activation code `NEBIUS-DEVPOST-GLOBAL26`, plus another $25
 through the free [Nebius Builders Program](https://dev.nebius.com/builders) (which also unlocks
 Tavily credits).
+
+**Which NVIDIA models run where.** THINK (the reply) uses
+`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` on Token Factory; AUDIT (the background safety backstop)
+uses `nvidia/nemotron-3-super-120b-a12b`. Each is overridable with `THINK_MODEL`
+or `AUDIT_MODEL`. We chose AUDIT's model with a 36-row labelled eval across the NVIDIA models
+Token Factory serves ([ADR-010](docs/decisions/ADR-010-audit-model-eval.md),
+`scripts/audit_eval.py`):
+
+| AUDIT model | Recall on true events | False flags | Cost per AUDIT call |
+|---|---|---|---|
+| Nemotron 3 Nano 30B | 0.63 | 0/17 | 0.000023 USD |
+| Nemotron 3 Super 120B | 1.00 | 0/17 | 0.00011 USD |
+| Nemotron 3 Ultra 550B | 0.95 | 0/17 | 0.00037 USD |
+
+AUDIT defaults to Super ([ADR-016](docs/decisions/ADR-016-audit-model-super.md)). On the later
+43-row set Nano's recall was 0.88, under our 0.90 floor, and Super's was 1.00; both had 0/17
+false flags. Super costs about $0.0002 per AUDIT call (Nano about $0.00004) and measured a median
+1.09 s (max 3.00 s) against Nano's 0.65 s (max 1.47 s); AUDIT runs after the reply, so that
+time is off the critical path.
+
+## Licences of the voice components
+
+This repo is MIT. Two programs it starts are not:
+
+- **espeak-ng** (GPL-3.0, <https://github.com/espeak-ng/espeak-ng>): the fallback voice, installed
+  from `packages.txt`.
+- **piper-tts** (GPL-3.0-or-later, <https://github.com/OHF-Voice/piper1-gpl>, bundles espeak-ng):
+  the preferred voice, run as a separate program (the `piper` CLI, or `python -m piper.http_server`
+  on the loopback interface). No Piper code is imported into this app.
+
+Both are used at arm's length: this app sends a sentence and reads back a WAV. A Hugging Face Space
+image built from this repo contains both programs; their source is at the links above. The Piper
+voice `en_US-ljspeech-medium` is trained on the public-domain LJ Speech dataset
+(<https://keithito.com/LJ-Speech-Dataset/>); the earlier `en_US-lessac-medium` voice is trained on
+research-only data and is not used. Details and the reasoning:
+[ADR-011](docs/decisions/ADR-011-voice-licence-and-warm-piper.md). Not legal advice.
 
 ## Self-judging
 

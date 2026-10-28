@@ -6,15 +6,20 @@ senior's own words during conversation -- showing those to a caregiver is
 exactly the surveillance #140 warns about. Caregiver-authored memos/notes
 and disclosed safety flags are shown by design and must keep showing.
 """
+import os
 
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 import webapp
 from caregiver import CaregiverFlags
-from memory.store import MemoryScope, MemoryStore
+from memory.store import MemoryScope, MemoryStore, PrivacyLevel
+
+# Gradio hands over uploads under the temp dir; webapp refuses audio paths outside it.
+FAKE_MEMO_UPLOAD = os.path.join(tempfile.gettempdir(), "memo.wav")
 
 
 class TestCaregiverPanelPrivacy(unittest.TestCase):
@@ -150,7 +155,7 @@ class TestCaregiverPanelPrivacy(unittest.TestCase):
         # future code change could write a caregiver-sourced item with a
         # scope this code doesn't recognise, and the fail-closed guarantee
         # has to hold regardless of who (ostensibly) wrote the item
-        # (review-arm finding: the unknown-scope fallback had this
+        # (automated review finding: the unknown-scope fallback had this
         # uncovered exception).
         session_id, _ = webapp.init_session()
         data_dir, _ = webapp._session_dirs(session_id)
@@ -370,3 +375,146 @@ class TestMemoryConflictPrivacy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBriefedMemoryDedupe(unittest.TestCase):
+    """Briefed memory lists each caregiver-memo fact once.
+
+    Seen on the live Space 2026-10-21: the panel listed the split facts AND
+    the whole memo as one more entry, because the memo paths split on
+    different rules and MemoryStore.add's exact (text, source) dedupe cannot
+    see a whole memo and its fragments as the same facts.
+    """
+
+    FACTS = (
+        "Dad loves jazz",
+        "His grandson is named Leo",
+        "Avoid talking about driving",
+        "I'm dropping off groceries at 4 PM today",
+    )
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.sessions_dir = Path(self.temp_dir.name) / "sessions"
+        self.patches = [
+            patch.object(webapp, "SESSIONS_DIR", self.sessions_dir),
+            patch.object(webapp, "SHARED_PROFILE", False),
+            patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.temp_dir.cleanup()
+
+    def _briefed(self, panel: str) -> str:
+        return panel.split("### Briefed memory", 1)[1]
+
+    def _store(self, session_id: str) -> MemoryStore:
+        data_dir, _ = webapp._session_dirs(session_id)
+        return MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
+
+    def test_dedupe_whole_memo_beside_fragments_lists_each_fact_once(self):
+        # Negative control for the pre-change panel: a store holding the
+        # fragments plus the whole memo (what a "."-plus-space-only splitter
+        # stores for a transcript ending sentences with "!" / "?") rendered
+        # every fact twice -- once alone, once inside the whole-memo entry.
+        session_id, _ = webapp.init_session()  # pre-briefs the 4 fragments
+        whole_memo = "Dad loves jazz! His grandson is named Leo? Avoid talking about driving"
+        legacy_memo = "Dad loves jazz.His grandson is named Leo.Avoid talking about driving."  # no space after "."
+        store = self._store(session_id)
+        self.assertIsNotNone(store.add(whole_memo, source="caregiver_memo"))
+        self.assertIsNotNone(store.add(legacy_memo, source="caregiver_memo"))
+        self.assertEqual(len(store.all()), len(self.FACTS) + 2)  # stored, so the panel must hide them
+
+        emotional_text = "I feel lonely since my wife died"
+        store.add(emotional_text, source="conversation_extract", scope=MemoryScope.EMOTIONAL.value)
+
+        briefed = self._briefed(webapp._format_caregiver_panel(session_id))
+        for fact in self.FACTS:
+            self.assertEqual(briefed.count(fact), 1, f"{fact!r} listed {briefed.count(fact)}x:\n{briefed}")
+        self.assertNotIn(whole_memo, briefed)
+        self.assertNotIn(legacy_memo, briefed)
+        self.assertNotIn(emotional_text, briefed)  # #140 rules untouched by the dedupe
+
+    def test_dedupe_same_fact_different_punctuation_listed_once(self):
+        session_id, _ = webapp.init_session()
+        store = self._store(session_id)
+        store.add("Dad loves jazz.", source="caregiver_memo")  # exact-text dedupe misses the "."
+        store.add("dad loves Jazz", source="caregiver_note")
+        briefed = self._briefed(webapp._format_caregiver_panel(session_id))
+        self.assertEqual(briefed.lower().count("dad loves jazz"), 1, briefed)
+
+    def test_dedupe_all_memo_paths_share_one_splitter(self):
+        # The source-level fix: a dictated memo whose sentences end in "!",
+        # "?" or "." without a following space yields the same items as the
+        # pre-brief and the typed memo -- no whole-memo item is ever stored.
+        session_id, _ = webapp.init_session()
+        dictated = "Dad loves jazz! His grandson is named Leo? Avoid talking about driving.I'm dropping off groceries at 4 PM today."
+        with patch.object(webapp.hear, "transcribe", return_value=dictated):
+            webapp.save_caregiver_voice_memo(FAKE_MEMO_UPLOAD, session_id)
+        webapp.save_caregiver_text_memo(dictated, session_id)
+        self.assertEqual([i.text for i in self._store(session_id).all()], list(self.FACTS))
+
+    def test_dedupe_repeat_save_is_idempotent(self):
+        session_id, _ = webapp.init_session()
+        memo = "Dad loves chicken soup. Doctor appointment tomorrow at 2 PM!"
+        webapp.save_caregiver_text_memo(memo, session_id)
+        before = [i.text for i in self._store(session_id).all()]
+        self.assertEqual(before[len(self.FACTS):], ["Dad loves chicken soup", "Doctor appointment tomorrow at 2 PM"])
+        webapp.save_caregiver_text_memo(memo, session_id)
+        with patch.object(webapp.hear, "transcribe", return_value=memo):
+            webapp.save_caregiver_voice_memo(FAKE_MEMO_UPLOAD, session_id)
+        self.assertEqual([i.text for i in self._store(session_id).all()], before)
+        briefed = self._briefed(webapp._format_caregiver_panel(session_id))
+        self.assertEqual(briefed.count("Dad loves chicken soup"), 1)
+
+    def test_dedupe_keeps_distinct_facts_and_senior_items(self):
+        # A fact that merely shares words with another is NOT a concatenation
+        # and must stay; a hidden senior item stays hidden, an attested one stays shown.
+        session_id, _ = webapp.init_session()
+        store = self._store(session_id)
+        store.add("Dad loves jazz on Sunday mornings", source="caregiver_memo")
+        store.add("Leo", source="caregiver_note")
+        store.add("Dad said he enjoys the garden", source="conversation_extract", disclosure_attested=True)
+        briefed = self._briefed(webapp._format_caregiver_panel(session_id))
+        for text in ("Dad loves jazz on Sunday mornings", "Leo `(caregiver_note)`", "Dad said he enjoys the garden"):
+            self.assertIn(text, briefed)
+        self.assertEqual(briefed.count("Dad loves jazz"), 2)  # the fact and the distinct Sunday one
+
+    def test_dedupe_keeps_facts_that_differ_in_value_script_privacy_or_lifetime(self):
+        # openai_review findings on the first cut: the fact key must not erase
+        # digits/decimals or non-ASCII words, and two copies of the same words
+        # that differ in privacy both stay (they mean different things to the
+        # caregiver); two active copies differing only in lifetime show once
+        # with the longer-lived copy's badge.
+        session_id, _ = webapp.init_session()
+        # Through the real paths, so the shared splitter keeps "1.5" whole and
+        # the panel keeps the two doses (and the signed values) apart.
+        with patch.object(webapp.hear, "transcribe", return_value="Dose: 1.5 mg today. Temperature -5 C!"):
+            webapp.save_caregiver_voice_memo(FAKE_MEMO_UPLOAD, session_id)
+        webapp.save_caregiver_text_memo("Dose: 15 mg today. Temperature 5 C. Call if temperature < 38 C\nCall if temperature > 38 C", session_id)
+        store = self._store(session_id)
+        self.assertEqual(
+            [i.text for i in store.all()][len(self.FACTS):],
+            ["Dose: 1.5 mg today", "Temperature -5 C", "Dose: 15 mg today", "Temperature 5 C",
+             "Call if temperature < 38 C", "Call if temperature > 38 C"],
+        )
+        store.add("爸爸喜欢爵士乐", source="caregiver_memo")  # two distinct CJK facts
+        store.add("孙子叫小明", source="caregiver_memo")
+        store.add("Call Sarah", source="caregiver_memo", privacy=PrivacyLevel.CAREGIVER_ONLY.value)
+        store.add("Call Sarah.", source="caregiver_memo")
+        store.add("Sarah visits", source="caregiver_note", scope=MemoryScope.TEMPORARY.value, expires_at=time.time() + 600)
+        store.add("Sarah visits.", source="caregiver_note", scope=MemoryScope.TEMPORARY.value, expires_at=time.time() + 5 * 3600)
+        briefed = self._briefed(webapp._format_caregiver_panel(session_id))
+        for text in ("Dose: 1.5 mg today", "Dose: 15 mg today", "Temperature -5 C", "Temperature 5 C",
+                     "temperature < 38 C", "temperature > 38 C", "爸爸喜欢爵士乐", "孙子叫小明"):
+            self.assertEqual(briefed.count(text), 1, briefed)
+        self.assertIn("Hidden from Dad]** Call Sarah `(caregiver_memo)`", briefed)
+        self.assertIn("🟢 **[Permanent]** Call Sarah. `(caregiver_memo)`", briefed)
+        self.assertEqual(briefed.count("Sarah visits"), 1, briefed)
+        self.assertIn("expires in 4h 59m]** Sarah visits. `(caregiver_note)`", briefed)
+        self.assertNotIn("expires in 9m", briefed)
+
