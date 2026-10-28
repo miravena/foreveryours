@@ -319,7 +319,6 @@ class TestFallReply(unittest.TestCase):
         "The vase is falling over",
         "I feel very unwell and I'm hurt",
         "Help me, I'm scared",
-        "I'm stuck on the floor",
     ]
     GENERIC_REPLY = (
         "I hear you, and I'm taking this seriously. "
@@ -388,6 +387,20 @@ class TestDownAndUnableToCall(unittest.TestCase):
         "I can't reach my phone, I'm on the floor",
         "I'm on the ground in the garden and can't call for help",
         "Help, I fell in the bathroom and I can't reach the telephone",
+        # #244: stuck on the floor is the same situation as being unable to get up.
+        "I'm stuck on the floor",
+        "I am stuck on the floor",
+        "I\u2019m stuck on the floor.",
+        "I'm stuck on the floor again",
+        "I'm really stuck on the floor",
+        "I got stuck on the floor",
+        "I've been stuck on the floor",
+        "I'm stuck on the bathroom floor",
+        "I'm stuck on the ground",
+        "I'm trapped on the floor",
+        "I'm stuck here on the floor",
+        "Help, I'm stuck on the floor",
+        "Stuck on the floor",
     ]
     NEGATIVES = [
         "I'm on the floor watching telly",
@@ -417,6 +430,40 @@ class TestDownAndUnableToCall(unittest.TestCase):
                 note = res.continuation_note
                 self.assertIn("never mention 988", note)
                 self.assertIn("don't repeat", note)
+
+    # #244: not a person stuck on the ground. These may still trigger the
+    # generic distress reply through older rules; they must not get the 911 one.
+    STUCK_NEGATIVES = [
+        "I'm stuck on the second floor",
+        "I'm stuck on the ground floor",
+        "I'm stuck on the top floor",
+        "I'm stuck on the floor plan",
+        "I'm stuck on the floor puzzle",
+        "The drawer is stuck on the floor",
+        "My grandson is stuck on the floor",
+    ]
+
+    def test_stuck_on_floor_negatives_do_not_get_the_911_reply(self):
+        for phrase in self.STUCK_NEGATIVES:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertFalse(res.calls_911)
+                self.assertNotEqual(res.immediate_reply, fastpath.DOWN_UNABLE_REPLY)
+
+    def test_stuck_on_floor_is_not_the_generic_or_fall_reply(self):
+        res = fastpath.check("I'm stuck on the floor")
+        self.assertEqual(res.immediate_reply, fastpath.DOWN_UNABLE_REPLY)
+        self.assertIn("911", res.immediate_reply)
+        self.assertNotIn("988", res.immediate_reply)
+
+    def test_judge_turns_keep_their_replies(self):
+        # The generic fall reply stays for a past fall with no 911 cue.
+        res = fastpath.check("I fell down earlier and I'm scared")
+        self.assertIn("Are you hurt?", res.immediate_reply)
+        self.assertFalse(res.calls_911)
+        # The floor-and-phone reply stays.
+        res = fastpath.check("I'm on the floor and can't reach the phone")
+        self.assertEqual(res.immediate_reply, fastpath.DOWN_UNABLE_REPLY)
 
     def test_exact_issue_phrase(self):
         res = fastpath.check("I'm on the floor and can't reach the phone")
@@ -448,6 +495,47 @@ class TestDownAndUnableToCall(unittest.TestCase):
         self.assertFalse(fastpath.check("I fell down earlier and I'm scared").calls_911)
         self.assertFalse(fastpath.check("I can't get up").calls_911)
         self.assertFalse(fastpath.check("I want to die").calls_911)
+
+
+class TestPhysicalEmergencyNegatives(unittest.TestCase):
+    """#211: figurative or unrelated uses of the emergency words never get the
+    911 reply, and a mixed report names both numbers in either order."""
+
+    NEGATIVES = [
+        "My heart is full",
+        "I could breathe easier now",
+        "I like bleeding hearts in the garden",
+        "Bleeding hearts",
+        "I can breathe again",
+        "He called 911 last year about the neighbour's fire",
+    ]
+
+    def test_negatives_do_not_get_the_911_reply(self):
+        for phrase in self.NEGATIVES:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertFalse(res.calls_911)
+                self.assertNotEqual(res.immediate_reply, fastpath.PHYSICAL_EMERGENCY_REPLY)
+
+    def test_each_physical_phrase_says_911_and_never_988(self):
+        for phrase in ("I can't breathe", "I have bad chest pain", "I am bleeding", "Call 911"):
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertEqual(res.severity, "distress")
+                self.assertTrue(res.calls_911)
+                self.assertIn("911", res.immediate_reply)
+                self.assertNotIn("988", res.immediate_reply)
+                self.assertEqual(res.caregiver_flag, fastpath.CAREGIVER_FLAG_TEXT["medical"])
+
+    def test_mixed_report_in_either_order_names_988_and_911(self):
+        for phrase in ("I want to die and I can't breathe",
+                       "I can't breathe and I want to die",
+                       "My chest hurts. I want to kill myself."):
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertEqual(res.severity, "crisis")
+                self.assertIn("988", res.immediate_reply)
+                self.assertIn("911", res.immediate_reply)
 
 
 class TestCrisisContinuationNote(unittest.TestCase):

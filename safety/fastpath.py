@@ -129,10 +129,22 @@ _DOWN_FOR_LONG = (
     r".*\b(?:for\s+(?:hours|ages|a\s+long\s+time|(?:an?|one|two|three|four|five|six|several|a\s+few|many|\d+)\s+hours?)"
     r"|all\s+(?:night|day|morning|afternoon)|since\s+(?:last\s+night|this\s+morning|yesterday|breakfast|lunch))\b"
 )
+# Stuck on the floor (#244): being stuck on the floor is the same situation as
+# being unable to get up, so it gets the same reply. First person (or a bare
+# "stuck on the floor" as the whole opening of the utterance), so "the drawer
+# is stuck on the floor" stays a near-miss; "the second floor", "the ground
+# floor", "floor plan" and the like are not a person on the ground.
+_STUCK_ON_FLOOR = (
+    r"(?:\bi(?:'m|\s+am|\s+got|'ve\s+been|\s+have\s+been)\s+|^\s*(?:help[\s,!.]*)?)"
+    r"(?:(?:just|really|still|so|completely)\s+)*(?:stuck|trapped|stranded)\s+(?:\w+\s+){0,2}?"
+    r"on\s+the\s+(?:(?!(?:ground|first|second|third|top|dance|shop|factory)\b)\w+\s+)?(?:floor|ground)\b"
+    r"(?!\s+(?:floor|plans?|puzzles?|mats?|rugs?|lamps?|tiles?|polish|wax|level|space|manager)\b)"
+)
 DOWN_UNABLE_PATTERNS = [
     _DOWN_PLACE + r".*" + _CANNOT_SUMMON_HELP,
     _CANNOT_SUMMON_HELP + r".*" + _DOWN_PLACE,
     _DOWN_FOR_LONG,
+    _STUCK_ON_FLOOR,
 ]
 
 # The senior may be unable to reach a phone, so the reply offers the medical
