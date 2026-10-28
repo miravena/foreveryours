@@ -1,0 +1,86 @@
+{
+  "2": {
+    "text": "ForeverYours is a voice companion for Dad, briefed by his family. When his safety is at stake, it raises a flag for his daughter, and tells him first, out loud. Everything else he says stays between them.",
+    "spoken_text": "ForeverYours is a voice companion for Dad, briefed by his family. When his safety is at stake, it raises a flag for his daughter, and tells him first, out loud. Everything else he says stays between them.",
+    "file": "narration_v4/shot2.wav",
+    "duration_s": 13.3,
+    "window_s": 16,
+    "window": "0:13-0:29",
+    "fits": true,
+    "voice": "af_heart",
+    "speed": 0.9,
+    "wpm": 167
+  },
+  "3": {
+    "text": "His daughter briefs it once, from work. One line: a check-up with Dr. Tan on Thursday. Nothing to set up on Dad's side.",
+    "spoken_text": "His daughter briefs it once, from work. One line: a check-up with Doctor Tan on Thursday. Nothing to set up on Dad's side.",
+    "file": "narration_v4/shot3.wav",
+    "duration_s": 7.95,
+    "window_s": 12,
+    "window": "0:29-0:41",
+    "fits": true,
+    "voice": "af_heart",
+    "speed": 0.9,
+    "wpm": 174
+  },
+  "4": {
+    "text": "When Dad asks, it already knows what she typed. The reply is written by NVIDIA Nemotron on Nebius Token Factory. This is the real hosted wait, uncut.",
+    "spoken_text": "When Dad asks, it already knows what she typed. The reply is written by NVIDIA Nemo-tron on Nebius Token Factory. This is the real hosted wait, uncut.",
+    "file": "narration_v4/shot4.wav",
+    "duration_s": 11.08,
+    "window_s": 22,
+    "window": "0:41-1:03",
+    "fits": true,
+    "voice": "af_heart",
+    "speed": 0.9,
+    "wpm": 146
+  },
+  "5": {
+    "text": "What he says in private stays private. Danger is different.",
+    "spoken_text": "What he says in private stays private. Danger is different.",
+    "file": "narration_v4/shot5.wav",
+    "duration_s": 4.05,
+    "window_s": 40,
+    "window": "1:03-1:43",
+    "fits": true,
+    "voice": "af_heart",
+    "speed": 0.9,
+    "wpm": 148
+  },
+  "6": {
+    "text": "Next day, in a local test, it's still briefed.",
+    "spoken_text": "Next day, in a local test, it's still briefed.",
+    "file": "narration_v4/shot6.wav",
+    "duration_s": 2.73,
+    "window_s": 8,
+    "window": "1:43-1:51",
+    "fits": true,
+    "voice": "af_heart",
+    "speed": 0.9,
+    "wpm": 198
+  },
+  "7": {
+    "text": "Two models on Nebius Token Factory: Nemotron 3 Nano writes the replies, and Nemotron 3 Super is the safety backstop. Hearing and voice run on the app's own server, so his voice recording never goes to Nebius.",
+    "spoken_text": "Two models on Nebius Token Factory: Nemo-tron three Nano writes the replies, and Nemo-tron three Super is the safety backstop. Hearing and voice run on the app's own server, so his voice recording never goes to Nebius.",
+    "file": "narration_v4/shot7.wav",
+    "duration_s": 15.65,
+    "window_s": 16,
+    "window": "1:51-2:07",
+    "fits": true,
+    "voice": "af_heart",
+    "speed": 0.9,
+    "wpm": 142
+  },
+  "8": {
+    "text": "It doesn't catch everything; the README lists what it misses. Try it yourself, no login, at the link on screen.",
+    "spoken_text": "It doesn't catch everything; the read-me lists what it misses. Try it yourself, no login, at the link on screen.",
+    "file": "narration_v4/shot8.wav",
+    "duration_s": 6.91,
+    "window_s": 11,
+    "window": "2:07-2:18",
+    "fits": true,
+    "voice": "af_heart",
+    "speed": 0.9,
+    "wpm": 174
+  }
+}

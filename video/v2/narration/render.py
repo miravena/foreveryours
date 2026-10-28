@@ -20,17 +20,20 @@ SCRIPT = os.environ.get("FY_VIDEO_SCRIPT", os.path.join(HERE, "../../../docs/VID
 LINES = os.environ.get("FY_LINES_JSON", os.path.join(HERE, "lines.json"))
 VOICE, SPEED = "af_heart", 0.95   # chosen voice (see README.md)
 SPEEDS = json.loads(os.environ.get("FY_NARR_SPEEDS", "{}"))   # per-shot speed, e.g. {"2": 0.8}
-CANDIDATES = ["af_heart", "am_michael", "bf_emma"]
+CANDIDATES = os.environ.get("FY_NARR_CANDIDATES", "af_heart,am_michael,bf_emma").split(",")
 
 # Phonetic respelling applied to the render input ONLY; captions stay verbatim.
 RESPELL = [
     (r"elevenbaselab-foreveryours\.hf\.space", "eleven base lab, for ever yours, dot H F, dot space"),
     (r"faster-whisper", "faster whisper"),
     (r"\b988\b", "nine eight eight"),
+    (r"\bDr\. ", "Doctor "),
+    (r"\bREADME\b", "read-me"),
     (r"Nemotron 3 ", "Nemo-tron three "),  # "3 Nano" was heard as "3.0"
-    (r"Nebius", "Nebius"), (r"Nemotron", "Nemotron"), (r"Piper", "Piper"),
+    (r"\bNemotron\b", "Nemo-tron"),   # bare "Nemotron" was heard as "Nemetron"
+    (r"Nebius", "Nebius"), (r"Piper", "Piper"),
 ]
-GAP = 0.25  # seconds between sentences
+GAP = float(os.environ.get("FY_NARR_GAP", "0.25"))  # seconds between sentences
 
 _o = A.EspeakAPI.__init__
 A.EspeakAPI.__init__ = lambda self, lib, dp: _o(self, lib, "/usr/lib/aarch64-linux-gnu/espeak-ng-data")
@@ -74,7 +77,7 @@ def main():
     if mode in ("candidates", "all"):
         for v in CANDIDATES:
             raw = f"/tmp/cand_{v}.wav"
-            sf.write(raw, synth(shots[2]["text"], v), 24000)
+            sf.write(raw, synth(shots[2]["text"], v, SPEEDS.get("2", SPEED)), 24000)
             norm(raw, f"{OUT}/candidates/shot2_{v}.wav")
     if mode in ("render", "all"):
         meta = {}
