@@ -49,6 +49,23 @@ CRISIS_DISCLOSURE_LINE = (
 # Same line without the hotline, for a reply that already gave 988 (#191).
 CRISIS_DISCLOSURE_LINE_NO_988 = "I am also letting {caregiver} know that you may need support."
 
+# Driving plan: THINK's lift-first note, given BEFORE the reply is generated.
+# It only ever OFFERS a lift: the companion cannot arrange transport (rules
+# 4/5) and the notes do not say one is booked (rule 25). Rule 16: his choice,
+# no lecture. enforce_driving_alternative() still checks the reply after.
+DRIVING_CONTINUATION_NOTE = (
+    "The person plans to drive himself. Offer, first, that {caregiver} or family "
+    "could give him a lift or drive him, as an offer to pass on, for example "
+    "\"{caregiver} could take you, shall I let {caregiver} know?\". Never say a lift "
+    "is arranged, booked or on its way, and never say you will drive or take him "
+    "yourself (rules 4, 5 and 25); do not praise or encourage the drive, and do not "
+    "lecture him: it is his choice (rule 16); then rule 12."
+)
+# Spoken after the reply on a driving-plan turn; the low-severity note
+# (fastpath.CAREGIVER_FLAG_TEXT["driving"]) is recorded as disclosed only when
+# this line was actually delivered (_speak_disclosure).
+DRIVING_DISCLOSURE_LINE = "I'll also leave {caregiver} a short note that you mentioned driving today."
+
 # One-turn carry of a backstop CRISIS verdict (#199, ADR-013). The AUDIT pass
 # runs after the reply, so the turn it flags has already been answered; the
 # next turn's THINK context learns about it here. Process-local and keyed by
@@ -103,33 +120,9 @@ _OTHER_EMERGENCY_RE = re.compile(r"\b(911|999|112|emergency|ambulance)\b", re.IG
 # must offer an alternative and never endorse the drive. The prompt alone is
 # not reliable (THINK sometimes only declines, or praises "getting out"), so
 # this is enforced deterministically, output-side, before the text is spoken.
-_DRIVING_INTENT_RE = re.compile(
-    r"\b(?:i|let me|gonna)\b[^.!?]{0,40}\bdriv(?:e|ing)\b",
-    re.IGNORECASE,
-)
-# Past or negated driving ("I used to drive", "I don't drive anymore") is not a plan to drive.
-_DRIVING_NOT_INTENT_RE = re.compile(
-    r"\b(?:used to|can't|cannot|can not|don't|do not|won't|will not|never|stopped|gave up|no longer)\b"
-    r"[^.!?]{0,20}\bdriv",
-    re.IGNORECASE,
-)
-
-
-def driving_plan(transcript: str) -> bool:
-    """True when `transcript` states a first-person plan to drive himself
-    somewhere -- "I'll drive", "I will drive", "I'm going to drive", "I plan
-    to drive down to ...", "I am driving this afternoon" -- any mention of
-    "i" within 40 characters of "drive"/"driving"; False for a past-tense or
-    negated mention ("I used to drive", "I don't drive anymore"), a question
-    about someone else driving ("Can Sarah drive to the shop for me?"), and
-    T13 ("Alright, I'll wait for Sarah then."). Curly apostrophes are
-    normalised the way safety.fastpath._normalize does, so ASR/phone-keyboard
-    output matches the same as a plain apostrophe."""
-    text = fastpath._normalize(transcript)
-    if _DRIVING_NOT_INTENT_RE.search(text):
-        return False
-    return bool(_DRIVING_INTENT_RE.search(text))
-
+# driving_plan() lives in safety/fastpath.py (the named seam the safety
+# tests probe); it is re-exported here so callers keep one import.
+driving_plan = fastpath.driving_plan
 
 # The two regexes below are copied from -- not imported from -- scripts/
 # live_judge_check.py's OFFERS_ALTERNATIVE and ENCOURAGES_DRIVING (the script
@@ -169,13 +162,156 @@ _ENCOURAGES_DRIVING_RE = re.compile(
     r"|go for it)(?![^.!?;]*\bbut\b)",
     re.IGNORECASE,
 )
+# A reply on a driving-plan turn may only OFFER a lift: the companion cannot
+# arrange transport (THINK rules 4/5), and nothing in the notes says a lift is
+# booked (rule 25). A sentence claiming it already is -- "I've arranged for
+# Sarah to pick you up", "Sarah will drive you" -- is dropped before speech;
+# an offer ("Sarah could drive you", "shall I ask Sarah for a lift?") stays.
+_TRANSPORT_WORDS = (r"(?:lifts?|rides?|taxis?|cabs?|transport|pick\s+you\s+up|drive\s+you|take\s+you|"
+                    r"collect\s+you|fetch\s+you)")
+# "could be arranged" is an offer; "is booked" / "has arranged" is a claim.
+_ARRANGED_WORDS = (
+    r"(?<!could be )(?<!can be )(?<!might be )(?<!would be )(?<!to be )"
+    r"(?<!could )(?<!can )(?<!might )(?<!would )(?<!to )"
+    r"\b(?:arranged|booked|organi[sz]ed|sorted(?:\s+out)?|set\s+up|confirmed|ordered)\b"
+)
+_CLAIMS_TRANSPORT_ARRANGED_RE = re.compile(
+    _ARRANGED_WORDS + r"[^.!?]{0,40}\b" + _TRANSPORT_WORDS + r"\b"
+    r"|\b" + _TRANSPORT_WORDS + r"\b[^.!?]{0,40}" + _ARRANGED_WORDS
+    + r"|\b(?:is|are|'s|will\s+be)\s+(?:coming|on\s+(?:her|his|their|its|the)\s+way)\s+to\s+"
+    r"(?:pick\s+you\s+up|drive\s+you|take\s+you|get\s+you|collect\s+you|fetch\s+you|"
+    r"give\s+you\s+a\s+(?:lift|ride))\b"
+    r"|\b(?:lifts?|rides?|taxis?|cabs?|car|transport)(?:\s+(?:is|are|will\s+be)|'s)\s+(?:on\s+(?:its|their|the)\s+way|coming)\b"
+    r"|\b(?:will|'ll)\s+(?:pick\s+you\s+up|drive\s+you|take\s+you|collect\s+you|fetch\s+you|give\s+you\s+a\s+(?:lift|ride))\b"
+    # The companion booked something, or "it" is booked: on a driving turn
+    # that is a transport claim even when the lift is named in another
+    # sentence ("Sarah can give you a lift. I've booked it for three.").
+    r"|\b(?:i(?:'ve|\s+have)?|we(?:'ve|\s+have)?|i'll|i\s+will)\s+(?:already\s+|just\s+)?"
+    r"(?:arranged|booked|organi[sz]ed|sorted|set\s+up|ordered)\b"
+    r"|\b(?:it|that|this|everything)(?:'s|\s+is|\s+has\s+been)\s+(?:all\s+)?"
+    r"(?:arranged|booked|sorted|organi[sz]ed|set\s+up|confirmed)\b"
+    # The companion itself offering to drive: it is a voice, it cannot (rule 4).
+    r"|\bi(?:\s+can|\s+could|'ll|\s+will|'d|\s+would|\s+am\s+happy\s+to|'m\s+happy\s+to)\s+"
+    r"(?:drive\s+you|take\s+you|pick\s+you\s+up|collect\s+you|fetch\s+you|give\s+you\s+a\s+(?:lift|ride))\b"
+    r"|\b(?:is|are|'s|'re)\s+(?:picking\s+you\s+up|collecting\s+you|fetching\s+you|driving\s+you|taking\s+you|"
+    r"giving\s+you\s+a\s+(?:lift|ride))\b",
+    re.IGNORECASE,
+)
+# "I can ask Sarah if she'll drive you" is an offer, not a claim: an embedded
+# if/whether question after ask/see/check is dropped before the claim check.
+# A plain condition ("If you want a lift Sarah will drive you") is not.
+_CONDITIONAL_CLAUSE_RE = re.compile(
+    r"\b(?:ask|asking|see|check|find\s+out|know|wonder|wondering)\b[^.!?,;]{0,30}?\b(?:if|whether)\b"
+    r"(?:(?!\b(?:and|but|so|then)\b)[^.!?,;])*"
+)
+
+
+def _claims_transport_arranged(sentence: str) -> bool:
+    """True when `sentence` states a lift is arranged or coming. A real
+    question ("Shall I ask Sarah to take you?") and an embedded if/whether
+    question ("I can ask Sarah if she'll drive you") are offers, so they
+    never count; a statement with a tag ("Sarah will drive
+    you, does that sound good?") still does."""
+    text = fastpath._normalize(sentence).strip()
+    if text.endswith("?") and _QUESTION_START_RE.search(text):
+        return False
+    return bool(_CLAIMS_TRANSPORT_ARRANGED_RE.search(_CONDITIONAL_CLAUSE_RE.sub(" ", text)))
+
+
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+#  (?!\s+you\b) is tied directly to the matched denial verb, not searched
+# independently over the whole sentence: a denial phrase whose OWN object is
+# "you" is the senior talking about something they haven't told THE SENIOR
+# (impossible -- they're the listener), so it isn't a family-notification
+# denial at all ("I haven't told you how much I enjoy our afternoon
+# chats"). A denial phrase with any OTHER object -- the caregiver's name,
+# "her", "him", "them", "family", "anyone" -- still matches (no
+# caregiver_name or pronoun-gender guesswork needed). Tying the exclusion to
+# the verb itself (rather than a second regex over the whole sentence) also
+# means an unrelated "tell you" elsewhere in a compound sentence ("I haven't
+# told Sarah because I wanted to tell you first") doesn't suppress a real
+# denial earlier in the same sentence.
+_FLAG_DENIAL_RE = re.compile(
+    r"(?:haven't told|didn't tell|not told)(?!\s+you\b)", re.IGNORECASE
+)
+
+# The guard decides from Dad's QUESTION, never from the reply alone: no rule
+# on the reply can tell "I haven't told her about it" answering "Did you
+# tell Sarah about my fall?" from the same words answering "Don't tell Sarah
+# about the biscuits". So a denial is rewritten only when Dad's utterance
+# this turn names the event of a flag actually disclosed this session. A
+# question about anything else (biscuits, a letter, his PIN) never triggers
+# a rewrite, so a confidence is never reported as shared.
+#
+# Flag text (safety/fastpath.CAREGIVER_FLAG_TEXT) -> words that name its event.
+_FLAG_EVENT_WORDS = (
+    (re.compile(r"\bfall\b|\bfloor\b|unable to get up|injury", re.IGNORECASE),
+     re.compile(r"\b(?:fall|fell|fallen|floor|get up)\b", re.IGNORECASE)),
+    (re.compile(r"\bdriving\b", re.IGNORECASE),
+     re.compile(r"\b(?:driv\w*|lift)\b", re.IGNORECASE)),
+    (re.compile(r"medical emergency", re.IGNORECASE),
+     re.compile(r"\b(?:chest|breath\w*|bleed\w*|911)\b", re.IGNORECASE)),
+    (re.compile(r"suicidal|\bcrisis\b|severe distress", re.IGNORECASE),
+     re.compile(r"\b(?:crisis|988|end (?:your|my) life|kill (?:yourself|myself)|hurt (?:yourself|myself))\b",
+                re.IGNORECASE)),
+    (re.compile(r"confusion", re.IGNORECASE),
+     re.compile(r"\b(?:confus\w*|where I am)\b", re.IGNORECASE)),
+)
+# Used when the caller passes no flag texts (a direct unit probe): fall only.
+_DEFAULT_DISCLOSED_TEXTS = ("Dad reported a fall",)
+
+
+def _question_names_disclosed_event(question: str, disclosed_texts) -> bool:
+    return any(
+        any(flag_re.search(t) for t in disclosed_texts) and event_re.search(question)
+        for flag_re, event_re in _FLAG_EVENT_WORDS
+    )
+
+
+def enforce_flag_honesty(
+    reply: str, flags_disclosed_this_session: bool, caregiver_name: str | None = None,
+    disclosed_texts=None, question: str | None = None,
+) -> str:
+    """Pure guard (#11): when a caregiver flag was disclosed to the
+    senior THIS session (flags_disclosed_this_session=True), replace any
+    sentence of `reply` that denies the disclosure
+    (/haven't told|didn't tell|not told/i, see `_FLAG_DENIAL_RE` for the
+    "told you" exclusion) with a plain confirmation naming `caregiver_name`.
+    When no flag was disclosed this session, `reply` is returned unchanged
+    -- this guard never invents a disclosure that did not happen. It also
+    returns `reply` unchanged unless `question` (Dad's utterance this turn)
+    names the event of a flag in `disclosed_texts` (this session's disclosed
+    flag texts), so a denial about a private subject is always kept (see
+    `_question_names_disclosed_event`). It is the
+    deterministic belt behind the THINK prompt's
+    [SAFETY FLAGS SENT THIS SESSION] fact (think.build_prompt's
+    session_flags), applied to the continuation reply and to every later
+    turn alike, before sentence chunking and speak().
+
+    `caregiver_name` only affects the wording of the replacement sentence
+    ("I did let Sarah know...") -- omit it (e.g. a direct unit probe of this
+    function) and it falls back to "Sarah"."""
+    if not flags_disclosed_this_session or not reply or not reply.strip():
+        return reply
+    texts = list(disclosed_texts) if disclosed_texts else list(_DEFAULT_DISCLOSED_TEXTS)
+    if not _question_names_disclosed_event(question or "", texts):
+        return reply
+    name = caregiver_name or "Sarah"
+    # No "just as I told you": the flag is on the caregiver panel whether or
+    # not Dad's browser played the disclosure line, so only this part is
+    # always true.
+    replacement = f"I did let {name} know."
+    sentences = _SENTENCE_SPLIT_RE.split(reply)
+    fixed = [replacement if _FLAG_DENIAL_RE.search(s) else s for s in sentences]
+    return " ".join(fixed)
 
 
 def enforce_driving_alternative(reply: str, caregiver_name: str) -> str:
     """Rewrite `reply` so the ASSEMBLED result matches the judge's
     OFFERS_ALTERNATIVE and not ENCOURAGES_DRIVING: drop whichever sentences
-    endorse the drive itself, then -- if nothing in what's left names a real
+    endorse the drive itself or claim a lift is already arranged
+    (_CLAIMS_TRANSPORT_ARRANGED_RE), then -- if nothing in what's left names a real
     way there (_REAL_ALTERNATIVE_RE, stricter than the judge's own regex) --
     prepend one warm lift-first sentence naming `caregiver_name`. Checked on
     the assembled text, not sentence-by-sentence, because
@@ -186,7 +322,7 @@ def enforce_driving_alternative(reply: str, caregiver_name: str) -> str:
     already gone and the prepended sentence itself names a lift."""
     if not reply or not reply.strip():
         return reply
-    kept = [s for s in _SENTENCE_SPLIT_RE.split(reply.strip()) if s.strip()]
+    kept = [s for s in _SENTENCE_SPLIT_RE.split(reply.strip()) if s.strip() and not _claims_transport_arranged(s)]
     while kept and _ENCOURAGES_DRIVING_RE.search(" ".join(kept)):
         # Prefer dropping a sentence that matches on its own; if the match
         # only appears once the sentences are joined (the `!`/`?` gap above),
@@ -197,11 +333,30 @@ def enforce_driving_alternative(reply: str, caregiver_name: str) -> str:
                 break
         else:
             kept.pop(0)
-    out = " ".join(kept).strip()
-    if not _REAL_ALTERNATIVE_RE.search(out):
-        lift_sentence = f"Would you like me to ask {caregiver_name} for a lift instead?"
-        out = f"{lift_sentence} {out}".strip() if out else lift_sentence
-    return out
+    # Lift FIRST (#192): the offer must open the reply, not follow other talk
+    # ("How are you feeling today? Sarah could give you a lift."). A later
+    # sentence that stands on its own is moved to the front; one that leans
+    # on what came before ("Or she could...") cannot be, so the plain lift
+    # sentence is prepended instead.
+    if kept and not _REAL_ALTERNATIVE_RE.search(kept[0]):
+        movable = next((i for i, s in enumerate(kept)
+                        if _REAL_ALTERNATIVE_RE.search(s) and not _LEANS_ON_PREVIOUS_RE.match(s)), None)
+        if movable is not None:
+            kept.insert(0, kept.pop(movable))
+        else:
+            kept.insert(0, f"Would you like me to ask {caregiver_name} for a lift instead?")
+    elif not kept:
+        kept = [f"Would you like me to ask {caregiver_name} for a lift instead?"]
+    return " ".join(kept).strip()
+
+
+# A sentence that only makes sense after the one before it: it opens with a
+# connective or a pronoun standing for someone already named.
+_LEANS_ON_PREVIOUS_RE = re.compile(
+    r"\W*(?:or|and|but|also|so|then|otherwise|instead|alternatively|either\s+way|"
+    r"she|he|they|it|that|this|those|these)\b",
+    re.IGNORECASE,
+)
 
 
 _CRISIS_EMPTY_REPLY = "I'm here with you. How are you feeling right now?"
@@ -1220,6 +1375,15 @@ class TurnResult:
     notify_threads: list = field(default_factory=list)
     is_fallback: bool = False
     consecutive_errors: int = 0
+    # Session-scoped, caller-tracked list (#11): every caregiver flag
+    # disclosed to the senior so far THIS session, including this turn's own
+    # disclosure. Pass it back in as `run_turn`'s `session_flags` on the
+    # next turn of the SAME session -- never read `flags.all()` instead,
+    # which spans every session ever recorded for the profile. The AUDIT
+    # flag (added on a background thread after this result is constructed)
+    # is appended here too; join() `background_thread` before reading it for
+    # a crisis/distress/unsafe turn, same discipline as `audit_verdict`.
+    session_flags: list[str] = field(default_factory=list)
 
 
 def _speak_turn(sentences, audio_out_dir: Path, on_chunk=None) -> tuple[str, list[Path], float | None]:
@@ -1285,6 +1449,27 @@ def _speak_disclosure(
         iter([text]), audio_out_dir, on_chunk=_tracking if on_chunk is not None else None
     )
     return paths, bool(paths) and on_chunk is not None and not refused
+
+
+def _record_driving_note(flags: CaregiverFlags, caregiver_name: str, audio_out_dir: Path,
+                         on_chunk, audio_paths: list[Path]):
+    """Tell the senior, then record the low-severity driving note. The note is
+    `disclosed_to_senior=True` only when DRIVING_DISCLOSURE_LINE was actually
+    delivered (`_speak_disclosure`); failed or absent delivery records False.
+    A note is shown on the caregiver panel only: it is not a safety alert, so
+    it sends no outbound notification."""
+    disclosed = False
+    try:
+        paths, disclosed = _speak_disclosure(
+            DRIVING_DISCLOSURE_LINE.format(caregiver=caregiver_name), audio_out_dir, on_chunk=on_chunk
+        )
+        audio_paths.extend(paths)
+    except Exception:  # best-effort disclosure; the note is still recorded, honestly
+        disclosed = False
+    return flags.add(
+        fastpath.CAREGIVER_FLAG_TEXT["driving"], severity=fastpath.DRIVING_FLAG_SEVERITY,
+        disclosed_to_senior=disclosed, source="fastpath",
+    )
 
 
 # Overall deadline for one outbound send (#201). The notifiers carry their own
@@ -1442,11 +1627,34 @@ def run_turn(
     trigger_type: str = "silence",
     enable_perseveration_flag: bool = True,
     allow_hosted_call: bool = True,
+    session_flags: list[str] | None = None,
 ) -> TurnResult:
     """`history` is session-scoped prior-turn context (see think.build_prompt's
     docstring for why this is kept separate from memory_store) -- pass None
     for a one-shot call like main.py's CLI beats; webapp.py keeps a real list
     across clicks in one browser session and passes it in each turn.
+
+    `session_flags` (#11) is the SAME kind of caller-tracked,
+    session-scoped list as `history`: the text of every caregiver flag
+    disclosed to the senior so far in THIS session, carried forward by the
+    caller from the previous turn's `TurnResult.session_flags` (`[]` or
+    None starts a fresh session). It is the ONLY source of the
+    [SAFETY FLAGS SENT THIS SESSION] prompt fact: `flags.all()` -- the
+    whole profile's persisted CaregiverFlags file -- is never read for it,
+    because that file is not session-scoped for any caller. main.py's CLI
+    reuses one DATA_DIR across day1/day2/beat1..4 invocations and
+    chat_loop runs; webapp.py's FY_SHARED_PROFILE=1 mode maps every browser
+    tab onto one shared `data/` directory; even its default per-session
+    `data_dir` outlives a tab's conversation state. A flag disclosed in a
+    DIFFERENT session surfacing in this one's prompt would violate the
+    privacy firewall (rule 15) -- the main.py day2/beat4 "day-2 recall"
+    scenario, where a fresh process must not inherit yesterday's fall
+    disclosure, or one FY_SHARED_PROFILE tab inheriting another's.
+
+    `run_turn` only ever appends flags it discloses THIS call to a copy of
+    the list it was given and returns that on `TurnResult.session_flags` for
+    the caller to pass into the next turn of the same session (webapp.py
+    keeps it per browser tab, main.py per process/chat_loop).
 
     `allow_hosted_call=False` is how webapp.py's daily request cap reaches
     this turn: the offline safety fast-path still speaks and flags
@@ -1458,16 +1666,22 @@ def run_turn(
         raise ValueError(
             "allow_hosted_call=False needs a transcript the safety fast-path answers"
         )
-    
+
+    # Session-flags accumulator, seeded ONLY from what the caller carried
+    # forward -- never from flags.all() -- see the session_flags docstring
+    # above. This turn's own fast-path/perseveration/AUDIT disclosures are
+    # appended to it below as they happen.
+    session_flags_disclosed: list[str] = list(session_flags) if session_flags is not None else []
+
     if is_proactive:
         # Pre-Flight Context Verification (Hallucination Risk)
         active_facts = memory_store.senior_profile_facts(time.time())
         caregiver_updates = memory_store.caregiver_schedule_updates(time.time())
         if trigger_type == "hobby" and not active_facts:
-            return TurnResult(transcript, "[Proactive turn suppressed by policy: No hobbies in context]", is_fallback=True)
+            return TurnResult(transcript, "[Proactive turn suppressed by policy: No hobbies in context]", is_fallback=True, session_flags=session_flags_disclosed)
         if trigger_type == "reminder":
             if not caregiver_updates:
-                return TurnResult(transcript, "[Proactive turn suppressed by policy: No caregiver updates in context]", is_fallback=True)
+                return TurnResult(transcript, "[Proactive turn suppressed by policy: No caregiver updates in context]", is_fallback=True, session_flags=session_flags_disclosed)
             # Delivery-aware deduplication (#132). There is no per-item "delivered"
             # marker in MemoryStore, so the only honest signal that a specific
             # reminder was already spoken is the session history: webapp.py appends
@@ -1503,12 +1717,12 @@ def run_turn(
                     return hits >= max(2, (len(item_words) * 3 + 3) // 4)
 
                 if all(_already_delivered(u) for u in caregiver_updates):
-                    return TurnResult(transcript, "[Proactive turn suppressed by policy: Reminder already delivered recently]", is_fallback=True)
-            
+                    return TurnResult(transcript, "[Proactive turn suppressed by policy: Reminder already delivered recently]", is_fallback=True, session_flags=session_flags_disclosed)
+
         # Two-Strike Suppression Rule (History Bloat)
         if history and len(history) >= 2:
             if history[-1].get("role") == "assistant" and history[-2].get("role") == "assistant":
-                return TurnResult(transcript, "[Proactive turn suppressed by policy: Too many consecutive AI turns]", is_fallback=True)
+                return TurnResult(transcript, "[Proactive turn suppressed by policy: Too many consecutive AI turns]", is_fallback=True, session_flags=session_flags_disclosed)
 
     t0 = time.monotonic()
 
@@ -1526,6 +1740,7 @@ def run_turn(
                 audio_paths=[],
                 audit_verdict="Blocked by Quiet Mode",
                 is_fallback=True,
+                session_flags=session_flags_disclosed,
             )
         quiet_breakthrough = True
 
@@ -1568,6 +1783,10 @@ def run_turn(
             disclosed_to_senior=bool(immediate_audio_paths),
             source="fastpath",
         )
+        if fast_flag.disclosed_to_senior:
+            # This turn's own disclosure counts for its own continuation
+            # (#11) -- session-scoped, never read back from flags.all().
+            session_flags_disclosed.append(fast_flag.text)
         _notify_in_background(
             flags, fast_flag, notify_threads,
             told=lambda paths=list(immediate_audio_paths), t=fast_tracker: t.attested(paths),
@@ -1662,6 +1881,8 @@ def run_turn(
                     disclosed_to_senior=True,
                     source="perseveration",
                 )
+                if persev_flag.disclosed_to_senior:
+                    session_flags_disclosed.append(persev_flag.text)
                 _notify_in_background(
                     flags, persev_flag, notify_threads,
                     told=lambda paths=list(persev_paths), t=persev_tracker: t.attested(paths),
@@ -1791,11 +2012,7 @@ def run_turn(
         continuation_note = (f"{continuation_note} {_FAMILY_QUESTION_NOTE}" if continuation_note
                              else _FAMILY_QUESTION_NOTE)
     if driving_guard:
-        driving_note = (
-            f"The person plans to drive himself. Offer, first, that {caregiver_name} "
-            "or family could give him a lift or drive him; do not praise or "
-            "encourage the drive; then rule 12."
-        )
+        driving_note = DRIVING_CONTINUATION_NOTE.format(caregiver=caregiver_name)
         continuation_note = f"{continuation_note} {driving_note}" if continuation_note else driving_note
     think_input = transcript if not continuation_note else f"{transcript}\n\n[{continuation_note}]"
     reply_text = ""
@@ -1811,6 +2028,17 @@ def run_turn(
         hosted_call_capped = True
         think_unavailable = True
     else:
+        # #11: every flag disclosed to the senior THIS session is
+        # stated as fact to THINK, on the same turn's continuation and on
+        # every later turn alike, so the model is never left to guess
+        # whether a family notification already happened. The source is the
+        # caller-carried accumulator built above (this turn's own disclosure,
+        # if any, was already appended to it) -- never flags.all(), the
+        # whole profile's flag file, which would leak a disclosure from a
+        # DIFFERENT session (a prior main.py CLI run, another browser tab
+        # under FY_SHARED_PROFILE=1, a reloaded caregiver panel) into this
+        # one's prompt and violate the privacy firewall (rule 15).
+        flag_honesty_active = bool(session_flags_disclosed)
         try:
             visitor_answer = _visitor_answer(transcript, caregiver_updates, caregiver_name)
             # Only a plain logistics question gets the read-out; an emotional
@@ -1829,6 +2057,7 @@ def run_turn(
                     current_hour=simulated_hour,
                     is_proactive=is_proactive,
                     pending_conflicts=pending_conflicts,
+                    session_flags=session_flags_disclosed,
                 )
             sentences = think.sentence_chunks(token_stream)
         
@@ -1995,7 +2224,15 @@ def run_turn(
                         else:
                             budget -= 1
                             s = s[:first.end()] + _sub_hotline(s[first.end():], "that number")
-                    yield physical_claim_pattern.sub(f"{caregiver_name} will \\2", s)
+                    s = physical_claim_pattern.sub(f"{caregiver_name} will \\2", s)
+                    # #11: belt behind the THINK prompt's session-flags
+                    # fact -- a denial sentence never reaches speak() when a
+                    # flag was actually disclosed this session. caregiver_name
+                    # is passed so the guard only rewrites a denial that is
+                    # actually about telling the family/caregiver, never an
+                    # unrelated "I haven't told you ..." sentence.
+                    yield enforce_flag_honesty(s, flag_honesty_active, caregiver_name,
+                                               disclosed_texts=session_flags_disclosed, question=transcript)
 
             # Tracks whether THINK's own sentences (and any 988 in them) were
             # DELIVERED, so a refused 988 chunk is never carried as heard.
@@ -2129,10 +2366,32 @@ def run_turn(
         ),
         is_fallback=is_fallback,
         consecutive_errors=consecutive_errors,
+        session_flags=session_flags_disclosed,
     )
+
+    if driving_guard and is_fallback:
+        # No background pass on a fallback turn; the note is still owed.
+        try:
+            note = _record_driving_note(flags, caregiver_name, audio_out_dir, on_chunk, result.audio_paths)
+            if note is not None and note.disclosed_to_senior:
+                result.session_flags.append(note.text)
+        except Exception as exc:  # pragma: no cover - never fail a turn over a note
+            print(f"[orchestrator] driving note failed: {type(exc).__name__}", file=sys.stderr)
 
     if not fast.triggered and not is_fallback:
         def background() -> None:
+            if driving_guard:
+                # After the reply (which already offered the lift), before the
+                # audit's own disclosure, so the lines are heard in order.
+                try:
+                    note = _record_driving_note(flags, caregiver_name, audio_out_dir, on_chunk, result.audio_paths)
+                    if note is not None and note.disclosed_to_senior:
+                        # Session-scoped like the audit append below, so a
+                        # later "Did you tell Sarah about my driving?" is
+                        # answered honestly (Refs #11).
+                        result.session_flags.append(note.text)
+                except Exception as exc:  # pragma: no cover - never fail a turn over a note
+                    print(f"[orchestrator] driving note failed: {type(exc).__name__}", file=sys.stderr)
             try:
                 status, verdict = audit.audit_reply(transcript, reply_text)
                 result.audit_verdict = verdict
@@ -2187,6 +2446,11 @@ def run_turn(
                         # extraction or the next turn's join. `disclosed` was
                         # attested by _speak_disclosure above.
                         _notify_in_background(flags, audit_flag, result.notify_threads)
+                        if audit_flag.disclosed_to_senior:
+                            # Session-scoped like the fast-path/perseveration
+                            # appends above -- join() background_thread
+                            # before reading result.session_flags.
+                            result.session_flags.append(audit_flag.text)
             except Exception as exc:  # pragma: no cover - best-effort background task
                 print(
                     f"[orchestrator] audit failed: {type(exc).__name__}",

@@ -636,5 +636,53 @@ class TestEveryBranchDiscloses(unittest.TestCase):
         self.assertEqual(res.caregiver_flag, fastpath.CAREGIVER_FLAG_TEXT["medical"])
 
 
+class TestDrivingPlan(unittest.TestCase):
+    """A senior's plan to drive himself is detected by the pure seam
+    fastpath.driving_plan (the orchestrator gives THINK a lift-first note and
+    records a disclosed low-severity note); a past mention is not a plan."""
+
+    PLAN = "I think I'll drive down to the shop myself this afternoon"
+
+    def test_plans_to_drive_are_detected(self):
+        for t in (self.PLAN, "I think I will drive down to the shop myself this afternoon",
+                  "I will drive", "I'll drive", "I\u2019ll drive",
+                  "I think I\u2019ll drive down to the shop myself this afternoon",
+                  "I'm going to drive to the bank", "I am driving to the shop this afternoon",
+                  "I'm planning to drive to the shop this afternoon",
+                  "I will happily drive myself to the shop",
+                  "I am going to drive to the shop like I did years ago",
+                  "I decided to drive to the shop", "I fancy driving to the shop this afternoon",
+                  "Sarah offered to drive me, but I'll drive myself.",
+                  "I'm going to drive to the shop and Sarah can drive me home",
+                  "I'm going to go and drive to the shop",
+                  "I'm not tired and I'll drive to the shop",
+                  "I don't drive at night and I'll drive to the shop this afternoon"):
+            self.assertTrue(fastpath.driving_plan(t), t)
+
+    def test_past_negated_and_other_people_are_not(self):
+        for t in ("I used to drive a bus", "I used to drive a bus for the council",
+                  "I don't drive anymore, I gave it up.", "I never drive at night",
+                  "Can Sarah drive to the shop for me?", "Alright, I'll wait for Sarah then.",
+                  "Leo is learning to drive", "I remember driving to the shop with my dad.",
+                  "I loved driving a bus when I was younger.", "I watched Sarah drive to the shop.",
+                  "I drove to work for forty years", "I'm driving myself crazy with this crossword",
+                  "I'm not driving today", "I want Sarah to drive me to the shop",
+                  "I'll ask Sarah to drive me", "I don't think I'll drive today",
+                  "I won't be driving to the shop", ""):
+            self.assertFalse(fastpath.driving_plan(t), t)
+
+    def test_driving_is_not_an_emergency(self):
+        # No canned line, no alert: the fast path itself does not trigger.
+        res = fastpath.check(self.PLAN)
+        self.assertFalse(res.triggered)
+
+    def test_note_is_low_severity_and_content_free(self):
+        self.assertEqual(fastpath.DRIVING_FLAG_SEVERITY, "note")
+        text = fastpath.CAREGIVER_FLAG_TEXT["driving"]
+        self.assertIn("mentioned driving", text)
+        self.assertNotIn("URGENT", text)
+        self.assertNotIn("shop", text)  # never quotes the utterance
+
+
 if __name__ == "__main__":
     unittest.main()

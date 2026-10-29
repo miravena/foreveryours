@@ -9,6 +9,201 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-29: fall-honesty guard decides from the question (#11)
+- **Why:** an independent review of the batch found that the reply-only guard turned true privacy
+  answers into false disclosure claims after a fall flag ("I haven't told Sarah about your private
+  letter" became "I did let Sarah know"). Four rounds of reply-side rules (subject phrases, topic
+  words, allow-lists) each had a counterexample, because the same words can answer "about my fall"
+  or "about the biscuits".
+- **Fix:** `enforce_flag_honesty(..., disclosed_texts, question)` rewrites a denial only when
+  `question` (Dad's utterance this turn) names the event of a disclosed flag
+  (`_FLAG_EVENT_WORDS`). With no question it never rewrites. The replacement drops "just as I told
+  you", because the flag is on the caregiver panel even if Dad's browser never played the line. A
+  disclosed driving note joins `TurnResult.session_flags` on the normal and the fallback path.
+- **Known limits:** a question that names the event about some other matter ("Did you tell Sarah
+  about my fear of falling?") still allows the rewrite. The fast-path flag enters the session flags
+  when its line is synthesized, not when the browser acknowledges playing it.
+- **Tests:** 12 in `tests/test_fall_honesty.py`; `unittest discover` OK; `live_judge_check.py --fake
+  good` 23/23.
+
+### 2026-10-29 (#11: second review bounce -- shared-profile browser tabs still shared the flag fact)
+- **What:** the previous entry's fix left `run_turn` with a default mode that still read
+  `flags.all()` when the caller passed no `session_flags`, on the assumption that webapp.py's
+  `flags` store is per session. It is not under `FY_SHARED_PROFILE=1`: `_session_dirs` maps every
+  browser tab onto one `data/` directory and `_new_session` hands every tab the same session id,
+  so a fall disclosed in tab A became "[SAFETY FLAGS SENT THIS SESSION]" in tab B's prompt -- the
+  same rule-15 leak as the CLI case, one deployment mode over. The reviewer bounced on exactly
+  this (and on no live run having been made).
+- **Fix:** the default mode is gone -- `run_turn` never reads the flag file for the session fact;
+  `session_flags` None or `[]` is a fresh conversation. webapp.py now carries the list per browser
+  tab the way it carries `history`: `_session_flags` (an LRU-bounded `OrderedDict`, 1024 tabs)
+  keyed by `_flags_key` = session id + Gradio's per-tab `request.session_hash`, the very key
+  Gradio scopes `gr.State` by. Gradio injects the request into any handler parameter annotated
+  `gr.Request` (checked against gradio 6.30.0's `helpers.special_args`: positional parameters
+  only, and NOT through a `functools.partial`, which is why the four proactive buttons now use
+  `_proactive_streaming_handler(trigger)` closures instead of partials; their auto-named `/partial`
+  endpoints were referenced nowhere). `run_demo_turn`/`run_demo_turn_streaming` gain a
+  `request: gr.Request | None = None` parameter after `simulated_time_in`; the proactive wrappers
+  take it after `trigger_type` (direct callers pass `trigger_type` positionally). The `gr.State`
+  wiring and the 8-output contract are unchanged, and `gr.Request` is not part of the
+  `/run_demo_turn_streaming` API signature, so `scripts/live_judge_check.py` and CI are
+  unaffected. Per-session households drop their entries in `_end_session` and the sweeper; the
+  shared-profile mode has no per-tab close signal, so the LRU bound is its cleanup (a few strings
+  per tab, local-recording mode only). Why not a new `gr.State`: that is a ninth output on every
+  turn handler, and `tests/test_webapp.py` pins the 8-tuple and 5-tuple arities, which this fix
+  must not touch.
+- **Tests:** `tests/test_fall_honesty.py` gains `test_run_turn_never_reads_the_flags_store_for_session_flags`
+  (a disclosed flag already in the store, a caller carrying nothing: no prompt block, empty
+  `TurnResult.session_flags`, the guard leaves the reply alone) and `TestWebappTabIsolation`
+  (`FY_SHARED_PROFILE` on, one shared session id, two fake requests with different session
+  hashes: tab A's fall reaches tab A's next streaming and proactive turns and never tab B's, on
+  either path; plus the bare-id key and `_forget_session_flags`). Full suite and `--fake good`
+  green; results in the ticket's review note, together with the live run made this round.
+
+### 2026-10-28 (#11: judge T15 fall-honesty FAIL -- continuation denies a disclosed flag)
+- **What:** Run 39802780048 judge T15 ("Did you tell Sarah about my fall?") replied "I haven't
+  told Sarah anything yet" right after the fast-path had just disclosed the fall to the senior
+  and flagged it (T14). Rule 19 already says "you will always tell Dad when one is sent," but
+  THINK was never told one HAD been sent this session, so it denied it.
+- **Fix:** `pipeline/think.py` `build_prompt()` takes a new `session_flags: list[str] | None`
+  kwarg; when non-empty it appends a `[SAFETY FLAGS SENT THIS SESSION]` block stating the fact
+  plainly (SYSTEM_PROMPT itself untouched). `pipeline/orchestrator.py` `run_turn()` computes the
+  disclosed flags of this session (`flags.all()` where `disclosed_to_senior` is True -- the
+  CaregiverFlags instance is itself session-scoped, per webapp.py's per-session `data_dir`) and
+  passes them into every THINK call this turn and on every later turn of the session. A new pure
+  guard, `enforce_flag_honesty(reply, flags_disclosed_this_session)`, is the belt behind that
+  prompt fact: it replaces any sentence matching `/haven't told|didn't tell|not told/i` with "I
+  did let Sarah know, just as I told you." before the sentence reaches `speak()`, applied inside
+  `filter_sentences()`'s per-sentence yield so both the driving-plan and plain paths get it.
+- **Tests:** `tests/test_fall_honesty.py` (new) -- the fall turn's own THINK continuation, the
+  next turn, and the no-flag case, each checking the prompt, the returned reply text and every
+  text handed to `speak()`. Full `unittest discover tests` and `scripts/live_judge_check.py
+  --fake good` both green; T15 now PASSes live-fake (23/23).
+- **Next:** none for this fix; #192 (driving) and #245 (unbriefed relatives) ordering around
+  `filter_sentences()` is unchanged.
+- **Codex review (`scripts/openai_review.sh main`), answered not fixed:**
+  1. P1: `enforce_flag_honesty`'s regex is broad enough to also rewrite a sentence that
+     truthfully denies sharing something unrelated ("I haven't told Sarah about your private
+     letter."). This is the literal behaviour the ticket's own completion bar specifies
+     (regex and replacement text given verbatim, and the ticket's own negative-control AC
+     exercises exactly this match), so narrowing it would risk breaking that AC; flagging for a
+     follow-up ticket to scope the match to the family-notification denial specifically rather
+     than fixing it here (not spec'd, so out of this ticket's scope).
+  2. P2: `CaregiverFlags` is scoped to "this session" only because webapp.py hands each browser
+     session its own `data_dir` (per `_session_dirs`); `main.py`'s CLI (`chat`/beatN) and
+     webapp's `FY_SHARED_PROFILE=1` mode reuse one persistent `DATA_DIR`, so a flag from a prior
+     CLI run or shared-profile conversation would read as "sent this session" there. The ticket's
+     target is the hosted judge Space (`live_judge_check.py`, judge run 39802780048), which is
+     already correctly session-scoped; the CLI/shared-profile case is a pre-existing
+     characteristic of how `main.py` reuses its profile dir, not something this ticket's ACs
+     exercise. Noting for a follow-up rather than threading a new session-start boundary through
+     `run_turn` here (out of this ticket's scope).
+### 2026-10-28 (#192 follow-up: driving plan records a disclosed low-severity note)
+- **What:** a judge simulation's driving turn (memo "Avoid talking about driving", then "I think
+  I'll drive down to the shop myself this afternoon") got a reply that welcomed the outing, no flag,
+  and a "Calm" panel. `driving_plan()` moved to `safety/fastpath.py` (the orchestrator re-exports
+  it). On a driving-plan turn THINK's continuation note (`DRIVING_CONTINUATION_NOTE`, given before
+  the reply) asks for a lift offer first, only as an offer, never as something arranged, with no
+  lecture (rules 4, 5, 16, 25). `enforce_driving_alternative()` now also drops a sentence claiming a
+  lift is arranged or on its way (a question or an if/whether clause is an offer and stays). After
+  the reply, `DRIVING_DISCLOSURE_LINE` is spoken through `_speak_disclosure` and the note
+  `CAREGIVER_FLAG_TEXT["driving"]` is recorded with severity `note`, `disclosed_to_senior` True
+  only when that line was delivered. `note` is not a high-priority severity, so the panel lists it
+  and stays calm; it sends no outbound notification. THINK rule 19 now names the note.
+- **Result:** `tests/test_fastpath.py::TestDrivingPlan`, `tests/test_orchestrator.py::TestDrivingNote`;
+  full suite green. Forcing `disclosed_to_senior=True` fails three of the new tests.
+- **Gotcha (Codex review):** the old "any `i` within 40 characters of drive" rule also matched
+  remembered or third-person driving ("I loved driving a bus when I was younger", "I watched Sarah
+  drive"), which a note-and-disclosure path makes costly; `driving_plan` now needs a first-person
+  future or intended verb ("I'll", "I'm going to", "I plan to", "I'm driving") and rejects
+  "when I was"/"years ago". Third-person booking claims ("Your lift is booked", "Sarah has
+  arranged a lift") are dropped as claims too; "could be arranged" stays an offer.
+  Round 2: "I'm planning to drive" and "I will happily drive" are plans; a past reference
+  elsewhere in the turn ("like I did years ago") no longer cancels one; "Your lift is on its
+  way" and "Sarah is on her way to pick you up" are claims.
+  Round 3: `driving_plan` is high recall again, like the rest of the fast path: the strict
+  pattern, or "I" within 40 characters of drive/driving unless that span is a memory or someone
+  else ("loved", "remember", "watched", "was", "when I was"), so "I decided to drive" and "I fancy
+  driving" count. Only an embedded if/whether question ("ask Sarah if she'll drive you") is an
+  offer; "If you want a lift Sarah will drive you" is a claim. Each round found another phrasing:
+  #265 already records that a regex guard is a blocklist.
+  Round 4: "I'm not driving today", "drive me" and "I want Sarah to drive" are not his plan;
+  "Sarah is picking you up at three" and "arranged for Sarah to collect you" are claims.
+  Round 5: `driving_plan` now judges each clause, so "Sarah offered to drive me, but I'll drive
+  myself" is a plan; "Your lift's on its way" (contraction) is a claim.
+  Round 6: "I'm going to drive and Sarah can drive me home" is a plan; the companion offering to
+  drive him itself ("I can drive you") is dropped (rule 4).
+  Round 7: "drive me" is checked on the matched span, not the clause, and clauses are not split on
+  "and" ("I'm going to go and drive" is one plan); an embedded if-question ends at and/but/so, so a
+  booking claim after it ("... and I've booked a taxi for you") is still dropped.
+  Round 8: a negation must sit within two words of the verb ("I'm not tired and I'll drive" is a
+  plan, "I don't think I'll drive" is not); "I've booked it" and "It's all arranged" are claims
+  even when the lift is named in another sentence.
+  Round 9: only the negated span is removed before the intent check ("I don't drive at night and
+  I'll drive to the shop" is a plan); "Sarah is coming to give you a lift" is a claim.
+
+### 2026-10-29 (#11: review bounce on the fall-honesty fix -- session isolation + guard false positive)
+- **What:** the prior round's fix (above) landed with two gaps the first Codex review had
+  already flagged and deferred as out-of-scope, and the independent reviewer bounced on them:
+  (1) `session_flags_disclosed` was read from `flags.all()`, the WHOLE profile's persisted
+  `CaregiverFlags` file, not something actually scoped to one session -- correct only as long as
+  the caller's own `flags` object happens to be constructed fresh per session (webapp.py's
+  default per-session `data_dir`); `main.py`'s CLI (every beat, and `chat_loop`) reuses one
+  `DATA_DIR` across every invocation, so a flag disclosed in an earlier run (the
+  day2/beat4 "day-2 recall" demo) would read as "sent this session" in a later, unrelated one --
+  a privacy-firewall (rule 15) violation. (2) `enforce_flag_honesty`'s regex matched ANY
+  "haven't told / didn't tell / not told" sentence once a flag was disclosed, including one
+  about something else entirely ("I haven't told you how much I enjoy our afternoon chats"),
+  rewriting it into a false family-notification confirmation.
+- **Fix:** `run_turn()` gains a `session_flags: list[str] | None = None` kwarg, the same kind of
+  caller-tracked, caller-carried list as `history` -- append-only, seeded from the caller, never
+  re-derived from `flags.all()` when the caller supplies it. Two modes: omit it (default) when
+  the caller's `flags` object is already session-scoped (webapp.py's normal per-session
+  `data_dir`, unchanged) -- `flags.all()` is still used, since it can only ever hold this
+  session's own disclosures there; or pass an explicit list (`[]` to start a session, the
+  previous turn's `TurnResult.session_flags` to continue one) when `flags` is a store the caller
+  reuses across real sessions. `main.py`'s `beat2_senior_turn` (so beat2/beat3/beat4 too) and
+  `chat_loop` now pass/thread `session_flags` this way. `enforce_flag_honesty()` no longer gates
+  on the caregiver's name or "family" at all -- a first pass at this did, and a second Codex
+  round caught the false negative it created: a pronoun denial, "I haven't told HER about your
+  fall," wasn't rewritten. It now leaves alone only a denial whose object is "you" (the senior,
+  which isn't a family-notification denial at all) and rewrites every other denial, by name,
+  pronoun or "anyone" alike. It also takes an optional `caregiver_name`, used purely for the
+  replacement sentence's wording ("I did let Sarah know...", falling back to "Sarah").
+- **Tests:** `tests/test_fall_honesty.py` gains `test_session_isolation_does_not_leak_other_session_flags`
+  (a second, explicit-`session_flags=[]` session against the SAME on-disk flags file as a prior
+  one must not see its disclosure), `test_guard_leaves_unrelated_denials_about_the_senior_alone`
+  (the "told you" false positive) and `test_guard_rewrites_a_pronoun_denial_not_just_the_name`
+  (the "told her/him/anyone" false negative a first narrowing attempt introduced). The existing
+  `test_next_turn_after_fall_carries_flag_and_strips_denial` now threads
+  `first.session_flags` into the second call instead of relying on `flags.all()`. Full
+  `unittest discover tests` and `scripts/live_judge_check.py --fake good` both green.
+  `scripts/openai_review.sh main` ran three times: round 1 caught the beat2/beat3/beat4 gap, the
+  pronoun false negative above, and a leftover internal-tracker-id slip in comments (all three
+  fixed here); round 2 caught a further false negative -- the "told you" exclusion was searched
+  over the WHOLE sentence, so an unrelated "tell you" later in a compound one ("I haven't told
+  Sarah because I wanted to tell you first") suppressed a real, earlier denial -- fixed by tying
+  the exclusion to the matched denial verb itself (a lookahead on `_FLAG_DENIAL_RE`, not a
+  second independent regex); round 3 is clean on the guard and session-scoping, and flags one
+  remaining P2 (next bullet) accepted as a known limitation.
+- **Still open:** `scripts/openai_review.sh`'s round-3 P2: `chat_loop`'s background AUDIT thread
+  can still be running after its 10s join times out; `session_flags = result.session_flags`
+  rebinds to the SAME list `run_turn` returned, so a late append IS visible through that
+  reference, but if the AUDIT thread appends AFTER the human has already typed the next turn
+  (run_turn's `list(session_flags)` copies it at call time), that one flag's text can miss that
+  one turn's prompt. Only the interactive CLI debug tool is affected (not the hosted judge
+  Space's single-call-per-turn Gradio path this ticket's ACs target), and it is a narrow,
+  timing-dependent window on an AUDIT flag specifically (fast-path/perseveration flags, which
+  are synchronous, are never affected); a proper fix needs a lock or a queue around
+  `chat_loop`'s session_flags handoff, out of proportion to this ticket.
+- `webapp.py`'s
+  `FY_SHARED_PROFILE=1` local-demo mode reuses one `DATA_DIR` the same way the CLI does, so it
+  has the same residual cross-session exposure as a CLI run; the ticket's target (the hosted
+  judge Space, `live_judge_check.py`, run 39802780048) runs with per-browser `data_dir`s and
+  `FY_SHARED_PROFILE` unset, so this is not exercised by this ticket's ACs. No live Nebius key is
+  configured in the worktree this fix was built in, so a real (non-`--fake`) `live_judge_check.py`
+  pass is the hosted Space/CI's job, not verified here.
+
 ### 2026-10-28 (#264: v4 cut, no silent waits, natural narration, product name on the close)
 - **What:** Reviewed v3 on the file itself (frames, loudness, silence map, faster-whisper
   transcript) and rebuilt it as v4 in `video/v4/` (same footage, new edit): the narrator now

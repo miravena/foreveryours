@@ -785,6 +785,29 @@ class TestDrivingPlan(unittest.TestCase):
         self.assertNotRegex(out, orchestrator._ENCOURAGES_DRIVING_RE)
         self.assertRegex(out, orchestrator._REAL_ALTERNATIVE_RE)
 
+    def test_lift_offer_comes_first_after_other_talk(self):
+        # Review bounce: a lift offer AFTER other conversation passed the
+        # guard unchanged. The offer must open the reply.
+        cases = {
+            "How are you feeling today? Sarah could give you a lift.":
+                "Sarah could give you a lift. How are you feeling today?",
+            "That's a nice afternoon for it. Or Sarah could give you a lift.":
+                "Would you like me to ask Sarah for a lift instead? That's a nice afternoon for it. "
+                "Or Sarah could give you a lift.",
+            "Sarah would be happy to see you. She could give you a lift.":
+                "Would you like me to ask Sarah for a lift instead? Sarah would be happy to see you. "
+                "She could give you a lift.",
+        }
+        for reply, expected in cases.items():
+            out = orchestrator.enforce_driving_alternative(reply, "Sarah")
+            self.assertEqual(out, expected)
+            first = orchestrator._SENTENCE_SPLIT_RE.split(out)[0]
+            self.assertRegex(first, orchestrator._REAL_ALTERNATIVE_RE)
+            self.assertEqual(orchestrator.enforce_driving_alternative(out, "Sarah"), out)
+        # Already lift-first: untouched.
+        reply = "Sarah could take you, shall I let her know? Enjoy the afternoon."
+        self.assertEqual(orchestrator.enforce_driving_alternative(reply, "Sarah"), reply)
+
     def test_guard_is_idempotent(self):
         reply = ("I understand you'd like to drive to the shop yourself this afternoon. "
                  "Please be sure to take any safety precautions you need.")
@@ -802,6 +825,197 @@ class TestDrivingPlan(unittest.TestCase):
                   "Is my grandson driving over today?",
                   "Can Sarah drive to the shop for me?"):
             self.assertFalse(orchestrator.driving_plan(t), t)
+
+
+class TestDrivingNote(unittest.TestCase):
+    """A driving plan, with the original memo "Avoid talking about driving":
+    THINK gets the lift-first note before it replies, the spoken reply offers
+    a lift first and never claims one is arranged, and a low-severity note
+    "Dad mentioned driving today" is recorded, disclosed only when the
+    disclosure line was actually delivered."""
+
+    PLAN = "I think I'll drive down to the shop myself this afternoon"
+    CURLY = "I think I’ll drive down to the shop myself this afternoon"
+    ENCOURAGING = ("I'm glad you're feeling up to getting out and about. "
+                   "Your family is just a call away if you'd like a lift.")
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.data_dir = Path(tmp.name) / "data"
+        self.audio_dir = Path(tmp.name) / "audio"
+        self.data_dir.mkdir()
+        self.audio_dir.mkdir()
+        import webapp
+        self.webapp = webapp
+        self.profile = webapp.DEFAULT_PROFILE_ID
+        self.store = MemoryStore(self.profile, self.data_dir)
+        self.store.add("Avoid talking about driving", source="caregiver_memo")
+        self.flags = CaregiverFlags(self.profile, self.data_dir)
+
+    def _turn(self, transcript, reply, on_chunk=lambda sentence, path: None):
+        captured, heard, disclosures = {}, [], []
+        real_disclosure = orchestrator._speak_disclosure
+
+        def fake_stream(prompt, *a, **k):
+            captured["prompt"] = prompt
+            captured["guardrails"] = list(k.get("guardrails") or [])
+            return iter([reply])
+
+        def recording_chunk(sentence, path):
+            heard.append(sentence)
+            return on_chunk(sentence, path)
+
+        def spy_disclosure(text, *a, **k):
+            disclosures.append(text)
+            return real_disclosure(text, *a, **k)
+
+        with patch("pipeline.orchestrator.think.stream_reply", side_effect=fake_stream), \
+             patch("pipeline.orchestrator.think.extract_new_memory", return_value=None), \
+             patch("pipeline.orchestrator.audit.audit_reply", return_value=("SAFE", "ok")), \
+             patch("pipeline.orchestrator._speak_disclosure", side_effect=spy_disclosure):
+            res = run_turn(transcript, self.store, self.flags, self.audio_dir, caregiver_name="Sarah",
+                           on_chunk=recording_chunk if on_chunk is not None else None)
+            if res.background_thread:
+                res.background_thread.join(timeout=30)
+        notes = [f for f in CaregiverFlags(self.profile, self.data_dir).all()
+                 if f.text == fastpath.CAREGIVER_FLAG_TEXT["driving"]]
+        self.guardrails = captured.get("guardrails", [])
+        return res, captured.get("prompt", ""), heard, disclosures, notes
+
+    def _panel(self):
+        with patch.object(self.webapp, "_session_dirs", return_value=(self.data_dir, self.audio_dir)):
+            return self.webapp._format_caregiver_panel("driving-note-test")
+
+    def test_original_memo_and_utterance_give_lift_note_and_disclosed_low_severity_flag(self):
+        res, prompt, heard, disclosures, notes = self._turn(self.PLAN, self.ENCOURAGING)
+        # THINK's prompt (built BEFORE the reply) carries the lift-first note,
+        # and the note forbids claiming transport is arranged.
+        self.assertIn("Avoid talking about driving", self.guardrails)
+        self.assertIn("plans to drive himself", prompt)
+        self.assertIn("Offer, first, that Sarah or family could give him a lift", prompt)
+        self.assertIn("Never say a lift is arranged, booked or on its way", prompt)
+        self.assertIn("do not lecture", prompt.lower())
+        # One disclosed low-severity note, content-free.
+        self.assertEqual(len(notes), 1, notes)
+        self.assertEqual(notes[0].severity, "note")
+        self.assertTrue(notes[0].disclosed_to_senior)
+        self.assertNotIn("shop", notes[0].text)
+        self.assertIn("mentioned driving", notes[0].text)
+        # The disclosure line went through the delivery path and was heard,
+        # after the reply's own sentences.
+        line = orchestrator.DRIVING_DISCLOSURE_LINE.format(caregiver="Sarah")
+        self.assertEqual(disclosures, [line])
+        self.assertEqual(heard[-1], line)
+        self.assertGreater(len(heard), 1, heard)
+        # The panel lists the note but stays calm: no red alert card.
+        self.assertNotIn(fastpath.DRIVING_FLAG_SEVERITY, self.webapp.HIGH_PRIORITY_SEVERITIES)
+        panel = self._panel()
+        self.assertIn("(note)", panel)
+        self.assertIn("Dad mentioned driving today", panel)
+        self.assertIn("Dad was told", panel)
+        self.assertIn("Calm", panel)
+        self.assertNotIn("HIGH PRIORITY SAFETY ALERT", panel)
+        self.assertNotIn("Safety alert raised", panel)
+
+    def test_disclosed_driving_note_enters_the_session_flags(self):
+        """Review finding: the disclosed driving note must be in
+        TurnResult.session_flags, so the next turn's THINK prompt and the
+        honesty guard know Sarah was told."""
+        res, _, _, _, notes = self._turn(self.PLAN, self.ENCOURAGING)
+        self.assertEqual(len(notes), 1, notes)
+        self.assertIn(notes[0].text, res.session_flags)
+
+    def test_curly_apostrophe_is_detected_the_same(self):
+        _, prompt, _, _, notes = self._turn(self.CURLY, self.ENCOURAGING)
+        self.assertIn("plans to drive himself", prompt)
+        self.assertEqual([(n.severity, n.disclosed_to_senior) for n in notes], [("note", True)])
+
+    def test_think_ignoring_the_note_still_offers_a_lift_first(self):
+        # THINK ignores the note and encourages the outing.
+        res, _, heard, _, _ = self._turn(self.PLAN, "I'm glad you're feeling up to getting out. Enjoy the drive!")
+        first = re.split(r"(?<=[.!?])\s+", res.reply_text)[0]
+        self.assertRegex(first, orchestrator._REAL_ALTERNATIVE_RE)
+        self.assertIn("Sarah", first)
+        self.assertNotIn("glad you're feeling up to getting out", res.reply_text)
+        self.assertNotRegex(res.reply_text, orchestrator._ENCOURAGES_DRIVING_RE)
+        self.assertFalse(orchestrator._claims_transport_arranged(res.reply_text))
+        self.assertEqual(heard[0], first, heard)
+
+    def test_claimed_arrangement_is_never_spoken(self):
+        for reply in ("I've arranged for Sarah to pick you up at three.",
+                      "Sarah will drive you this afternoon.",
+                      "I'll drive you down to the shop.",
+                      "Your lift is booked for three.",
+                      "Sarah has arranged a lift for you.",
+                      "Sarah will drive you, does that sound good?",
+                      "Your lift is on its way.",
+                      "Sarah is on her way to pick you up.",
+                      "If you want a lift Sarah will drive you.",
+                      "Sarah is picking you up at three.",
+                      "I've arranged for Sarah to collect you at three.",
+                      "Your lift's on its way.",
+                      "I can drive you to the shop.",
+                      "I can ask Sarah if she'll drive you and I've booked a taxi for you.",
+                      "Sarah can give you a lift. I've booked it for three.",
+                      "Sarah can give you a lift. It's all arranged.",
+                      "Sarah is coming to give you a lift."):
+            res, _, _, _, _ = self._turn(self.PLAN, reply)
+            self.assertFalse(orchestrator._claims_transport_arranged(res.reply_text), res.reply_text)
+            self.assertNotIn("arranged", res.reply_text)
+            self.assertNotIn("booked", res.reply_text)
+            self.assertNotIn("will drive you", res.reply_text)
+            self.assertRegex(res.reply_text, orchestrator._REAL_ALTERNATIVE_RE)
+        # An offer is kept: it is not a claim.
+        self.assertFalse(orchestrator._claims_transport_arranged("I can ask Sarah if she'll drive you."))
+        self.assertFalse(orchestrator._claims_transport_arranged("Shall I ask Sarah to take you?"))
+        self.assertFalse(orchestrator._claims_transport_arranged("A lift could be arranged if you like."))
+        self.assertFalse(orchestrator._claims_transport_arranged("Sarah could take you, shall I let Sarah know?"))
+
+    def test_refused_disclosure_records_not_disclosed(self):
+        line = orchestrator.DRIVING_DISCLOSURE_LINE.format(caregiver="Sarah")
+
+        def refuse_the_note(sentence, path):
+            return False if sentence == line else None
+
+        _, _, _, disclosures, notes = self._turn(self.PLAN, self.ENCOURAGING, on_chunk=refuse_the_note)
+        self.assertEqual(disclosures, [line])
+        self.assertEqual([(n.severity, n.disclosed_to_senior) for n in notes], [("note", False)])
+        self.assertIn("NOT yet disclosed to Dad", self._panel())
+
+    def test_no_delivery_channel_records_not_disclosed(self):
+        _, _, _, _, notes = self._turn(self.PLAN, self.ENCOURAGING, on_chunk=None)
+        self.assertEqual([(n.severity, n.disclosed_to_senior) for n in notes], [("note", False)])
+
+    def test_failed_disclosure_audio_records_not_disclosed(self):
+        def no_audio(sentences, out_dir, on_chunk=None):
+            return " ".join(sentences), [], None
+
+        with patch("pipeline.orchestrator._speak_turn", side_effect=no_audio):
+            _, _, _, _, notes = self._turn(self.PLAN, self.ENCOURAGING)
+        self.assertEqual([(n.severity, n.disclosed_to_senior) for n in notes], [("note", False)])
+
+    def test_past_mention_is_not_flagged(self):
+        reply = "A bus driver! That must have been quite a job."
+        res, prompt, _, disclosures, notes = self._turn("I used to drive a bus", reply)
+        self.assertEqual(notes, [])
+        self.assertEqual(disclosures, [])
+        self.assertNotIn("plans to drive himself", prompt)
+        self.assertEqual(res.reply_text, reply)
+
+    def test_remembered_or_someone_elses_driving_is_not_flagged(self):
+        reply = "That sounds like a lovely memory."
+        for said in ("I loved driving a bus when I was younger.", "I watched Sarah drive to the shop."):
+            res, prompt, _, disclosures, notes = self._turn(said, reply)
+            self.assertEqual((notes, disclosures), ([], []), said)
+            self.assertNotIn("plans to drive himself", prompt)
+            self.assertEqual(res.reply_text, reply)
+
+    def test_note_sends_no_outbound_notification(self):
+        with patch("pipeline.orchestrator._notify_in_background") as notify_mock:
+            _, _, _, _, notes = self._turn(self.PLAN, self.ENCOURAGING)
+        self.assertEqual(len(notes), 1)
+        notify_mock.assert_not_called()
 
 
 if __name__ == "__main__":

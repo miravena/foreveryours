@@ -231,7 +231,16 @@ CAREGIVER_FLAG_TEXT = {
         "AUDIT flagged a reply as unsafe: the companion's reply may have contained "
         "medical or unsafe advice, and it was not acted on by the companion."
     ),
+    # A low-severity NOTE, not an alert: the senior said he plans to drive
+    # himself (see driving_plan below). Recorded with DRIVING_FLAG_SEVERITY,
+    # which the caregiver panel lists but never raises as a safety alert.
+    # Fixed text like the others: no quote of where he said he was going.
+    "driving": "Note: Dad mentioned driving today.",
 }
+
+# Severity of the driving note. Not in webapp.HIGH_PRIORITY_SEVERITIES, so the
+# panel keeps its calm state and lists the note without the red alert card.
+DRIVING_FLAG_SEVERITY = "note"
 
 
 def _normalize(text: str) -> str:
@@ -272,6 +281,83 @@ def _without_benign_crisis_idioms(clause: str) -> str:
     for pattern in _BENIGN_CRISIS_IDIOMS:
         clause = re.sub(pattern, " ", clause)
     return clause
+
+
+# A first-person plan to drive himself somewhere. Not an emergency, so it is
+# not part of check() and never speaks a canned line: the orchestrator uses it
+# to give THINK a lift-first note, to guard the reply before it is spoken, and
+# to record the disclosed DRIVING_FLAG_SEVERITY note.
+# A plan, not a memory: the subject is "I" and the verb is future or
+# intended ("I'll drive", "I'm going to drive", "I plan to drive", "I'm
+# planning to drive", "I'm driving to the shop this afternoon"). A past
+# reference elsewhere in the turn ("like I did years ago") does not cancel it. "I loved driving a bus", "I remember
+# driving with my dad" and "I watched Sarah drive" name no plan of his own.
+_DRIVE_ADVERBS = r"(?:\s+(?:just|probably|maybe|perhaps|still|myself|go\s+and|get\s+up\s+and|[a-z]+ly))*"
+_DRIVING_INTENT_RE = re.compile(
+    r"\bi(?:'ll|\s+will|\s+shall)" + _DRIVE_ADVERBS + r"\s+drive\b"
+    r"|\bi(?:'m|\s+am)\s+(?:going\s+to|gonna)" + _DRIVE_ADVERBS + r"\s+drive\b"
+    r"|\bi(?:'m|\s+am)" + _DRIVE_ADVERBS + r"\s+driving\b(?!\s+(?:myself|me|you|him|her)\s+(?:crazy|mad|nuts|round\s+the\s+bend|up\s+the\s+wall))"
+    r"|\bi(?:'d|\s+would)\s+like\s+to" + _DRIVE_ADVERBS + r"\s+drive\b"
+    r"|\bi(?:'m|\s+am)" + _DRIVE_ADVERBS + r"\s+(?:planning|hoping|meaning|wanting|intending|about|fixing|set)\s+to"
+    + _DRIVE_ADVERBS + r"\s+drive\b"
+    r"|\bi(?:'m|\s+am)" + _DRIVE_ADVERBS + r"\s+thinking\s+(?:of|about)" + _DRIVE_ADVERBS + r"\s+driving\b"
+    r"|\bi\s+(?:plan|want|intend|mean|need|have|hope|think\s+i(?:'ll|\s+will)\s+have)\s+to" + _DRIVE_ADVERBS + r"\s+drive\b"
+    r"|\bi\s+(?:might|may|could)" + _DRIVE_ADVERBS + r"\s+drive\b"
+    r"|\b(?:let\s+me|gonna)" + _DRIVE_ADVERBS + r"\s+drive\b"
+)
+# High recall, like the rest of this module: any "I" within 40 characters of
+# drive/driving counts ("I decided to drive", "I fancy driving") unless that
+# span is a memory or someone else's driving ("I loved driving a bus", "I
+# watched Sarah drive", "when I was young"). The strict pattern above wins
+# first, so "I'm going to drive, like I did years ago" stays a plan.
+_DRIVING_LOOSE_RE = re.compile(r"\b(?:i|let me|gonna)\b[^.!?]{0,40}?\bdriv(?:e|ing)\b")
+_DRIVING_MEMORY_RE = re.compile(
+    r"\b(?:loved|liked|enjoyed|remember(?:ed)?|recall(?:ed)?|miss(?:ed)?|watched|saw|seen|taught|"
+    r"was|were|did|drove|driven|had)\b"
+    r"|\bwhen\s+i\s+was\b|\byears\s+ago\b|\bback\s+then\b|\bin\s+my\s+day\b|\bas\s+a\s+(?:young|boy|lad|girl)\b"
+)
+_DRIVING_IDIOM_RE = re.compile(
+    r"\bdriv(?:e|ing)\s+(?:myself|me|you|him|her|them)\s+(?:crazy|mad|nuts|round\s+the\s+bend|up\s+the\s+wall)\b"
+)
+# Past or negated driving ("I used to drive", "I don't drive anymore", "I don't
+# think I'll drive") is not a plan to drive. The negation must sit within two
+# words of the verb, so "I'm not tired and I'll drive" is still a plan.
+_DRIVING_NOT_INTENT_RE = re.compile(
+    r"\b(?:used to|can't|cannot|can not|don't|do not|won't|will not|never|stopped|gave up|no longer|not)\s+"
+    r"(?:[a-z']+\s+){0,2}driv[a-z]*"
+)
+# Checked on the matched "I ... drive" span only, so "I'm going to drive and
+# Sarah can drive me home" stays a plan (the strict pattern matched first).
+_DRIVING_OTHER_DRIVER_RE = re.compile(
+    r"\b(?:want|wants|ask|asks|asked|get|got|need|needs|like|have|had|let|wait\s+for)\s+(?!to\b|myself\b|me\b)[a-z']+\s+(?:to\s+)?driv"
+    r"|\bdriv(?:e|ing)\s+me\b"
+)
+
+
+def driving_plan(text: str) -> bool:
+    """True when `text` states a first-person plan to drive himself
+    somewhere -- "I'll drive", "I will drive", "I'm going to drive", "I plan
+    to drive down to ...", "I am driving this afternoon"; False for a
+    past-tense, negated or remembered mention ("I used to drive a bus", "I
+    don't drive anymore", "I loved driving a bus when I was younger"),
+    someone else driving ("I watched Sarah drive", "Can Sarah drive to the
+    shop for me?"), and "Alright, I'll wait for Sarah then." Curly apostrophes from
+    ASR or a phone keyboard are folded by _normalize, so the curly "I'll
+    drive" matches exactly like the straight one."""
+    # Clause by clause, so "Sarah offered to drive me, but I'll drive myself"
+    # is still a plan while "I don't drive anymore, I gave it up" is not.
+    # Not split on "and": "I'm going to go and drive" is one plan.
+    for clause in re.split(r"[,;.!?]|\b(?:but|so|then)\b", _normalize(text or "")):
+        # Only the negated span is removed: "I don't drive at night and
+        # I'll drive to the shop" keeps its plan.
+        clause = _DRIVING_NOT_INTENT_RE.sub(" ", clause)
+        if _DRIVING_INTENT_RE.search(clause):
+            return True
+        clause = _DRIVING_IDIOM_RE.sub(" ", clause)
+        if any(not _DRIVING_MEMORY_RE.search(m.group(0)) and not _DRIVING_OTHER_DRIVER_RE.search(m.group(0))
+               for m in _DRIVING_LOOSE_RE.finditer(clause)):
+            return True
+    return False
 
 
 @dataclass
