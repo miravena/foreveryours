@@ -11,6 +11,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Docs
+- Demo video v5 (`video/v5/`, #275): the v4 cut with straight quotes only in the captions and SRT, LIVE HOSTED SPACE as a corner badge and short cues instead of one 0:00-1:43 cue, "Not shown to the family" ending before the crisis line with a separate crisis label, a clean "Local persistence test - not the hosted Space." card for day 2, and a self-contained closing limitation line. Draft release only.
+
 ## [1.0.0] - 2026-10-29
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track). During judging only `v1.0.x` patches deploy (ADR-015).
