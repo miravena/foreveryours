@@ -11,6 +11,10 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Fixed
+- "I'm lying on the kitchen floor and I can't get up" gets the 911 reply, not the generic distress line (#280). The down-and-unable rule now allows a room or surface word before "floor". A room floor on its own is still a near-miss.
+- The memo box refuses a memo that changes a medication dose ("take three extra aspirin", "double his insulin", "skip his pills"), and the text stays in the box to edit (#280). Memo text reaches THINK's prompt, and rule 7 forbids dosing advice. Reminders and plain medication facts are saved as before.
+
 ## [1.0.0] - 2026-10-29
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track). During judging only `v1.0.x` patches deploy (ADR-015).

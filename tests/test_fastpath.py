@@ -450,6 +450,24 @@ class TestDownAndUnableToCall(unittest.TestCase):
                 self.assertFalse(res.calls_911)
                 self.assertNotEqual(res.immediate_reply, fastpath.DOWN_UNABLE_REPLY)
 
+    def test_down_place_allows_a_room_word(self):
+        # #280: a room word before "floor" is the same emergency.
+        for phrase in ("I'm lying on the kitchen floor and I can't get up.",
+                       "I'm on the bathroom floor, can't reach the phone.",
+                       "I've been lying on the hallway floor since last night.",
+                       "I can't get up off my bedroom floor, I'm on the bedroom floor."):
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertEqual(res.immediate_reply, fastpath.DOWN_UNABLE_REPLY)
+                self.assertIn("911", res.immediate_reply)
+                self.assertNotIn("988", res.immediate_reply)
+
+    def test_a_room_floor_alone_is_still_a_near_miss(self):
+        for phrase in ("I'm on the kitchen floor cleaning the tiles.",
+                       "The cat is asleep on the bathroom floor."):
+            with self.subTest(phrase=phrase):
+                self.assertNotEqual(fastpath.check(phrase).immediate_reply, fastpath.DOWN_UNABLE_REPLY)
+
     def test_stuck_on_floor_is_not_the_generic_or_fall_reply(self):
         res = fastpath.check("I'm stuck on the floor")
         self.assertEqual(res.immediate_reply, fastpath.DOWN_UNABLE_REPLY)

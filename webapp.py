@@ -88,9 +88,11 @@ from caregiver import (
     DEFAULT_PROFILE_ID,
     DEMO_MEMO,
     INTERVIEW_QUESTIONS,
+    MEMO_DOSING_REFUSAL,
     SAMPLE_FAMILY,
     SAMPLE_FAMILY_LABEL,
     CaregiverFlags,
+    dosing_instruction,
     sample_family_texts,
     interview_answer_memo,
     split_memo_facts,
@@ -1984,6 +1986,10 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
         with _session_active(session_id, refuse_if_deleted=True):
             if not memo_text or not memo_text.strip():
                 return _format_caregiver_panel(session_id), session_id, ""
+            hit = dosing_instruction(memo_text)
+            if hit:  # #280: nothing reaches the store; the text stays in the box to edit
+                return ("⚠️ " + MEMO_DOSING_REFUSAL.format(hit=hit) + "\n\n"
+                        + _format_caregiver_panel(session_id)), session_id, memo_text
             _save_memo_text(session_id, memo_text)
             return _format_caregiver_panel(session_id), session_id, ""
     except SessionGone:
@@ -2009,6 +2015,9 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
                 return _format_caregiver_panel(session_id), session_id
             if refusal is not None:  # nothing reaches the store
                 return "⚠️ " + refusal.replace("what Dad says", "the memo") + "\n\n" + _format_caregiver_panel(session_id), session_id
+            hit = dosing_instruction(transcript)
+            if hit:  # #280: a spoken dose instruction is refused the same way
+                return "⚠️ " + MEMO_DOSING_REFUSAL.format(hit=hit) + "\n\n" + _format_caregiver_panel(session_id), session_id
             data_dir, _ = _session_dirs(session_id)
             _join_previous_turn(session_id)  # see save_caregiver_text_memo
             store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)

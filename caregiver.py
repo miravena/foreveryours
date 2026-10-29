@@ -198,6 +198,34 @@ def validate_sample_profile(text_or_items) -> None:
                 )
 
 
+# A memo is briefing data, but its text reaches THINK's prompt (#280). A dose
+# instruction in it ("take three extra aspirin", "double his insulin") is
+# exactly what rule 7 forbids the companion to say, so the memo box refuses it
+# instead of storing it. Narrow on purpose: only a change to a dose (extra,
+# more, double, skip, stop) is refused. A reminder or a plain medication fact
+# ("Blood pressure pill at 8 AM", "Dad takes 5 mg daily") is kept, as before.
+_DOSING_INSTRUCTION_RE = re.compile(
+    r"\b(?:\d+|one|two|three|four|five|six|a\s+few|some)\s+(?:extra|more|additional)\s+(?:"
+    + _MED_WORDS + r"|aspirins?)"
+    r"|\b(?:extra|additional|another|double)\s+(?:dose|" + _MED_WORDS + r"|aspirins?)"
+    r"|\b(?:double|skip|stop|increase|halve)\s+(?:his|her|their|your|dad'?s|the)\s+"
+    r"(?:dose|dosage|insulin|medication|medicine|meds|pills?|tablets?)\b",
+    re.IGNORECASE,
+)
+
+
+def dosing_instruction(text: str) -> str | None:
+    """The dose instruction in a caregiver memo, or None (#280)."""
+    hit = _DOSING_INSTRUCTION_RE.search(unicodedata.normalize("NFKC", text or ""))
+    return hit.group(0) if hit else None
+
+
+MEMO_DOSING_REFUSAL = (
+    "Memo not saved: it gives a medication dose ({hit!r}). The companion never gives dosing "
+    "advice, so dose instructions are not stored. A reminder such as \"Blood pressure pill at 8 AM\" is fine."
+)
+
+
 # One sentence boundary for every memo path. Each caller used to
 # split on its own rule ("." + space here, [.!?\n]+ there), so the same memo
 # dictated once and typed once produced different texts -- MemoryStore.add's
