@@ -413,11 +413,14 @@ class TestWebappSessions(unittest.TestCase):
         for bad in ("Double insulin tonight.", "Skip pills tonight.", "Give Dad extra insulin tonight.",
                     "Stop his blood pressure pills.",
                     # round 2
-                    "Do not forget to double his insulin tonight.", "Give Dad more insulin tonight."):
+                    "Do not forget to double his insulin tonight.", "Give Dad more insulin tonight.",
+                    # round 3
+                    "Take three extra blood pressure pills tonight.", "Double his metformin tonight."):
             with self.subTest(bad=bad):
                 self.assertIsNotNone(webapp.dosing_instruction(bad))
         for ok in ("Do not double his insulin.", "Never skip his pills.", "Dad takes 5 mg daily.",
-                   "Bring an extra pillow tonight.", "Sarah is dropping off more groceries."):
+                   "Bring an extra pillow tonight.", "Sarah is dropping off more groceries.",
+                   "Dad has extra insulin in the fridge.", "Dad has two more pills left in the box."):
             with self.subTest(ok=ok):
                 self.assertIsNone(webapp.dosing_instruction(ok))
         panel, _, cleared = webapp.save_caregiver_text_memo("Blood pressure pill at 8 AM.", session_id)

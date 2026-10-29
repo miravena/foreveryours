@@ -204,12 +204,20 @@ def validate_sample_profile(text_or_items) -> None:
 # instead of storing it. Narrow on purpose: only a change to a dose (extra,
 # more, double, skip, stop) is refused. A reminder or a plain medication fact
 # ("Blood pressure pill at 8 AM", "Dad takes 5 mg daily") is kept, as before.
-_DOSE_TARGET = r"(?:dose|dosage|insulin|aspirins?|" + _MED_WORDS + r")\b"  # \b: "pillow" is not a pill
+# Common medicines named outright ("double his metformin").
+_DRUG_NAMES = (r"metformin|warfarin|lisinopril|amlodipine|atorvastatin|simvastatin|levothyroxine|furosemide|"
+               r"metoprolol|donepezil|gabapentin|prednisone|ibuprofen|paracetamol|acetaminophen|tylenol|"
+               r"morphine|oxycodone|codeine|digoxin|sertraline|lorazepam|diazepam")
+_DOSE_TARGET = (r"(?:dose|dosage|insulin|aspirins?|" + _DRUG_NAMES + r"|" + _MED_WORDS
+                + r")\b")  # \b: "pillow" is not a pill
+# "Extra" or "more" is an instruction only after a verb that gives or takes it:
+# "take three extra blood pressure pills", not "Dad has extra insulin in the fridge".
+_DOSE_VERB = r"\b(?:take|takes|taking|give|giving|inject|use|add|try|have\s+him|let\s+him)\b[^.!?]{0,25}?"
 _DOSING_INSTRUCTION_RE = re.compile(
-    r"\b(?:\d+|one|two|three|four|five|six|a\s+few|some)\s+(?:extra|more|additional)\s+" + _DOSE_TARGET
-    + r"|\b(?:extra|additional|another|double|more)\s+" + _DOSE_TARGET
+    _DOSE_VERB + r"\b(?:(?:\d+|one|two|three|four|five|six|a\s+few|some|an?)\s+)?"
+    r"(?:extra|more|additional|another|double)\s+(?:\w+\s+){0,2}?" + _DOSE_TARGET
     + r"|\b(?:double|skip|stop|increase|halve)\s+(?:(?:his|her|their|your|dad'?s|the|all|any)\s+)?"
-    r"(?:(?:\w+\s+){0,2}" + _DOSE_TARGET + r")\b",
+    r"(?:(?:\w+\s+){0,2}" + _DOSE_TARGET + r")",
     re.IGNORECASE,
 )
 # "Do not double his insulin" is a precaution, not an instruction.
