@@ -11,15 +11,7 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
-### Changed
-- When Dad says he plans to drive himself, the reply offers a lift first, only as an offer and never as something already arranged, and the caregiver panel lists a low-severity note "Dad mentioned driving today" that Dad is told about in the conversation; the panel stays calm. "I used to drive a bus" is not a plan and records nothing (#192 follow-up).
-### Fixed
-- The fall-honesty guard now decides from Dad's question, not from the reply. It rewrites a denial only when Dad asks about the event of a flag actually disclosed this session (his fall, his driving, a crisis), and the replacement is just "I did let Sarah know." A question about anything else, such as biscuits, a letter or a PIN, never turns a kept confidence into a false "I told her". A disclosed driving note is now carried in the session flags on both the normal and the fallback path (#11).
-- After a fast-path fall or crisis flag is disclosed to the senior, THINK's prompt now carries a `[SAFETY FLAGS SENT THIS SESSION]` fact (`think.build_prompt`'s new `session_flags`) on that turn's continuation and every later turn of the session, and a deterministic guard (`orchestrator.enforce_flag_honesty`) strips any "haven't told" / "didn't tell" / "not told" denial before speech (#11).
-- `run_turn`'s session-flags fact is now tracked the same way `history` is -- a caller-carried list, returned on `TurnResult.session_flags` -- instead of being re-read from the whole `CaregiverFlags` file each turn, which could otherwise surface a flag disclosed in a DIFFERENT session sharing the same profile (main.py's `beat2`/`beat3`/`beat4`/`chat_loop` CLI runs) into this session's prompt; `enforce_flag_honesty` now only leaves alone a denial sentence whose object is "you" (the senior) -- "I haven't told you how much I enjoy our chats" -- and rewrites every other denial, by name, pronoun or otherwise ("I haven't told her/him/anyone about your fall") (#11).
-- `webapp.py` now carries that per-conversation flag list itself, per browser tab -- keyed by Gradio's own per-tab session hash (the key it scopes `gr.State` by), so under `FY_SHARED_PROFILE=1`, where every tab shares one session id and one `data/` directory, a fall disclosed in one tab is never stated as fact in another tab's prompt; `run_turn` no longer reads the `CaregiverFlags` file for the session fact in any mode (#11).
-
-## [1.0.0] - 2026-10-28
+## [1.0.0] - 2026-10-29
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track). During judging only `v1.0.x` patches deploy (ADR-015).
 
@@ -29,63 +21,6 @@ The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI trac
 - Demo video v3 (#264): the v2 footage recut so the fall, the caregiver alert and "Dad was told" are on screen within 4 seconds; scenario-specific thesis instead of a competitor claim, one disclosure label, LIVE HOSTED SPACE / LOCAL PERSISTENCE TEST labels, shorter narration at 150-160 words per minute, shots 3-4 re-captured so the memo shows "expires Thu 23:59" (#261), 2:25. Pipeline in `video/v3/`, script in `docs/VIDEO_SCRIPT.md`.
 - Added an anonymized synthesis of three caregiver conversations to the README and the Devpost
   Inspiration draft (#219).
-### Added
-- Uptime monitor: a scheduled workflow checks the hosted demo every 30 minutes and opens, updates and closes an `outage` Issue assigned to both maintainers (#252).
-- Space hardware is one setting (repo variable `SPACE_HARDWARE`, default `cpu-basic`), and the deploy
-  stops early with a clear message when the account cannot run it (not PRO, no card); proposed in ADR-017 (#253).
-- Hosted page names which model does what in an always-visible footer, and each caregiver flag
-  says which layer raised it (safety rules, Nemotron backstop, or repeated-question check);
-  `CaregiverFlag` gains a persisted `source` field, old flag files load as unknown (#214).
-
-### Changed
-- A push to `main` that only changes `docs/**`, `*.md` or `video/**` no longer redeploys the
-  Space, so docs merges stop restarting it (#252).
-- AUDIT's default model is now `nvidia/nemotron-3-super-120b-a12b` (recall 1.00 vs Nano 0.88 on the 43-row eval, 0/17 false flags each); THINK stays on Nano. ADR-016 amends ADR-010 and ADR-002; ADR-012 to ADR-015 are Accepted (#200).
-- Hosted page puts the action first: a bold "Try this first" line with a one-click example that
-  fills the type box, one-line AI notice with the privacy link, plain sample clip names, and the
-  "household was reset" note only after a real expiry, not on the first turn of a fresh page (#215).
-
-### Fixed
-- The companion no longer makes up family news. A new reply rule says facts about family and the
-  household (how someone is doing, school, sport, visits, meals, lifts) come only from what the family
-  briefed or what Dad said in this conversation, and otherwise it says it has no news and asks. A
-  sentence that introduces a relative nobody briefed ("your granddaughter Maya") is dropped before it
-  is spoken, and a schedule question that also asks about a relative now reaches the model with that
-  relative's briefed facts. A statement about a family member the family did brief ("Leo is doing
-  great at school") is spoken only when a memo or Dad's own words contain what it says; otherwise
-  the companion says it has no news about them and would love to hear. Sentences about the caregiver
-  herself are held to the notes only when Dad asks about the family or the day, so her privacy and
-  fall-alert answers are never cut. A question about the family
-  now reaches the model with the relative's briefed facts and a no-news instruction. The live judge
-  check gains T23, "How is my grandson doing?" (#245).
-- A memo about a named future day ("Dr. Tan on Thursday at 10 AM", "tomorrow", "on the 30th") now
-  stays until the end of that day in the household's timezone instead of expiring after 24 hours;
-  same-day errands ("4 PM today") keep the 24-hour life, and the caregiver panel says when it goes
-  ("expires Thu 23:59") instead of a countdown that was wrong by days (#248).
-- Clicking the "Try this first" chip or a sample-clip chip now runs the turn like Send, instead of only filling the input (#239).
-- When the host answers the page with an HTML error page, the page shows one "The companion is busy, please try again in a moment." banner instead of a stack of "Could not parse server response" toasts, also when the reply audio fails to load (#246).
-- "I'm on the floor and can't reach the phone" (and "I fell and can't get to the phone", "I've been
-  on the floor for hours", a fall plus "can't get up") now hits the safety rules before the model:
-  the reply says to press the medical alert or call 911 and that the family is being told, the
-  caregiver flag is raised, and the 988 crisis line is never spoken on that turn (#242).
-- "I'm stuck on the floor" (and "I'm stuck on the bathroom floor", "I got stuck on the ground",
-  "I'm trapped on the floor") now gets the same reply as "I'm on the floor and can't reach the
-  phone": press your medical alert button or call 911, with the family being told, and never 988.
-  "The second floor", "the ground floor", "floor plan" and a third person stuck still do not (#244).
-- "Is anyone coming by today?" is answered from the caregiver's visit updates (e.g. Sarah at 4 PM),
-  so the companion can no longer invent a visitor or drop the time; an emotional "is anyone coming?"
-  still gets a warm reply (#229).
-- "What did I just tell you?" recalls the previous turn, including something said "between us",
-  without putting it on the caregiver panel (#230).
-- When the senior states a plan to drive himself, every spoken reply on that turn -- THINK's
-  stream, a partial stream, and the fallback after a stream error -- offers an alternative and
-  never endorses the drive: `driving_plan()`/`enforce_driving_alternative()` enforce the judge's
-  own OFFERS_ALTERNATIVE/ENCOURAGES_DRIVING regexes deterministically, output-side (#192).
-- "Do I have any appointments this week?" recalls the caregiver's memo (Dr. Tan, Thursday 10 AM)
-  instead of "no appointments listed": the plural "appointments" (and "doctors", "visits") now
-  counts as a schedule question, so the caregiver updates reach the reply (#189).
-
-### Docs
 - `docs/incidents/2026-10-27-space-outage.md`: why the live Space stopped being scheduled on
   ZeroGPU, its uptime history, and hosting options with costs through judging (#252, #253).
 - Demo video v2: shots 3-4 now brief and ask about a Dr. Tan appointment (verified 3/3 on the live Space), AI narration (Kokoro af_heart), and reproducible capture and assembly scripts in `video/v2/` (#5).
@@ -122,6 +57,12 @@ The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI trac
   drops the interview-mode stretch line now tracked by #206.
 
 ### Added
+- Uptime monitor: a scheduled workflow checks the hosted demo every 30 minutes and opens, updates and closes an `outage` Issue assigned to both maintainers (#252).
+- Space hardware is one setting (repo variable `SPACE_HARDWARE`, default `cpu-basic`), and the deploy
+  stops early with a clear message when the account cannot run it (not PRO, no card); proposed in ADR-017 (#253).
+- Hosted page names which model does what in an always-visible footer, and each caregiver flag
+  says which layer raised it (safety rules, Nemotron backstop, or repeated-question check);
+  `CaregiverFlag` gains a persisted `source` field, old flag files load as unknown (#214).
 - Caregiver panel previews the exact outbound message (#201) when no channel is active (always on the hosted demo), labelled "Not sent"; the chat disclosure says nothing is sent.
 - Caregiver outbound notification ([ADR-014](docs/decisions/ADR-014-outbound-notification.md), #201):
   `notify.py` sends one fixed-text message per safety flag by SMTP or webhook when
@@ -176,7 +117,58 @@ The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI trac
   `Build: <sha7>` under *About this demo household*, `scripts/verify_space_sha.py` checks a Space
   against a sha, and `scripts/deploy_hf_space.py` refuses to deploy a dirty tree.
 
+### Changed
+- When Dad says he plans to drive himself, the reply offers a lift first, only as an offer and never as something already arranged, and the caregiver panel lists a low-severity note "Dad mentioned driving today" that Dad is told about in the conversation; the panel stays calm. "I used to drive a bus" is not a plan and records nothing (#192 follow-up).
+- A push to `main` that only changes `docs/**`, `*.md` or `video/**` no longer redeploys the
+  Space, so docs merges stop restarting it (#252).
+- AUDIT's default model is now `nvidia/nemotron-3-super-120b-a12b` (recall 1.00 vs Nano 0.88 on the 43-row eval, 0/17 false flags each); THINK stays on Nano. ADR-016 amends ADR-010 and ADR-002; ADR-012 to ADR-015 are Accepted (#200).
+- Hosted page puts the action first: a bold "Try this first" line with a one-click example that
+  fills the type box, one-line AI notice with the privacy link, plain sample clip names, and the
+  "household was reset" note only after a real expiry, not on the first turn of a fresh page (#215).
+
 ### Fixed
+- The fall-honesty guard now decides from Dad's question, not from the reply. It rewrites a denial only when Dad asks about the event of a flag actually disclosed this session (his fall, his driving, a crisis), and the replacement is just "I did let Sarah know." A question about anything else, such as biscuits, a letter or a PIN, never turns a kept confidence into a false "I told her". A disclosed driving note is now carried in the session flags on both the normal and the fallback path (#11).
+- After a fast-path fall or crisis flag is disclosed to the senior, THINK's prompt now carries a `[SAFETY FLAGS SENT THIS SESSION]` fact (`think.build_prompt`'s new `session_flags`) on that turn's continuation and every later turn of the session, and a deterministic guard (`orchestrator.enforce_flag_honesty`) strips any "haven't told" / "didn't tell" / "not told" denial before speech (#11).
+- `run_turn`'s session-flags fact is now tracked the same way `history` is -- a caller-carried list, returned on `TurnResult.session_flags` -- instead of being re-read from the whole `CaregiverFlags` file each turn, which could otherwise surface a flag disclosed in a DIFFERENT session sharing the same profile (main.py's `beat2`/`beat3`/`beat4`/`chat_loop` CLI runs) into this session's prompt; `enforce_flag_honesty` now only leaves alone a denial sentence whose object is "you" (the senior) -- "I haven't told you how much I enjoy our chats" -- and rewrites every other denial, by name, pronoun or otherwise ("I haven't told her/him/anyone about your fall") (#11).
+- `webapp.py` now carries that per-conversation flag list itself, per browser tab -- keyed by Gradio's own per-tab session hash (the key it scopes `gr.State` by), so under `FY_SHARED_PROFILE=1`, where every tab shares one session id and one `data/` directory, a fall disclosed in one tab is never stated as fact in another tab's prompt; `run_turn` no longer reads the `CaregiverFlags` file for the session fact in any mode (#11).
+- The companion no longer makes up family news. A new reply rule says facts about family and the
+  household (how someone is doing, school, sport, visits, meals, lifts) come only from what the family
+  briefed or what Dad said in this conversation, and otherwise it says it has no news and asks. A
+  sentence that introduces a relative nobody briefed ("your granddaughter Maya") is dropped before it
+  is spoken, and a schedule question that also asks about a relative now reaches the model with that
+  relative's briefed facts. A statement about a family member the family did brief ("Leo is doing
+  great at school") is spoken only when a memo or Dad's own words contain what it says; otherwise
+  the companion says it has no news about them and would love to hear. Sentences about the caregiver
+  herself are held to the notes only when Dad asks about the family or the day, so her privacy and
+  fall-alert answers are never cut. A question about the family
+  now reaches the model with the relative's briefed facts and a no-news instruction. The live judge
+  check gains T23, "How is my grandson doing?" (#245).
+- A memo about a named future day ("Dr. Tan on Thursday at 10 AM", "tomorrow", "on the 30th") now
+  stays until the end of that day in the household's timezone instead of expiring after 24 hours;
+  same-day errands ("4 PM today") keep the 24-hour life, and the caregiver panel says when it goes
+  ("expires Thu 23:59") instead of a countdown that was wrong by days (#248).
+- Clicking the "Try this first" chip or a sample-clip chip now runs the turn like Send, instead of only filling the input (#239).
+- When the host answers the page with an HTML error page, the page shows one "The companion is busy, please try again in a moment." banner instead of a stack of "Could not parse server response" toasts, also when the reply audio fails to load (#246).
+- "I'm on the floor and can't reach the phone" (and "I fell and can't get to the phone", "I've been
+  on the floor for hours", a fall plus "can't get up") now hits the safety rules before the model:
+  the reply says to press the medical alert or call 911 and that the family is being told, the
+  caregiver flag is raised, and the 988 crisis line is never spoken on that turn (#242).
+- "I'm stuck on the floor" (and "I'm stuck on the bathroom floor", "I got stuck on the ground",
+  "I'm trapped on the floor") now gets the same reply as "I'm on the floor and can't reach the
+  phone": press your medical alert button or call 911, with the family being told, and never 988.
+  "The second floor", "the ground floor", "floor plan" and a third person stuck still do not (#244).
+- "Is anyone coming by today?" is answered from the caregiver's visit updates (e.g. Sarah at 4 PM),
+  so the companion can no longer invent a visitor or drop the time; an emotional "is anyone coming?"
+  still gets a warm reply (#229).
+- "What did I just tell you?" recalls the previous turn, including something said "between us",
+  without putting it on the caregiver panel (#230).
+- When the senior states a plan to drive himself, every spoken reply on that turn -- THINK's
+  stream, a partial stream, and the fallback after a stream error -- offers an alternative and
+  never endorses the drive: `driving_plan()`/`enforce_driving_alternative()` enforce the judge's
+  own OFFERS_ALTERNATIVE/ENCOURAGES_DRIVING regexes deterministically, output-side (#192).
+- "Do I have any appointments this week?" recalls the caregiver's memo (Dr. Tan, Thursday 10 AM)
+  instead of "no appointments listed": the plural "appointments" (and "doctors", "visits") now
+  counts as a schedule question, so the caregiver updates reach the reply (#189).
 - Interview mode (#206): a bare "topics to avoid" answer ("Politics") is saved as "Avoid talking about
   politics", so it becomes a companion guardrail instead of an ordinary fact it might raise.
 - Physical emergencies are no longer sent to 988 (#211): chest pain, trouble breathing, bleeding
