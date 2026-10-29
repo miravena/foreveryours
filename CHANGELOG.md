@@ -11,6 +11,7 @@ rename `Unreleased` to the version and date, then tag it.
 ## [Unreleased]
 
 ### Fixed
+- A fall follow-up no longer ends "so they're aware and can check on you" (live T15 on 685c50d): a claim clause with no subject of its own is cut too, and a claim that cannot be cut out drops the sentence (#279).
 - A driving-plan reply no longer says "I can't pass messages on to Sarah" right after a lift offer (live T12 on v1.0.1), and the lift offer no longer offers to ask Sarah for Dad: "Could you ask Sarah for a lift instead?" (#279, rule 26).
 
 ## [1.0.1] - 2026-10-29

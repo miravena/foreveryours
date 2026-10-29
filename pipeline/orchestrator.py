@@ -351,7 +351,7 @@ _ARRIVAL_HEDGE_RE = re.compile(
     r"cannot\s+say|not\s+sure|unsure|whether|if|wonder)\b", re.IGNORECASE)
 
 
-def claims_caregiver_arriving(sentence: str, caregiver_name: str) -> bool:
+def claims_caregiver_arriving(sentence: str, caregiver_name: str, need_subject: bool = True) -> bool:
     """True when `sentence` says the caregiver (or help) is coming, on the way
     or about to check on Dad: something the app never knows (#279). A
     negated or hedged mention in the same clause is not a claim."""
@@ -361,7 +361,7 @@ def claims_caregiver_arriving(sentence: str, caregiver_name: str) -> bool:
         # are you hurt?" still claims.
         return False
     subject = _ARRIVAL_SUBJECT.format(name=_name_alternation(caregiver_name))
-    if not re.search(subject, text, re.IGNORECASE):
+    if need_subject and not re.search(subject, text, re.IGNORECASE):
         return False
     # Every mention counts: "I can't say when she'll check on you, but she's
     # on her way" is still a claim. A condition before the claim or in its
@@ -407,20 +407,22 @@ _CLAUSE_CUT_RE = re.compile(r"\s*[;,\u2014]\s*|\s+(?=(?:and|but|so|because|since
 def strip_arrival_clauses(sentence: str, caregiver_name: str) -> str:
     """`sentence` without its clauses that claim the caregiver is coming
     ("She's on her way; please call 911." -> "Please call 911."), or "" when
-    every clause is a claim. A clause that holds both the claim and a call
+    every clause is a claim or the claim cannot be cut out. A clause that holds both the claim and a call
     for help becomes plain 911 advice."""
     parts = [p for p in _CLAUSE_CUT_RE.split(sentence.strip()) if p.strip()]
-    kept = [p for p in parts if not claims_caregiver_arriving(p, caregiver_name)]
-    if any(claims_caregiver_arriving(p, caregiver_name) and (_CALL_FOR_HELP_RE.search(p) or _hotline_match(p))
-           for p in parts):
+    # The sentence already names who: "..., so they're aware and can check on
+    # you" leaves "and can check on you" with no subject of its own.
+    def claims(p: str) -> bool:
+        return claims_caregiver_arriving(p, caregiver_name, need_subject=False)
+
+    kept = [p for p in parts if not claims(p)]
+    if any(claims(p) and (_CALL_FOR_HELP_RE.search(p) or _hotline_match(p)) for p in parts):
         # "Sarah is on her way to help you call 911": the claim cannot be cut
         # from the advice, so the advice is said plainly instead.
         kept = [p for p in kept if not _CALL_FOR_HELP_RE.search(p) and _hotline_match(p) is None]
         kept.append(_CALL_911_LINE)
-    if not kept:
-        return ""
-    if kept == parts:
-        return sentence
+    if not kept or kept == parts:
+        return ""  # the claim cannot be cut out, so the sentence goes
     kept[0] = re.sub(r"^(?:and|but|so|because|since|while)\s+", "", kept[0], flags=re.IGNORECASE)
     out = ", ".join(kept).strip()
     out = out[0].upper() + out[1:]
