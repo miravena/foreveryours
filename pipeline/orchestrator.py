@@ -370,7 +370,10 @@ def claims_caregiver_arriving(sentence: str, caregiver_name: str) -> bool:
     for m in _ARRIVAL_CLAIM_RE.finditer(text):
         lead = re.split(_CLAUSE_BREAK, text[:m.start()])[-1]
         tail = re.split(_CLAUSE_BREAK, text[m.end():])[0]
-        if (_ARRIVAL_CONDITION_RE.search(text[:m.start()] + m.group(0) + tail)
+        # Only a condition since the last ";" counts: "If you are hurt, call
+        # 911; Sarah is on her way" is still a claim.
+        since = re.split(r"[;\u2014]", text[:m.start()])[-1]
+        if (_ARRIVAL_CONDITION_RE.search(since + m.group(0) + tail)
                 or _ARRIVAL_HEDGE_RE.search(lead) or _ARRIVAL_ADVICE_RE.search(lead)):
             continue
         return True
@@ -460,8 +463,11 @@ def appointment_updates(updates: list[str], question: str = "", caregiver_name: 
     this_week = bool(re.search(r"\bthis\s+week\b", question, re.IGNORECASE))
     asked_days = {d.lower() for d in _DAY_WORD_RE.findall(question)}
     # "Dr. Lee" and a typed "dr. lee" alike.
-    asked_names = (({w.lower() for w in re.findall(r"\b[A-Z][a-z]+\b", question)}
-                    | {w.lower() for w in re.findall(r"\b(?:dr|doctor)\.?\s+([a-z]{2,})\b", question, re.IGNORECASE)})
+    # Only a name Dad ties to the appointment counts ("with Dr. Lee", "doctor
+    # tan", "with Rosa"), never a capitalised opener ("Any", "Please").
+    asked_names = ({w.lower() for w in re.findall(r"\b(?:dr|doctor)\.?\s+([a-z]{2,})\b", question, re.IGNORECASE)}
+                   | {w.lower() for w in re.findall(r"\bwith\s+([A-Z][a-z]+)\b", question)})
+    asked_names = (asked_names - {"dr", "doctor"}
                    - _QUESTION_NOT_NAMES - asked_days - _caregiver_parts(caregiver_name)
                    - {d for d in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")})
     asked_kinds = {k.lower() for k in _APPOINTMENT_KIND_RE.findall(question)}
