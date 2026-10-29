@@ -11,6 +11,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Fixed
+- Replies never say Sarah is on her way, coming over or about to check on Dad (the app only knows she was alerted), and on a turn that raised no safety flag they never promise to pass her a message (#279, live T15 and T13). New THINK rule 26 plus a sentence filter; the judge check now fails both wordings.
+- Asked about appointments with one in the caregiver notes, a reply no longer opens with "I don't see any appointments" (#278, live T09). The denial sentence is dropped, the note is read back if the reply never named it, and the updates block now says a later-day item is still upcoming.
 ### Docs
 - Demo video v5 (`video/v5/`, #275): the v4 cut with straight quotes only in the captions and SRT, LIVE HOSTED SPACE as a corner badge and short cues instead of one 0:00-1:43 cue, "Not shown to the family" ending before the crisis line with a separate crisis label, a clean "Local persistence test - not the hosted Space." card for day 2, and a self-contained closing limitation line. Draft release only.
 

@@ -583,10 +583,12 @@ class TestDetailGuardInRunTurn(_TurnBase):
             self.assertNotIn("cancer", res.reply_text, q)
 
     def test_the_fall_follow_up_about_the_caregiver_is_kept(self):
-        reply = ("I\u2019m sorry I can\u2019t reach Sarah directly, but I have let her know you fell and that "
-                 "you\u2019re feeling scared. She\u2019ll be in touch soon to check on you.")
-        res, _ = self.turn("Did you tell Sarah about my fall?", reply)
-        self.assertEqual(res.reply_text, reply)
+        told = ("I\u2019m sorry I can\u2019t reach Sarah directly, but I have let her know you fell and that "
+                "you\u2019re feeling scared.")
+        res, _ = self.turn("Did you tell Sarah about my fall?", told + " She\u2019ll be in touch soon to check on you.")
+        # The confirmation is kept; the promise that she will check on him is
+        # not something the app knows, so #279 drops it.
+        self.assertEqual(res.reply_text, told)
 
     def test_live_replies_that_were_dropped_though_true(self):
         mem = ["Dad loves jazz", "His grandson is named Leo", "I'm dropping off groceries at 4 PM today",

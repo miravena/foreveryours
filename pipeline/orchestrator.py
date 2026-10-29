@@ -307,6 +307,244 @@ def enforce_flag_honesty(
     return " ".join(fixed)
 
 
+# #279: the companion knows only what the notes say and which safety flags
+# were sent. "She's on her way to check on you now" (T15) is never in a note,
+# and after a fall it can leave Dad waiting for help that is not coming, so
+# such a sentence is dropped on every turn. A note-grounded visit ("She'll be
+# along at 4 PM") names no arrival-now phrase and is kept.
+_ARRIVAL_CLAIM_RE = re.compile(
+    r"\bon\s+(?:her|his|their|the|its)\s+way\b"
+    r"|\b(?:heading|rushing|hurrying|racing|driving)\s+(?:over|round|here|to\s+you|to\s+see\s+you)\b"
+    r"|\bcoming\s+(?:over\s+|round\s+|by\s+)?(?:now|right\s+(?:now|away|over)|straight\s+(?:over|away))\b"
+    r"|\b(?:be|come|get)\s+(?:here|there|over|round|by|to\s+you)\s+"
+    r"(?:soon|shortly|any\s+(?:minute|moment|time\s+now)|right\s+away|straight\s+away|in\s+no\s+time)\b"
+    r"|\bcheck(?:ing)?\s+(?:on|in\s+on)\s+you\b"
+    r"|\b(?:is|are|'s|'re)\s+coming\s+to\s+(?:see|check)\b",
+    re.IGNORECASE,
+)
+_ARRIVAL_SUBJECT = (r"\b(?:{name}|she|he|they|her|him|them|your\s+(?:family|daughter|son)|"
+                    r"someone|somebody|help|family)\b")
+# "If you call Sarah, she can be there soon" is advice about what Dad does.
+_ARRIVAL_CONDITION_RE = re.compile(r"\b(?:if|once|when|after)\s+you\b", re.IGNORECASE)
+
+
+# "Please ask Sarah to check on you" is advice about what Dad does.
+_ARRIVAL_ADVICE_RE = re.compile(
+    r"\b(?:ask|have|get|call|phone|ring|tell|let)\s+(?:\w+\s+){1,2}to\b|\byou\s+(?:could|can|might|may|should)\b",
+    re.IGNORECASE)
+# Only a sentence that tells Dad to call for help keeps an arrival claim
+# (safety first); "she's on her way with emergency help" does not.
+_CALL_FOR_HELP_RE = re.compile(
+    r"\b(?:call|dial|phone|ring|press|use)\b[^.!?]{0,30}\b(?:911|999|112|ambulance|emergency|alert|button)\b",
+    re.IGNORECASE)
+
+
+def _name_alternation(caregiver_name: str) -> str:
+    return "|".join(re.escape(p) for p in sorted(_caregiver_parts(caregiver_name)) if p) or "sarah"
+
+
+_CLAUSE_BREAK = r"[,;:]|\b(?:but|and|so|because|since|while|as)\b"
+# "Sarah isn't on her way" and "I don't know if she's on her way" are the
+# honest answer, not a claim.
+_ARRIVAL_HEDGE_RE = re.compile(
+    r"\b(?:not|isn't|aren't|won't|no\s+one|nobody|don't\s+know|do\s+not\s+know|can't\s+say|"
+    r"cannot\s+say|not\s+sure|unsure|whether|if|wonder)\b", re.IGNORECASE)
+
+
+def claims_caregiver_arriving(sentence: str, caregiver_name: str) -> bool:
+    """True when `sentence` says the caregiver (or help) is coming, on the way
+    or about to check on Dad: something the app never knows (#279). A
+    negated or hedged mention in the same clause is not a claim."""
+    text = fastpath._normalize(sentence)
+    if text.rstrip().rstrip("\"')").endswith("?") and _QUESTION_START_RE.search(text):
+        # "Would you like Sarah to check on you?" asks; "She's on her way,
+        # are you hurt?" still claims.
+        return False
+    subject = _ARRIVAL_SUBJECT.format(name=_name_alternation(caregiver_name))
+    if not re.search(subject, text, re.IGNORECASE):
+        return False
+    # Every mention counts: "I can't say when she'll check on you, but she's
+    # on her way" is still a claim. A condition before the claim or in its
+    # own clause shields it ("If you call Sarah, she can be there soon"); one
+    # after it does not ("She's on her way; call 911 if you are hurt").
+    for m in _ARRIVAL_CLAIM_RE.finditer(text):
+        lead = re.split(_CLAUSE_BREAK, text[:m.start()])[-1]
+        tail = re.split(_CLAUSE_BREAK, text[m.end():])[0]
+        # Only a condition since the last ";" counts: "If you are hurt, call
+        # 911; Sarah is on her way" is still a claim.
+        since = re.split(r"[;\u2014]", text[:m.start()])[-1]
+        if (_ARRIVAL_CONDITION_RE.search(since + m.group(0) + tail)
+                or _ARRIVAL_HEDGE_RE.search(lead) or _ARRIVAL_ADVICE_RE.search(lead)):
+            continue
+        return True
+    return False
+
+
+# #279: the app cannot send the family a message; only safety flags reach
+# them, raised by the safety checks themselves. So on a turn that raised no
+# flag, "I'll let Sarah know we're all set" (T13) is a promise it cannot keep,
+# and one that contradicts the privacy answer (rule 19).
+_PROMISER = (r"(?:\bi(?:'ll|\s+will|'m\s+going\s+to|\s+am\s+going\s+to|\s+can|\s+could|'d|\s+would|"
+             r"\s+shall)|\blet\s+me|\bshall\s+i|\bshould\s+i|\bwant\s+me\s+to|\blike\s+me\s+to)")
+_PROMISE_VERB = (r"(?:let|tell|inform|notify|text|call|ring|phone|message|update|remind|"
+                 r"pass\s+(?:that|this|it|the\s+message|your\s+message|it\s+all)\s+(?:on|along)\s+to|"
+                 r"make\s+sure|send\s+a\s+(?:message|note|text)\s+to)")
+
+
+def promises_family_message(sentence: str, caregiver_name: str) -> bool:
+    """True when the companion offers or promises to pass something to the
+    caregiver or family ("I'll let Sarah know", "Shall I tell her?")."""
+    rx = (_PROMISER + r"\s+(?:also\s+|just\s+|quickly\s+|definitely\s+|be\s+sure\s+to\s+|make\s+sure\s+to\s+)?"
+          + _PROMISE_VERB + r"\s+(?:that\s+)?(?:" + _name_alternation(caregiver_name)
+          + r"|her|him|them|your\s+(?:family|daughter|son))\b")
+    return bool(re.search(rx, fastpath._normalize(sentence), re.IGNORECASE))
+
+
+_CALL_911_LINE = "if you need help right now, please call 911"
+_CLAUSE_CUT_RE = re.compile(r"\s*[;,\u2014]\s*|\s+(?=(?:and|but|so|because|since|while)\s)", re.IGNORECASE)
+
+
+def strip_arrival_clauses(sentence: str, caregiver_name: str) -> str:
+    """`sentence` without its clauses that claim the caregiver is coming
+    ("She's on her way; please call 911." -> "Please call 911."), or "" when
+    every clause is a claim. A clause that holds both the claim and a call
+    for help becomes plain 911 advice."""
+    parts = [p for p in _CLAUSE_CUT_RE.split(sentence.strip()) if p.strip()]
+    kept = [p for p in parts if not claims_caregiver_arriving(p, caregiver_name)]
+    if any(claims_caregiver_arriving(p, caregiver_name) and (_CALL_FOR_HELP_RE.search(p) or _hotline_match(p))
+           for p in parts):
+        # "Sarah is on her way to help you call 911": the claim cannot be cut
+        # from the advice, so the advice is said plainly instead.
+        kept = [p for p in kept if not _CALL_FOR_HELP_RE.search(p) and _hotline_match(p) is None]
+        kept.append(_CALL_911_LINE)
+    if not kept:
+        return ""
+    if kept == parts:
+        return sentence
+    kept[0] = re.sub(r"^(?:and|but|so|because|since|while)\s+", "", kept[0], flags=re.IGNORECASE)
+    out = ", ".join(kept).strip()
+    out = out[0].upper() + out[1:]
+    return out if out[-1] in ".!?" else out + "."
+
+
+_NO_MESSAGE_LINE = "I can't pass messages on to {name} myself, but you can tell {name} when you talk."
+_NO_ARRIVAL_LINE = "I don't know when {name} will be by, but I'm right here with you."
+
+# #278: asked about appointments with one in the notes, the model sometimes
+# opens with a denial ("I don't see any appointments listed for this week").
+# fastpath._normalize folds "check-up" to "check up".
+_APPOINTMENT_RE = re.compile(r"\b(?:appointments?|check[\s-]?ups?|doctors?|dr\b|dentist|clinic)", re.IGNORECASE)
+_APPOINTMENT_DENIAL_RE = re.compile(
+    r"\b(?:don't|do\s+not|can't|cannot|couldn't)\s+(?:see|have|find|spot)\b[^.!?]{0,40}?"
+    r"\b(?:appointments?|check\s?ups?|anything|that\s+noted|it\s+noted)\b"
+    r"|\bno\s+(?:appointments?|check\s?ups?)\b|\bnothing\s+(?:on|scheduled|listed|noted|booked)\b",
+    re.IGNORECASE,
+)
+_TIME_DENIAL_RE = re.compile(
+    r"\b(?:don't|do\s+not|can't|cannot)\s+(?:see|have|find)\b[^.!?]{0,30}?\btime\b", re.IGNORECASE)
+_CLOCK_RE = re.compile(r"\b\d{1,2}(?::\d{2})?\s*(?:a\.?m\b\.?|p\.?m\b\.?)|\bo'clock\b|\bnoon\b", re.IGNORECASE)
+_DAY_WORD_RE = re.compile(r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)\b",
+                          re.IGNORECASE)
+_APPOINTMENT_NOT_KEYS = {"dad", "mom", "the", "his", "her", "your", "this", "that", "next", "every", "also"}
+
+
+_APPOINTMENT_KIND_RE = re.compile(r"\b(?:dentist|dental|optician|eye|physio\w*|hearing|hospital|clinic|surgery)\b",
+                                  re.IGNORECASE)
+_QUESTION_NOT_NAMES = {"dr", "do", "does", "did", "dad", "what", "when", "where", "which", "who", "how", "is",
+                       "are", "am", "can", "could", "have", "has", "will", "would", "i", "my"}
+
+
+def appointment_updates(updates: list[str], question: str = "", caregiver_name: str = "") -> list[str]:
+    """The caregiver updates that are an appointment, safe to read aloud, and
+    about what Dad asked: a day, a name or a kind of appointment he names
+    ("on Friday", "with Dr. Lee", "my dentist") must be in the note."""
+    if re.search(r"\b(?:today|tonight|tomorrow|yesterday|next\s+(?:week|month))\b", question, re.IGNORECASE):
+        return []  # a relative day needs the calendar; leave it to THINK
+    this_week = bool(re.search(r"\bthis\s+week\b", question, re.IGNORECASE))
+    asked_days = {d.lower() for d in _DAY_WORD_RE.findall(question)}
+    # "Dr. Lee" and a typed "dr. lee" alike.
+    # Only a name Dad ties to the appointment counts ("with Dr. Lee", "doctor
+    # tan", "with Rosa"), never a capitalised opener ("Any", "Please").
+    asked_names = ({w.lower() for w in re.findall(r"\b(?:dr|doctor)\.?\s+([a-z]{2,})\b", question, re.IGNORECASE)}
+                   | {w.lower() for w in re.findall(r"\bwith\s+([A-Z][a-z]+)\b", question)})
+    asked_names = (asked_names - {"dr", "doctor"}
+                   - _QUESTION_NOT_NAMES - asked_days - _caregiver_parts(caregiver_name)
+                   - {d for d in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")})
+    asked_kinds = {k.lower() for k in _APPOINTMENT_KIND_RE.findall(question)}
+    out = []
+    for u in updates:
+        if not _APPOINTMENT_RE.search(fastpath._normalize(u)) or _READOUT_UNSAFE_RE.search(u):
+            continue
+        lower = set(re.findall(r"[a-z]+", u.lower()))
+        if asked_days - lower or asked_names - lower or asked_kinds - lower:
+            continue
+        if this_week and re.search(r"\bnext\s+(?:week|month)\b|\bin\s+\w+\s+weeks?\b", u, re.IGNORECASE):
+            continue
+        out.append(u)
+    return out
+
+
+def _clock_key(text: str) -> str:
+    return re.sub(r"[\s.]", "", text.lower())
+
+
+def _mentions_appointment(text: str, updates: list[str], caregiver_name: str = "") -> bool:
+    """True when `text` carries one of the appointments: a name from it
+    ("Tan", never the caregiver's), or its day or clock time together with
+    an appointment word ("the Thursday check-up", not "groceries on
+    Thursday" or "groceries at 10 AM")."""
+    words = set(re.findall(r"[a-z]+", text.lower()))
+    clocks = {_clock_key(m.group(0)) for m in _CLOCK_RE.finditer(text)}
+    appointment_word = bool(_APPOINTMENT_RE.search(fastpath._normalize(text)))
+    for u in updates:
+        days = {m.group(0).lower() for m in _DAY_WORD_RE.finditer(u)}
+        if appointment_word and words & days:
+            return True
+        if appointment_word and clocks & {_clock_key(m.group(0)) for m in _CLOCK_RE.finditer(u)}:
+            return True
+        names = ({w.lower() for w in re.findall(r"\b[A-Z][a-z]{2,}\b", u)}
+                 - _APPOINTMENT_NOT_KEYS - days - _caregiver_parts(caregiver_name))
+        if words & names:
+            return True
+    return False
+
+
+_EXCEPTION_RE = re.compile(r"\b(?:besides|except|other\s+than|apart\s+from|aside\s+from|but|only)\b",
+                           re.IGNORECASE)
+
+
+def denies_noted_appointment(sentence: str, updates: list[str], caregiver_name: str = "") -> bool:
+    """True when `sentence` denies an appointment the notes hold ("I don't
+    see any appointments listed for this week", "There are no appointments
+    on Thursday"). A denial that names the appointment as the exception
+    ("... besides the Thursday check-up with Dr. Tan") is kept, and so is a
+    "no time noted" when the note has no clock time either."""
+    if not updates:
+        return False
+    text = fastpath._normalize(sentence)
+    if _APPOINTMENT_DENIAL_RE.search(text):
+        return not (_EXCEPTION_RE.search(text) and _mentions_appointment(sentence, updates, caregiver_name))
+    if _TIME_DENIAL_RE.search(text):
+        noted = {_clock_key(m.group(0)) for u in updates for m in _CLOCK_RE.finditer(u)}
+        said = {_clock_key(m.group(0)) for m in _CLOCK_RE.finditer(text)}
+        return bool(noted) and not noted & said
+    return False
+
+
+def appointment_readout(updates: list[str], caregiver_name: str) -> str:
+    """The appointment notes said back to Dad, in the second person."""
+    parts = []
+    for u in updates:
+        u = u.strip().rstrip(".")
+        u = re.sub(r"^(?:your\s+)?dad\s+has\b", "you have", u, flags=re.IGNORECASE)
+        u = re.sub(r"^(?:your\s+)?dad\s+is\b", "you are", u, flags=re.IGNORECASE)
+        u = re.sub(r"^(?:your\s+)?dad's\b", "your", u, flags=re.IGNORECASE)
+        if caregiver_name.lower() not in u.lower():
+            u = f"{caregiver_name} mentioned {u if u[:2].isupper() else u[0].lower() + u[1:]}"
+        parts.append(u[0].upper() + u[1:] + ".")
+    return " ".join(parts)
+
+
 def enforce_driving_alternative(reply: str, caregiver_name: str) -> str:
     """Rewrite `reply` so the ASSEMBLED result matches the judge's
     OFFERS_ALTERNATIVE and not ENCOURAGES_DRIVING: drop whichever sentences
@@ -2100,6 +2338,10 @@ def run_turn(
             # 988 left in it still goes through hotline_budget below, which
             # is 0 once the canned line was spoken.
             drop_apology = fast.triggered and fast.severity == "crisis"
+            dropped_claims: list[tuple[str, str]] = []  # #278/#279: invented arrivals, message promises, appointment denials
+            appointments = (appointment_updates(caregiver_updates, transcript or "", caregiver_name)
+                            if not fast.triggered and not readout and _APPOINTMENT_RE.search(transcript or "")
+                            else [])
 
             def filter_sentences(s_iter):
                 budget = hotline_budget
@@ -2225,6 +2467,23 @@ def run_turn(
                             budget -= 1
                             s = s[:first.end()] + _sub_hotline(s[first.end():], "that number")
                     s = physical_claim_pattern.sub(f"{caregiver_name} will \\2", s)
+                    # #279: never say the caregiver is on her way, and on a
+                    # turn that raised no flag never promise her a message.
+                    if claims_caregiver_arriving(s, caregiver_name):
+                        # Only the clause with the claim goes; advice in the
+                        # same sentence ("don't move your neck") is kept.
+                        stripped = strip_arrival_clauses(s, caregiver_name)
+                        dropped_claims.append(("arrival", s))
+                        if not stripped:
+                            continue
+                        s = stripped
+                    if not fast.triggered and promises_family_message(s, caregiver_name):
+                        dropped_claims.append(("message", s))
+                        continue
+                    # #278: a denial of an appointment the notes hold.
+                    if appointments and denies_noted_appointment(s, appointments, caregiver_name):
+                        dropped_claims.append(("appointment", s))
+                        continue
                     # #11: belt behind the THINK prompt's session-flags
                     # fact -- a denial sentence never reaches speak() when a
                     # flag was actually disclosed this session. caregiver_name
@@ -2280,6 +2539,31 @@ def run_turn(
                 think_audio_paths.extend(extra_paths)
                 if first_audio_time is None:
                     first_audio_time = extra_first
+            if dropped_claims:
+                print(f"[orchestrator] dropped {len(dropped_claims)} sentence(s): "
+                      f"{', '.join(k for k, _ in dropped_claims)} (#278, #279)", file=sys.stderr)
+            if (appointments and not dropped_hotline and not driving_guard
+                    and not _mentions_appointment(reply_text, appointments, caregiver_name)):
+                # #278: asked about appointments, the notes hold one, and the
+                # reply never said it: read it from the notes.
+                extra_text, extra_paths, extra_first = _speak_turn(
+                    iter([appointment_readout(appointments, caregiver_name)]), audio_out_dir, on_chunk=on_chunk
+                )
+                reply_text = f"{reply_text} {extra_text}".strip()
+                think_audio_paths.extend(extra_paths)
+                if first_audio_time is None:
+                    first_audio_time = extra_first
+            if dropped_claims and not dropped_hotline and not reply_text.strip():
+                # Everything THINK said was an invented arrival or a message
+                # promise: say the honest version instead of "thoughts drifted".
+                line = (_NO_ARRIVAL_LINE if any(k == "arrival" for k, _ in dropped_claims)
+                        else _NO_MESSAGE_LINE).format(name=caregiver_name)
+                if driving_guard:
+                    line = enforce_driving_alternative(line, caregiver_name)
+                reply_text, empty_paths, empty_first = _speak_turn(iter([line]), audio_out_dir, on_chunk=on_chunk)
+                think_audio_paths.extend(empty_paths)
+                if first_audio_time is None:
+                    first_audio_time = empty_first
             if (dropped_unbriefed or dropped_detail) and not dropped_hotline and not reply_text.strip():
                 # Every sentence named someone nobody briefed: say so honestly
                 # instead of the "thoughts drifted" fallback. A driving-plan
