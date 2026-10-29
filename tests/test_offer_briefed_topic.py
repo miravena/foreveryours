@@ -28,6 +28,12 @@ PROFILE = ["Dad loves jazz", "His grandson is named Leo"]
 UPDATES = ["Sarah is dropping off groceries at 4 PM today"]
 
 
+def _notes_text(messages) -> str:
+    """The <family_notes> data message (#280), or "" when there is none."""
+    return next((m["content"] for m in messages
+                 if m.get("role") == "user" and str(m.get("content", "")).startswith("<family_notes>")), "")
+
+
 def _system_text(messages: list[dict]) -> str:
     return "\n".join(m["content"] for m in messages if m["role"] == "system")
 
@@ -41,8 +47,10 @@ class TestBuildPromptCarriesRule21(unittest.TestCase):
         system = _system_text(messages)
         self.assertIn(RULE_21, system)
         self.assertIn("Offer ONE item by name", system)
+        notes = _notes_text(messages)  # #280: the brief is a data message
         for fact in PROFILE + UPDATES:
-            self.assertIn(fact, system)
+            self.assertIn(fact, notes)
+            self.assertNotIn(f"- {fact}", system)  # rule 11 quotes "Dad loves jazz" itself
         self.assertEqual(messages[-1], {"role": "user", "content": INVITATION})
 
     def test_rule_21_follows_rules_19_and_20(self):
@@ -137,16 +145,16 @@ class TestOrchestratorHandsTheBriefToThink(unittest.TestCase):
         self.assertIsNotNone(client.messages, "THINK was never called")
         system = _system_text(client.messages)
         self.assertIn(RULE_21, system)
-        self.assertIn("jazz", system)
-        self.assertIn("- Dad loves jazz", system)  # the seeded fact, not rule 20's example
-        self.assertIn("groceries at 4 PM", system)
+        notes = _notes_text(client.messages)  # #280: the brief is a data message
+        self.assertIn("- Dad loves jazz", notes)  # the seeded fact, not rule 20's example
+        self.assertIn("groceries at 4 PM", notes)
         self.assertEqual(client.messages[-1]["content"], INVITATION)
         self.assertRegex(res.reply_text.lower(), r"jazz|\bleo\b|sarah|grocer")
 
     def test_invitation_gets_one_anchor_not_the_whole_profile(self):
         client, _ = self._run(INVITATION)
-        system = _system_text(client.messages)
-        anchors = system.split("SENIOR PROFILE & BELOVED ANCHORS", 1)[1].split("---\n", 1)[1].split("\n\n", 1)[0]
+        notes = _notes_text(client.messages)
+        anchors = notes.split("Profile:\n", 1)[1].split("\nUpdates:", 1)[0]
         self.assertEqual(len([ln for ln in anchors.splitlines() if ln.startswith("- ")]), 1)
 
     def test_plain_casual_turn_still_gets_zero_memories(self):
