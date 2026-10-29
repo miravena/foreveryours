@@ -10,13 +10,17 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-29
+
+The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.1 plus two wording fixes the live judge check found on it. During judging only `v1.0.x` patches deploy (ADR-015).
+
 ### Fixed
 - A fall follow-up no longer ends "so they're aware and can check on you" (live T15 on 685c50d): a claim clause with no subject of its own is cut too, and a claim that cannot be cut out drops the sentence (#279).
 - A driving-plan reply no longer says "I can't pass messages on to Sarah" right after a lift offer (live T12 on v1.0.1), and the lift offer no longer offers to ask Sarah for Dad: "Could you ask Sarah for a lift instead?" (#279, rule 26).
 
 ## [1.0.1] - 2026-10-29
 
-The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.0 plus the reply-honesty and kitchen-floor fixes below. During judging only `v1.0.x` patches deploy (ADR-015).
+v1.0.0 plus the reply-honesty and kitchen-floor fixes below; superseded by 1.0.2 the same day.
 
 ### Fixed
 - "I'm lying on the kitchen floor and I can't get up" gets the 911 reply, not the generic distress line (#280). The down-and-unable rule now allows a room or surface word before "floor". A room floor on its own is still a near-miss.
@@ -522,7 +526,8 @@ demo and the Gradio web demo).
 - Safety fast-path false positives ("I fell" vs "I fell asleep") (#29).
 - `.env` loading for the Hugging Face Spaces wrapper (`app.py`) (#31).
 
-[Unreleased]: ../../compare/v1.0.1...HEAD
+[Unreleased]: ../../compare/v1.0.2...HEAD
+[1.0.2]: ../../compare/v1.0.1...v1.0.2
 [1.0.1]: ../../compare/v1.0.0...v1.0.1
 [1.0.0]: ../../compare/v0.2.0...v1.0.0
 [0.2.0]: ../../compare/v0.1.0...v0.2.0
