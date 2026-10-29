@@ -204,10 +204,10 @@ def validate_sample_profile(text_or_items) -> None:
 # instead of storing it. Narrow on purpose: only a change to a dose (extra,
 # more, double, skip, stop) is refused. A reminder or a plain medication fact
 # ("Blood pressure pill at 8 AM", "Dad takes 5 mg daily") is kept, as before.
-_DOSE_TARGET = r"(?:dose|dosage|insulin|aspirins?|" + _MED_WORDS + r")"
+_DOSE_TARGET = r"(?:dose|dosage|insulin|aspirins?|" + _MED_WORDS + r")\b"  # \b: "pillow" is not a pill
 _DOSING_INSTRUCTION_RE = re.compile(
     r"\b(?:\d+|one|two|three|four|five|six|a\s+few|some)\s+(?:extra|more|additional)\s+" + _DOSE_TARGET
-    + r"|\b(?:extra|additional|another|double)\s+" + _DOSE_TARGET
+    + r"|\b(?:extra|additional|another|double|more)\s+" + _DOSE_TARGET
     + r"|\b(?:double|skip|stop|increase|halve)\s+(?:(?:his|her|their|your|dad'?s|the|all|any)\s+)?"
     r"(?:(?:\w+\s+){0,2}" + _DOSE_TARGET + r")\b",
     re.IGNORECASE,
@@ -217,11 +217,16 @@ _DOSING_NEGATED_RE = re.compile(r"\b(?:do\s+not|don'?t|never|no|must\s+not|mustn
                                 r"\s+(?:\w+\s+){0,2}$", re.IGNORECASE)
 
 
+# "Do not forget to double his insulin" still instructs it.
+_DOSING_NOT_NEGATED_RE = re.compile(r"\b(?:forget|fail|neglect|hesitate)\b", re.IGNORECASE)
+
+
 def dosing_instruction(text: str) -> str | None:
     """The dose instruction in a caregiver memo, or None (#280)."""
     folded = unicodedata.normalize("NFKC", text or "").replace("\u2019", "'")
     for hit in _DOSING_INSTRUCTION_RE.finditer(folded):
-        if not _DOSING_NEGATED_RE.search(folded[:hit.start()]):
+        neg = _DOSING_NEGATED_RE.search(folded[:hit.start()])
+        if not neg or _DOSING_NOT_NEGATED_RE.search(neg.group(0)):
             return hit.group(0)
     return None
 
