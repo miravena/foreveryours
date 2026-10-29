@@ -24,6 +24,13 @@ from true to false:
   listening after its reply until the audit finishes (bounded), and a line
   that arrives after the browser stopped listening is recorded undisclosed.
   The same rule gates lifestyle notes.
+- **The driving note** (`fastpath.driving_plan`): when the senior says he
+  plans to drive himself, the reply first offers a lift (it may offer to ask
+  the caregiver, never claim one is arranged), then a spoken line tells him
+  the caregiver gets a short note. The note ("Dad mentioned driving today",
+  severity `note`) is recorded as disclosed only when that line was
+  delivered. It is listed on the panel but is not a safety alert: the panel
+  stays calm and no outbound notification is sent for it.
 
 The senior is never meant to be monitored silently behind their back; the
 code's job is to make that true in both cases above, not just the easy one.

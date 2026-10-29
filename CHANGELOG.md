@@ -11,6 +11,13 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Changed
+- When Dad says he plans to drive himself, the reply offers a lift first, only as an offer and never as something already arranged, and the caregiver panel lists a low-severity note "Dad mentioned driving today" that Dad is told about in the conversation; the panel stays calm. "I used to drive a bus" is not a plan and records nothing (#192 follow-up).
+### Fixed
+- After a fast-path fall or crisis flag is disclosed to the senior, THINK's prompt now carries a `[SAFETY FLAGS SENT THIS SESSION]` fact (`think.build_prompt`'s new `session_flags`) on that turn's continuation and every later turn of the session, and a deterministic guard (`orchestrator.enforce_flag_honesty`) strips any "haven't told" / "didn't tell" / "not told" denial before speech (#11).
+- `run_turn`'s session-flags fact is now tracked the same way `history` is -- a caller-carried list, returned on `TurnResult.session_flags` -- instead of being re-read from the whole `CaregiverFlags` file each turn, which could otherwise surface a flag disclosed in a DIFFERENT session sharing the same profile (main.py's `beat2`/`beat3`/`beat4`/`chat_loop` CLI runs) into this session's prompt; `enforce_flag_honesty` now only leaves alone a denial sentence whose object is "you" (the senior) -- "I haven't told you how much I enjoy our chats" -- and rewrites every other denial, by name, pronoun or otherwise ("I haven't told her/him/anyone about your fall") (#11).
+- `webapp.py` now carries that per-conversation flag list itself, per browser tab -- keyed by Gradio's own per-tab session hash (the key it scopes `gr.State` by), so under `FY_SHARED_PROFILE=1`, where every tab shares one session id and one `data/` directory, a fall disclosed in one tab is never stated as fact in another tab's prompt; `run_turn` no longer reads the `CaregiverFlags` file for the session fact in any mode (#11).
+
 ## [1.0.0] - 2026-10-28
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track). During judging only `v1.0.x` patches deploy (ADR-015).

@@ -47,12 +47,15 @@ SESSION_TTL_S + GRADIO_CACHE_SWEEP[0] seconds. Neither path promises deletion
 the instant the tab closes. Set FY_SHARED_PROFILE=1 to
 get the old single shared `data/dad.*` profile back -- useful locally when
 recording a video alongside `main.py` beats, never for a public deployment.
+Even then, the safety flags disclosed to the senior in one tab are
+conversation state, kept per browser tab like `history` (see
+`_session_flags`), so no tab is ever told about another tab's fall (#11).
 """
 from __future__ import annotations
 
+import collections
 import contextlib
 import datetime
-import functools
 import html
 import json
 import os
@@ -362,6 +365,63 @@ _request_log: dict[str, int] = {}  # vestigial -- kept only so tests' webapp._re
 
 _bg_threads_lock = threading.Lock()
 _bg_threads: dict[str, list[threading.Thread]] = {}  # session_id -> every outstanding writer thread for that session, if any (#148: a single slot let a later turn's thread overwrite tracking of a still-running earlier writer)
+
+# Caregiver flags disclosed to the senior so far in ONE browser tab's
+# conversation (#11): `run_turn`'s caller-carried `session_flags`, the same
+# kind of per-tab state as `history`. Keyed by `_flags_key` -- the session id
+# plus Gradio's own per-tab `request.session_hash` (the key Gradio itself
+# scopes `gr.State` by), so two tabs are two conversations even under
+# FY_SHARED_PROFILE=1, where every tab shares one session id and one `data/`
+# directory. This is never derived from the on-disk CaregiverFlags file: that
+# file is the household's whole flag history, not this tab's conversation
+# (rule 15, the privacy firewall). Entries for a per-session household go
+# when `_end_session`/the sweeper remove it; under FY_SHARED_PROFILE=1 no
+# tab-close signal carries the hash, so the dict is bounded (oldest tab out)
+# instead -- a few strings per tab, local-recording mode only.
+_session_flags_lock = threading.Lock()
+_session_flags: "collections.OrderedDict[str, list[str]]" = collections.OrderedDict()
+_SESSION_FLAGS_MAX = 1024
+
+
+def _flags_key(session_id: str, request=None) -> str:
+    """Per-tab key for `_session_flags`: `<session_id>:<session_hash>` when
+    the turn came through Gradio (`request` injected by Gradio from the
+    handler's `request: gr.Request` parameter), else the bare session id
+    (direct Python callers such as the tests, one conversation per id)."""
+    session_hash = getattr(request, "session_hash", None) if request is not None else None
+    return f"{session_id}:{session_hash}" if session_hash else session_id
+
+
+def _get_session_flags(flags_key: str) -> list[str]:
+    """The flags disclosed so far in this tab's conversation; `[]` for a tab
+    that has not disclosed any (a fresh session). Returned as the stored
+    list itself: a late AUDIT-thread disclosure appended to the previous
+    turn's `TurnResult.session_flags` (the same object) is then visible to
+    the next turn, which copies it at call time."""
+    with _session_flags_lock:
+        flags = _session_flags.get(flags_key)
+        if flags is None:
+            return []
+        _session_flags.move_to_end(flags_key)
+        return flags
+
+
+def _set_session_flags(flags_key: str, flags: list[str]) -> None:
+    """Carry this turn's `TurnResult.session_flags` into the tab's next turn."""
+    with _session_flags_lock:
+        _session_flags[flags_key] = flags
+        _session_flags.move_to_end(flags_key)
+        while len(_session_flags) > _SESSION_FLAGS_MAX:
+            _session_flags.popitem(last=False)
+
+
+def _forget_session_flags(session_id: str) -> None:
+    """Drop every tab's flags for a per-session household being removed
+    (`_end_session`, the sweeper). Only meaningful when the session id is
+    one household's own (never under FY_SHARED_PROFILE=1, where it is shared)."""
+    with _session_flags_lock:
+        for key in [k for k in _session_flags if k == session_id or k.startswith(f"{session_id}:")]:
+            del _session_flags[key]
 _session_sweeper_started = False
 _session_sweeper_lock = threading.Lock()
 
@@ -880,6 +940,7 @@ def _sweep_stale_sessions() -> None:
                 if _is_session_busy(child.name):
                     continue
                 if child.stat().st_mtime < cutoff:
+                    _forget_session_flags(child.name)
                     shutil.rmtree(child, onerror=_log_rmtree_error)
             except FileNotFoundError:
                 pass
@@ -963,6 +1024,7 @@ def _end_session(session_id: str | None) -> None:
             return
         with _bg_threads_lock:
             _bg_threads.pop(session_id, None)
+        _forget_session_flags(session_id)
         shutil.rmtree(entry, ignore_errors=True)
 
 
@@ -1297,9 +1359,14 @@ def run_demo_turn(
     history_or_session: list[dict] | str | None = None,
     session_id: str | None = None,
     simulated_time_in: str | None = None,
+    request: gr.Request | None = None,
     is_proactive: bool = False,
     trigger_type: str = "silence",
 ) -> tuple[str, str | None, list[dict], str, str, str, str, None]:
+    """`request` is Gradio's injected per-call request (a parameter annotated
+    `gr.Request` is filled by Gradio, never by a component), used only for
+    its per-tab `session_hash` in `_flags_key` (#11); direct callers leave
+    it None."""
     if isinstance(text_in_or_history, list):
         history = text_in_or_history
         session_id_val = history_or_session if isinstance(history_or_session, str) else session_id
@@ -1325,7 +1392,11 @@ def run_demo_turn(
     elif "Night" in simulated_time_str:
         simulated_hour = 23
 
-    out = _run_demo_turn(audio_in, actual_text, history, session_id_val, simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type)
+    out = _run_demo_turn(
+        audio_in, actual_text, history, session_id_val, simulated_hour,
+        is_proactive=is_proactive, trigger_type=trigger_type,
+        flags_key=_flags_key(session_id_val, request),
+    )
     if session_expired:
         out = (
             _RESET_NOTICE + "\n\n" + out[0],
@@ -1337,9 +1408,12 @@ def run_demo_turn(
     return (*out, session_id_val, "", None)
 
 
-def run_proactive_turn(history, session, sim_time, trigger_type):
-    """Handler for the four proactive buttons: same 8 outputs as run_demo_turn."""
-    return run_demo_turn(None, None, history, session, sim_time, is_proactive=True, trigger_type=trigger_type)
+def run_proactive_turn(history, session, sim_time, trigger_type="silence", request: gr.Request | None = None):
+    """Handler for the four proactive buttons: same 8 outputs as run_demo_turn.
+    `trigger_type` stays the fourth positional (direct callers pass it so);
+    `request` is keyword-only in practice -- the Gradio-facing handler is
+    `_proactive_streaming_handler`, which passes it by name."""
+    return run_demo_turn(None, None, history, session, sim_time, request, is_proactive=True, trigger_type=trigger_type)
 
 
 
@@ -1349,6 +1423,7 @@ def run_demo_turn_streaming(
     history_or_session: list[dict] | str | None = None,
     session_id: str | None = None,
     simulated_time_in: str | None = None,
+    request: gr.Request | None = None,
     is_proactive: bool = False,
     trigger_type: str = "silence",
 ):
@@ -1358,7 +1433,12 @@ def run_demo_turn_streaming(
     the actual turn. The `finally` here runs even if the browser disconnects
     and Gradio closes this generator mid-turn (`gen.close()` throws
     GeneratorExit at the suspended yield, which unwinds through this
-    `finally` on its way out), so `_active_turns` is always cleaned up."""
+    `finally` on its way out), so `_active_turns` is always cleaned up.
+
+    `request` is Gradio's injected per-call request (filled by Gradio from
+    the `gr.Request` annotation, not a component input; it is not part of
+    the `/run_demo_turn_streaming` API signature), used only for its per-tab
+    `session_hash` in `_flags_key` (#11). Direct callers leave it None."""
     if isinstance(text_in_or_history, list):
         history = text_in_or_history
         session_id_val = history_or_session if isinstance(history_or_session, str) else session_id
@@ -1404,6 +1484,7 @@ def run_demo_turn_streaming(
             yield from _run_demo_turn_streaming_impl(
                 audio_in, actual_text, history, session_id_val, simulated_hour,
                 session_expired, is_proactive, trigger_type, consumer=consumer,
+                flags_key=_flags_key(session_id_val, request),
             )
         finally:
             if acquired:
@@ -1421,6 +1502,7 @@ def _run_demo_turn_streaming_impl(
     is_proactive: bool,
     trigger_type: str,
     consumer: "_ChunkConsumer | None" = None,
+    flags_key: str | None = None,
 ):
     import queue
     import threading
@@ -1428,6 +1510,8 @@ def _run_demo_turn_streaming_impl(
 
     if consumer is None:
         consumer = _ChunkConsumer()
+    if flags_key is None:
+        flags_key = _flags_key(session_id_val)
 
     yield (
         "_Companion is thinking..._",
@@ -1482,6 +1566,11 @@ def _run_demo_turn_streaming_impl(
         # it before attesting, the main reply's synthesis never does.
         return consumer.submit(sentence, chunk_path)
 
+    # This tab's disclosed flags so far (#11), carried like `history`: into
+    # this turn's THINK prompt and honesty guard, and (with this turn's own
+    # disclosure appended) stored back for the next turn inside _worker.
+    session_flags = _get_session_flags(flags_key)
+
     def _worker():
         try:
             res = run_turn(
@@ -1489,6 +1578,7 @@ def _run_demo_turn_streaming_impl(
                 enable_perseveration_flag=DEV_MODE,
                 on_chunk=_on_chunk,
                 allow_hosted_call=allow_hosted_call,
+                session_flags=session_flags,
             )
             # Hand off to the background AUDIT/memory-extraction thread BEFORE
             # consumer.put(("DONE", ...)) (#148): if the generator was already closed
@@ -1497,6 +1587,14 @@ def _run_demo_turn_streaming_impl(
             # ignores a thread already tracked (identity), so the later
             # registration below (after DONE) is a no-op.
             _remember_background_thread(session_id_val, res.background_thread)
+            # Store this tab's flags HERE, not once the generator below has
+            # consumed DONE (#11, Codex review): if the browser disconnects
+            # mid-continuation nobody ever reads DONE, but the fall
+            # disclosure was already spoken and flagged, so the next turn of
+            # this conversation must still carry it. A duck-typed result
+            # without the field (test stubs) leaves the tab's list as it was.
+            if getattr(res, "session_flags", None) is not None:
+                _set_session_flags(flags_key, res.session_flags)
             consumer.put(("DONE", res))
         except Exception as exc:
             consumer.put(("ERROR", exc))
@@ -1646,8 +1744,21 @@ def _run_demo_turn_streaming_impl(
     if late_yields and (bg is None or not bg.is_alive()):
         yield (out[0], None, new_history, panel(), biomarker_str, session_id_val, "", None)
 
-def run_proactive_turn_streaming(history, session, sim_time, trigger_type):
-    yield from run_demo_turn_streaming(None, None, history, session, sim_time, is_proactive=True, trigger_type=trigger_type)
+def run_proactive_turn_streaming(history, session, sim_time, trigger_type="silence", request: gr.Request | None = None):
+    yield from run_demo_turn_streaming(None, None, history, session, sim_time, request, is_proactive=True, trigger_type=trigger_type)
+
+
+def _proactive_streaming_handler(trigger_type: str):
+    """One proactive button's handler. A plain closure, not
+    `functools.partial`: Gradio resolves a handler's type hints to find the
+    `request: gr.Request` parameter it injects (#11, `_flags_key`), and it
+    cannot resolve them on a partial object, so a partial-wrapped handler
+    would silently run every proactive turn without its tab's request."""
+    def handler(history, session, sim_time, request: gr.Request | None = None):
+        yield from run_proactive_turn_streaming(history, session, sim_time, trigger_type, request=request)
+
+    handler.__name__ = f"run_proactive_turn_streaming_{trigger_type}"
+    return handler
 
 
 
@@ -1660,14 +1771,20 @@ def _run_demo_turn(
     simulated_hour: int = 10,
     is_proactive: bool = False,
     trigger_type: str = "silence",
+    flags_key: str | None = None,
 ) -> tuple[str, str | None, list[dict], str, str]:
     """Registers the turn as in-progress (#148) before any other work, and
     always deregisters it in `finally` -- every branch below returns a
     value, so `finally` covers every one of them, including the early
     "no speech detected" returns. `session_id` must already be a validated
-    id by this point (the public wrappers normalize before calling in)."""
+    id by this point (the public wrappers normalize before calling in).
+    `flags_key` (#11) names this tab's conversation in `_session_flags`;
+    None means the bare session id (one conversation per session id)."""
     with _session_active(session_id, refuse_if_deleted=False):
-        return _run_demo_turn_impl(audio_in, text_in, history, session_id, simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type)
+        return _run_demo_turn_impl(
+            audio_in, text_in, history, session_id, simulated_hour,
+            is_proactive=is_proactive, trigger_type=trigger_type, flags_key=flags_key,
+        )
 
 
 def _run_demo_turn_impl(
@@ -1678,7 +1795,10 @@ def _run_demo_turn_impl(
     simulated_hour: int = 10,
     is_proactive: bool = False,
     trigger_type: str = "silence",
+    flags_key: str | None = None,
 ) -> tuple[str, str | None, list[dict], str, str]:
+    if flags_key is None:
+        flags_key = _flags_key(session_id)
     data_dir, audio_dir = _session_dirs(session_id)
     _join_previous_turn(session_id)
     store = MemoryStore(DEFAULT_PROFILE_ID, data_dir, timezone_str=SENIOR_TIMEZONE)
@@ -1720,6 +1840,8 @@ def _run_demo_turn_impl(
             transcript, store, flags, audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, history=history, simulated_hour=simulated_hour, is_proactive=is_proactive, trigger_type=trigger_type,
             enable_perseveration_flag=DEV_MODE,
             allow_hosted_call=allow_hosted_call,
+            # This tab's disclosed flags so far (#11), carried like `history`.
+            session_flags=_get_session_flags(flags_key),
         )
     except Exception as exc:
         err = str(exc)
@@ -1764,6 +1886,10 @@ def _run_demo_turn_impl(
     # the NEXT turn) still bounds how long a stale thread can run before the
     # next turn's MemoryStore write would otherwise race it.
     _remember_background_thread(session_id, result.background_thread)
+    # A duck-typed result without the field (test stubs) leaves the tab's
+    # list as it was; a real TurnResult always carries it.
+    if getattr(result, "session_flags", None) is not None:
+        _set_session_flags(flags_key, result.session_flags)
 
     if not result.is_fallback:
         if is_proactive:
@@ -2493,28 +2619,28 @@ def build_demo() -> gr.Blocks:
             )
 
         proactive_btn_morning.click(
-            fn=functools.partial(run_proactive_turn_streaming, trigger_type="morning"),
+            fn=_proactive_streaming_handler("morning"),
             inputs=[history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
             concurrency_limit=TURN_CONCURRENCY,
             concurrency_id="senior_turn",
         )
         proactive_btn_grocery.click(
-            fn=functools.partial(run_proactive_turn_streaming, trigger_type="reminder"),
+            fn=_proactive_streaming_handler("reminder"),
             inputs=[history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
             concurrency_limit=TURN_CONCURRENCY,
             concurrency_id="senior_turn",
         )
         proactive_btn_hobby.click(
-            fn=functools.partial(run_proactive_turn_streaming, trigger_type="hobby"),
+            fn=_proactive_streaming_handler("hobby"),
             inputs=[history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
             concurrency_limit=TURN_CONCURRENCY,
             concurrency_id="senior_turn",
         )
         proactive_btn_silence.click(
-            fn=functools.partial(run_proactive_turn_streaming, trigger_type="silence"),
+            fn=_proactive_streaming_handler("silence"),
             inputs=[history_state, session_state, simulated_time_in],
             outputs=[transcript_out, audio_out, history_state, caregiver_panel, biomarkers_panel, session_state, text_in, audio_in],
             concurrency_limit=TURN_CONCURRENCY,

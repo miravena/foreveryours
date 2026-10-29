@@ -106,6 +106,12 @@ def beat2_senior_turn(transcript: str | None, audio_in: Path | None = None, play
     result = run_turn(
         transcript, store, flags, AUDIO_DIR,
         caregiver_name=DEFAULT_CAREGIVER_NAME, on_chunk=player.feed,
+        # Each `main.py beatN` invocation is its own process/session (#11):
+        # DATA_DIR is shared across beats and days, so an explicit empty
+        # session_flags keeps a leftover disclosure from a PRIOR beat/day
+        # run (e.g. beat3's fall flag, read by a later beat4 "day-2 recall"
+        # process) from reading as "sent this session" here.
+        session_flags=[],
     )
 
     print(f'Senior said: "{transcript}"')
@@ -198,6 +204,12 @@ def chat_loop(play: bool = True) -> None:
     store = MemoryStore(DEFAULT_PROFILE_ID, DATA_DIR, timezone_str=SENIOR_TIMEZONE)
     flags = CaregiverFlags(DEFAULT_PROFILE_ID, DATA_DIR)
     history: list[dict] = []
+    # Session-scoped flag-disclosure list (#11), carried forward the
+    # same way `history` is: starts empty even though `flags` (the on-disk
+    # CaregiverFlags file) may already hold flags from an earlier chat_loop
+    # run or CLI beat against this same DATA_DIR -- those belong to a
+    # DIFFERENT session and must never leak into this one's THINK prompt.
+    session_flags: list[str] = []
     max_history_turns = 4
     consecutive_errors = 0
 
@@ -232,6 +244,7 @@ def chat_loop(play: bool = True) -> None:
                 history=history,
                 consecutive_errors=consecutive_errors,
                 on_chunk=player.feed,
+                session_flags=session_flags,
             )
             consecutive_errors = result.consecutive_errors
         except NebiusNotConfigured:
@@ -252,6 +265,7 @@ def chat_loop(play: bool = True) -> None:
 
         if result.background_thread is not None:
             result.background_thread.join(timeout=10)
+        session_flags = result.session_flags
         player.close()
         result.time_to_first_sound_s = player.time_to_first_sound_s
         if result.time_to_first_sound_s is not None:
