@@ -792,10 +792,10 @@ class TestDrivingPlan(unittest.TestCase):
             "How are you feeling today? Sarah could give you a lift.":
                 "Sarah could give you a lift. How are you feeling today?",
             "That's a nice afternoon for it. Or Sarah could give you a lift.":
-                "Would you like me to ask Sarah for a lift instead? That's a nice afternoon for it. "
+                "Could you ask Sarah for a lift instead? That's a nice afternoon for it. "
                 "Or Sarah could give you a lift.",
             "Sarah would be happy to see you. She could give you a lift.":
-                "Would you like me to ask Sarah for a lift instead? Sarah would be happy to see you. "
+                "Could you ask Sarah for a lift instead? Sarah would be happy to see you. "
                 "She could give you a lift.",
         }
         for reply, expected in cases.items():
