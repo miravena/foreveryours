@@ -10,6 +10,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Fixed
+- A driving-plan reply no longer says "I can't pass messages on to Sarah" right after a lift offer (live T12 on v1.0.1), and the lift offer no longer offers to ask Sarah for Dad: "Could you ask Sarah for a lift instead?" (#279, rule 26).
+
 ## [1.0.1] - 2026-10-29
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.0 plus the reply-honesty and kitchen-floor fixes below. During judging only `v1.0.x` patches deploy (ADR-015).

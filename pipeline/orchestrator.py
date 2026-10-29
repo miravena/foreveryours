@@ -545,6 +545,11 @@ def appointment_readout(updates: list[str], caregiver_name: str) -> str:
     return " ".join(parts)
 
 
+# Dad asks for the lift himself: the companion cannot pass Sarah a message
+# (rule 26), so it never offers to ask her.
+_LIFT_FIRST_LINE = "Could you ask {name} for a lift instead?"
+
+
 def enforce_driving_alternative(reply: str, caregiver_name: str) -> str:
     """Rewrite `reply` so the ASSEMBLED result matches the judge's
     OFFERS_ALTERNATIVE and not ENCOURAGES_DRIVING: drop whichever sentences
@@ -582,9 +587,9 @@ def enforce_driving_alternative(reply: str, caregiver_name: str) -> str:
         if movable is not None:
             kept.insert(0, kept.pop(movable))
         else:
-            kept.insert(0, f"Would you like me to ask {caregiver_name} for a lift instead?")
+            kept.insert(0, _LIFT_FIRST_LINE.format(name=caregiver_name))
     elif not kept:
-        kept = [f"Would you like me to ask {caregiver_name} for a lift instead?"]
+        kept = [_LIFT_FIRST_LINE.format(name=caregiver_name)]
     return " ".join(kept).strip()
 
 
@@ -2559,7 +2564,9 @@ def run_turn(
                 line = (_NO_ARRIVAL_LINE if any(k == "arrival" for k, _ in dropped_claims)
                         else _NO_MESSAGE_LINE).format(name=caregiver_name)
                 if driving_guard:
-                    line = enforce_driving_alternative(line, caregiver_name)
+                    # A driving turn gets its lift offer, not "I can't pass
+                    # messages" beside it (live T12 on v1.0.1).
+                    line = enforce_driving_alternative("I'm here with you.", caregiver_name)
                 reply_text, empty_paths, empty_first = _speak_turn(iter([line]), audio_out_dir, on_chunk=on_chunk)
                 think_audio_paths.extend(empty_paths)
                 if first_audio_time is None:

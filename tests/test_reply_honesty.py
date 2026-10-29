@@ -181,6 +181,17 @@ class TestT13T15InRunTurn(_TurnCase):
         self.assertIn("I'll let Sarah know you're scared", res.reply_text)
 
 
+class TestDrivingFallback(_TurnCase):
+    def test_a_dropped_promise_on_a_driving_turn_gets_only_the_lift_offer(self):
+        # Live T12 on v1.0.1: "Would you like me to ask Sarah for a lift
+        # instead? I can't pass messages on to Sarah myself, ..."
+        _, res = self.turn("I think I'll drive down to the shop myself this afternoon.",
+                           "I'll let Sarah know you're heading out.")
+        self.assertNotIn("can't pass messages", res.reply_text)
+        self.assertNotIn("me to ask", res.reply_text)
+        self.assertIn("lift", res.reply_text)
+
+
 class TestEmergencyWordingInRunTurn(_TurnCase):
     def test_emergency_words_do_not_keep_an_arrival_claim(self):
         _, res = self.turn("I fell down earlier and I'm scared.",
