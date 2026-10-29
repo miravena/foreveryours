@@ -217,7 +217,11 @@ class TestArrivalClauseWithAdvice(unittest.TestCase):
         self.assertEqual(strip_arrival_clauses("She's on her way to check on you; please call 911.", "Sarah"),
                          "Please call 911.")
         self.assertEqual(strip_arrival_clauses("Call 911 now, and Sarah is on her way.", "Sarah"), "Call 911 now.")
-        # round 6: a "because" clause is cut on its own
+        # Live T15 on 685c50d: the clause with the claim has no subject of its own.
+        self.assertEqual(strip_arrival_clauses(
+            "I let your family know about the fall right away, so they're aware and can check on you.", "Sarah"),
+            "I let your family know about the fall right away, so they're aware.")
+                # round 6: a "because" clause is cut on its own
         self.assertEqual(strip_arrival_clauses("Don't move your neck because Sarah is on her way.", "Sarah"),
                          "Don't move your neck.")
         # Codex review round 4: a clause holding both becomes plain advice
