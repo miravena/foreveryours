@@ -18,7 +18,7 @@ feature tour).
 
 ## Shot list
 
-This is the v4 cut (#264): the v3 footage with the narration rewritten so that no hosted wait
+This is the v5 cut (#275), built on v4 (#264): the v3 footage with the narration rewritten so that no hosted wait
 is silent, the narrator reads at a natural speed, and the close names the product. The v3
 script is this file at the v3 build's commit.
 
@@ -29,11 +29,11 @@ script is this file at the v3 build's commit.
 | 0:29-0:41 | Caregiver side: the daughter types the memo "Dad has a check-up with Dr. Tan on Thursday at 10 AM." and clicks Save Text Memo. The briefed memory shows it added. The narrator speaks over the typing. | "His daughter briefs it once, from work. One line: a check-up with Dr. Tan on Thursday. Nothing to set up on Dad's side." |
 | 0:41-1:03 | Same session, Senior side: the senior types the line from "Senior line" below and clicks Send. "Companion is thinking..." for about nine seconds (the real wait, not cut); the narrator's first sentence plays as the split screen is framed and the rest over the wait, then the reply names Dr. Tan, Thursday, 10 AM. | "When Dad asks, it already knows what she typed. The reply is written by NVIDIA Nemotron on Nebius Token Factory. This is the real hosted wait, uncut." |
 | 1:03-1:43 | Senior side: the narrator's first sentence, then "I feel lonely since my wife died." The companion answers warmly; the Caregiver side shows no new flag and does not show what he said. A short freeze with the second sentence, then: "I want to end my life." The safety fast path answers with the 988 referral and the Caregiver side shows the crisis flag; the reply is cut after "I am also letting your family know you are in distress." | "What he says in private stays private. Danger is different." |
-| 1:43-1:51 | Day 2 (8 seconds): a new visit asks "I forgot, what is my grandson's name?" and the companion answers with Leo from yesterday's briefing. The Space keeps memory for one browser session, so this is `python main.py beat4` in a fresh process, labelled as a local test. The one output line that prints a synthesis time is left out of the rendered terminal, and the clip ends before the audit line. | "Next day, in a local test, it's still briefed." |
+| 1:43-1:51 | Day 2 (8 seconds): a clean card reading "Local persistence test - not the hosted Space." with the line "Day 2: a fresh local run still remembers yesterday's briefing"; the captions carry the question "I forgot, what is my grandson's name?" and the answer with Leo from yesterday's briefing. The Space keeps memory for one browser session, so the run behind it is `python main.py beat4` in a fresh process; v5 shows the card, not the terminal (#275). | "Next day, in a local test, it's still briefed." |
 | 1:51-2:07 | Plain screen, text only: "Replies: NVIDIA Nemotron 3 Nano · Safety backstop: NVIDIA Nemotron 3 Super, both on Nebius Token Factory" · "Hearing and voice: on the app's own server". No diagram, no logos. | "Two models on Nebius Token Factory: Nemotron 3 Nano writes the replies, and Nemotron 3 Super is the safety backstop. Hearing and voice run on the app's own server, so his voice recording never goes to Nebius." |
-| 2:07-2:18 | Plain screen: "ForeverYours", "The companion the family briefs", the Space URL, https://elevenbaselab-foreveryours.hf.space, and "Known limitations: in the README". | "It doesn't catch everything; the README lists what it misses. Try it yourself, no login, at the link on screen." |
+| 2:07-2:22 | Plain screen: "ForeverYours", "The companion the family briefs", the Space URL, https://elevenbaselab-foreveryours.hf.space, and "Known limitations: in the README". | "This is a prototype: it can miss nuance, so it does not replace human judgment or emergency services. Try it yourself, no login, at the link on screen." |
 
-Total: about 2:18, well under 3:00. The companion's replies are cut only at the end of a
+Total: about 2:23, well under 3:00. The companion's replies are cut only at the end of a
 sentence and never overlap the narrator. Times are the plan; the assembler prints the real
 shot boundaries.
 
@@ -85,11 +85,12 @@ Thursday..."). On-screen labels:
 
 | Time | Label |
 |---|---|
-| 0:00-1:43 | **LIVE HOSTED SPACE**, small, top right, on every shot recorded on the Space |
+| 0:00-1:43 | **LIVE HOSTED SPACE**, a small burned-in badge, top right, on every shot recorded on the Space; in the SRT it is one 4-second cue at the start of each hosted shot, never one long cue |
 | 0:04-0:13 | **Dad was told**, once, from the frame the caregiver flag appears; no other overlay repeats it |
-| 1:09-1:27 | **Not shown to the family** over the unchanged Caregiver side after the private line |
-| 1:43-1:51 | **LOCAL PERSISTENCE TEST** on the day-2 terminal |
-| 1:51-2:18 | The card text is the caption; narrator caption below it |
+| 1:09-1:24 | **Not shown to the family** over the unchanged Caregiver side after the private line; it ends when the freeze before the crisis line starts, so it is never on screen over "I want to end my life." |
+| 1:32-1:43 | **Crisis: 988 offered, simulated family alert** from the frame the crisis flag appears to the end of the shot, so the video never implies the crisis is hidden from the family |
+| 1:43-1:51 | The day-2 card, whose text is the label: **Local persistence test - not the hosted Space.** (the SRT carries it too) |
+| 1:51-2:22 | The card text is the caption; narrator caption below it |
 
 The same captions and labels ship as a sidecar `.srt` built from the same timeline.
 
@@ -117,9 +118,11 @@ Checked against #264's criteria, the issue #5 rules, [`SELF_JUDGING.md`](SELF_JU
 - No broad claim about other assistants: the thesis says what this one does (briefed by his family, raises a flag for his daughter when his safety is at stake, tells him first); no product is named.
 - The alert is described as a flag raised for his daughter, which is what the panel shows (a simulated alert; nothing is sent in the demo), not as a message delivered.
 - One "Dad was told" overlay, aligned with the flag; the crisis shot relies on the panel's own line.
-- Hosted and local evidence labelled where they appear: LIVE HOSTED SPACE on shots 1-5, LOCAL PERSISTENCE TEST on shot 6.
-- Day-2 shot 15 seconds or less: 8 seconds, and it ends before the local run's audit line.
+- Hosted and local evidence labelled where they appear: LIVE HOSTED SPACE (corner badge) on shots 1-5, "Local persistence test - not the hosted Space." on the shot 6 card.
+- Captions and the SRT use straight quotes only: a player that reads the SRT as cp1252 turns a curly apostrophe into mojibake (#275).
+- The crisis shot says what the panel shows: 988 offered, a simulated family alert; no claim that anyone is contacted or that a notification is delivered.
+- Day-2 shot 15 seconds or less: 8 seconds, on a clean card with no terminal and no audit line.
 - No AUDIT, biomarkers, proactive triggers, phone-notification shot, latency figure or music; the only names on screen are the sponsors' (NVIDIA, Nebius) in plain text. The narration voice is Kokoro (Apache-2.0).
 - Privacy wording matches PRIVACY.md: speech runs on the app's own server and the voice recording never goes to Nebius.
-- Limitations stated: the last card points at the README's "Known limitations".
+- Limitations stated: the closing line is self-contained ("This is a prototype: it can miss nuance, so it does not replace human judgment or emergency services."), and the last card still points at the README's "Known limitations".
 - The product's name is on screen in the last card, with the URL.

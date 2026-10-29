@@ -33,6 +33,7 @@ RESPELL = [
     (r"\bNemotron\b", "Nemo-tron"),   # bare "Nemotron" was heard as "Nemetron"
     (r"Nebius", "Nebius"), (r"Piper", "Piper"),
 ]
+ONLY = [x for x in os.environ.get("FY_NARR_ONLY", "").split(",") if x]   # re-render just these shots (v5: "8")
 GAP = float(os.environ.get("FY_NARR_GAP", "0.25"))  # seconds between sentences
 
 _o = A.EspeakAPI.__init__
@@ -80,8 +81,9 @@ def main():
             sf.write(raw, synth(shots[2]["text"], v, SPEEDS.get("2", SPEED)), 24000)
             norm(raw, f"{OUT}/candidates/shot2_{v}.wav")
     if mode in ("render", "all"):
-        meta = {}
+        meta = json.load(open(LINES)) if ONLY and os.path.exists(LINES) else {}
         for n, s in shots.items():
+            if ONLY and str(n) not in ONLY: continue
             raw = f"/tmp/shot{n}_raw.wav"; dst = f"{OUT}/shot{n}.wav"
             sp = SPEEDS.get(str(n), SPEED)
             sf.write(raw, synth(s["text"], VOICE, sp), 24000); norm(raw, dst)
@@ -92,6 +94,8 @@ def main():
                                 wpm=round(len(s["text"].split()) * 60 / d))
             open(f"{OUT}/shot{n}.caption.txt", "w").write(s["text"] + "\n")
         json.dump(meta, open(LINES, "w"), indent=2)
-        for n, m in meta.items(): print(n, m["duration_s"], "/", m["window_s"], "OK" if m["fits"] else "OVER", m["wpm"], "wpm")
+        for n, m in meta.items():
+            if ONLY and n not in ONLY: continue
+            print(n, m["duration_s"], "/", m["window_s"], "OK" if m["fits"] else "OVER", m["wpm"], "wpm")
 
 main()
