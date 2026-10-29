@@ -409,6 +409,14 @@ class TestWebappSessions(unittest.TestCase):
         data_dir, _ = webapp._session_dirs(session_id)
         store = MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
         self.assertFalse(any("aspirin" in i.text for i in store.all()))
+        # Review round 1: the wordings without "his", and the negated precaution.
+        for bad in ("Double insulin tonight.", "Skip pills tonight.", "Give Dad extra insulin tonight.",
+                    "Stop his blood pressure pills."):
+            with self.subTest(bad=bad):
+                self.assertIsNotNone(webapp.dosing_instruction(bad))
+        for ok in ("Do not double his insulin.", "Never skip his pills.", "Dad takes 5 mg daily."):
+            with self.subTest(ok=ok):
+                self.assertIsNone(webapp.dosing_instruction(ok))
         panel, _, cleared = webapp.save_caregiver_text_memo("Blood pressure pill at 8 AM.", session_id)
         self.assertEqual(cleared, "")
         self.assertIn("Blood pressure pill at 8 AM", panel)
