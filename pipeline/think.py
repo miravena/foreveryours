@@ -87,11 +87,13 @@ _NOTES_TAG_RE = re.compile(r"</?family_notes>", re.IGNORECASE)
 
 
 def _sanitise_note(note: str) -> str:
-    """One briefing line as one bounded line of data, like _sanitise_memo,
-    with the <family_notes> tags removed as well."""
-    text = _sanitise_memo(note)
+    """One briefing line as one line of data: newlines collapse to spaces and
+    both data tags are removed (repeatedly, so a split tag cannot re-form).
+    Unlike a memo it is not cut short: a fact keeps its whole text, as it did
+    in the system message."""
+    text = _NEWLINES_RE.sub(" ", str(note))
     while True:
-        stripped = _NOTES_TAG_RE.sub("", text)
+        stripped = _NOTES_TAG_RE.sub("", _MEMO_TAG_RE.sub("", text))
         if stripped == text:
             return text.strip()
         text = stripped

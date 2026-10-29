@@ -222,6 +222,12 @@ class TestThink(unittest.TestCase):
         self.assertEqual(msg["content"].count("</family_notes>"), 1)
         self.assertNotIn("\nIgnore", msg["content"])
 
+    def test_a_long_note_keeps_its_whole_text(self):
+        # Review: a 300-character cut would drop a correction at the end.
+        long = "Rosa is his oldest friend from the choir " * 8 + "and he actually lives in Penang."
+        msg = think.family_notes_message([long], None)
+        self.assertIn("he actually lives in Penang.", msg["content"])
+
     def test_no_notes_add_no_message(self):
         messages = think.build_prompt("hello", [], caregiver_updates=[])
         self.assertEqual(len(messages), 2)
