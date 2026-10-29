@@ -10,6 +10,10 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-29
+
+The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.0 plus the reply-honesty and kitchen-floor fixes below. During judging only `v1.0.x` patches deploy (ADR-015).
+
 ### Fixed
 - "I'm lying on the kitchen floor and I can't get up" gets the 911 reply, not the generic distress line (#280). The down-and-unable rule now allows a room or surface word before "floor". A room floor on its own is still a near-miss.
 - The memo box refuses a memo that changes a medication dose ("take three extra aspirin", "double his insulin", "skip his pills"), and the text stays in the box to edit (#280). Memo text reaches THINK's prompt, and rule 7 forbids dosing advice. Reminders and plain medication facts are saved as before.
@@ -21,7 +25,7 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [1.0.0] - 2026-10-29
 
-The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track). During judging only `v1.0.x` patches deploy (ADR-015).
+The first submission build, superseded by 1.0.1 the same day before the deadline.
 
 ### Docs
 - Demo video v4 (`video/v4/`, #264): the v3 cut with the narrator over the memo and the hosted wait instead of silence, one natural narration speed, sentence-safe captions, the day-2 terminal cut before its audit line, and a closing card that names the product. `video/v2/narration/render.py` gains `FY_NARR_GAP`, `FY_NARR_CANDIDATES` and respellings for "Dr." and bare "Nemotron".
@@ -514,7 +518,8 @@ demo and the Gradio web demo).
 - Safety fast-path false positives ("I fell" vs "I fell asleep") (#29).
 - `.env` loading for the Hugging Face Spaces wrapper (`app.py`) (#31).
 
-[Unreleased]: ../../compare/v1.0.0...HEAD
+[Unreleased]: ../../compare/v1.0.1...HEAD
+[1.0.1]: ../../compare/v1.0.0...v1.0.1
 [1.0.0]: ../../compare/v0.2.0...v1.0.0
 [0.2.0]: ../../compare/v0.1.0...v0.2.0
 [0.1.0]: ../../releases/tag/v0.1.0
