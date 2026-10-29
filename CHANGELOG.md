@@ -11,6 +11,10 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Fixed
+- Replies never say Sarah is on her way, coming over or about to check on Dad (the app only knows she was alerted), and on a turn that raised no safety flag they never promise to pass her a message (#279, live T15 and T13). New THINK rule 26 plus a sentence filter; the judge check now fails both wordings.
+- Asked about appointments with one in the caregiver notes, a reply no longer opens with "I don't see any appointments" (#278, live T09). The denial sentence is dropped, the note is read back if the reply never named it, and the updates block now says a later-day item is still upcoming.
+
 ## [1.0.0] - 2026-10-29
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track). During judging only `v1.0.x` patches deploy (ADR-015).
