@@ -43,7 +43,9 @@ class TestArrivalClaims(unittest.TestCase):
                   "Sarah will check on you later.",
                   "Your family is rushing over.",
                   # Codex review round 2: emergency words do not make it true
-                  "Sarah is on her way with emergency help."):
+                  "Sarah is on her way with emergency help.",
+                  # round 6: a hedged first mention does not shield a later claim
+                  "I can't say when Sarah will check on you, but she's on her way."):
             with self.subTest(s=s):
                 self.assertTrue(claims_caregiver_arriving(s, "Sarah"))
 
@@ -200,6 +202,9 @@ class TestArrivalClauseWithAdvice(unittest.TestCase):
         self.assertEqual(strip_arrival_clauses("She's on her way to check on you; please call 911.", "Sarah"),
                          "Please call 911.")
         self.assertEqual(strip_arrival_clauses("Call 911 now, and Sarah is on her way.", "Sarah"), "Call 911 now.")
+        # round 6: a "because" clause is cut on its own
+        self.assertEqual(strip_arrival_clauses("Don't move your neck because Sarah is on her way.", "Sarah"),
+                         "Don't move your neck.")
         # Codex review round 4: a clause holding both becomes plain advice
         self.assertEqual(strip_arrival_clauses("Sarah is on her way to help you call 911.", "Sarah"),
                          "If you need help right now, please call 911.")
@@ -212,6 +217,8 @@ class TestArrivalClauseWithAdvice(unittest.TestCase):
         self.assertEqual(appointment_updates([MEMO_TAN], "Any appointments tomorrow?"), [])
         self.assertEqual(appointment_updates([MEMO_TAN], "What time is my dentist appointment?"), [])
         self.assertEqual(appointment_updates([MEMO_TAN], "What time is my appointment with Dr. Lee?"), [])
+        self.assertEqual(appointment_updates([MEMO_TAN], "What time is my appointment with dr. lee?"), [])
+        self.assertEqual(appointment_updates([MEMO_TAN], "when do i see doctor tan?"), [MEMO_TAN])
         self.assertEqual(appointment_updates([MEMO_TAN], "What time is my appointment with Dr. Tan?"), [MEMO_TAN])
 
 

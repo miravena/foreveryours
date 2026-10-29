@@ -343,6 +343,7 @@ def _name_alternation(caregiver_name: str) -> str:
     return "|".join(re.escape(p) for p in sorted(_caregiver_parts(caregiver_name)) if p) or "sarah"
 
 
+_CLAUSE_BREAK = r"[,;:]|\b(?:but|and|so|because|since|while|as)\b"
 # "Sarah isn't on her way" and "I don't know if she's on her way" are the
 # honest answer, not a claim.
 _ARRIVAL_HEDGE_RE = re.compile(
@@ -355,21 +356,23 @@ def claims_caregiver_arriving(sentence: str, caregiver_name: str) -> bool:
     or about to check on Dad: something the app never knows (#279). A
     negated or hedged mention in the same clause is not a claim."""
     text = fastpath._normalize(sentence)
-    m = _ARRIVAL_CLAIM_RE.search(text)
-    if not m:
-        return False
-    # A condition before the claim or in its own clause counts ("If you call
-    # Sarah, she can be there soon"); one after it does not ("She's on her
-    # way; call 911 if you are hurt" is still a claim).
-    lead = re.split(r"[,;:]|\b(?:but|and|so)\b", text[:m.start()])[-1]
-    tail = re.split(r"[,;:]|\b(?:but|and|so)\b", text[m.end():])[0]
-    if (_ARRIVAL_CONDITION_RE.search(text[:m.start()] + m.group(0) + tail)
-            or _ARRIVAL_HEDGE_RE.search(lead) or _ARRIVAL_ADVICE_RE.search(lead)):
-        return False
     if text.rstrip().rstrip("\"')").endswith("?"):
         return False  # "Would you like Sarah to check on you?" asks, it does not claim
     subject = _ARRIVAL_SUBJECT.format(name=_name_alternation(caregiver_name))
-    return bool(re.search(subject, text, re.IGNORECASE))
+    if not re.search(subject, text, re.IGNORECASE):
+        return False
+    # Every mention counts: "I can't say when she'll check on you, but she's
+    # on her way" is still a claim. A condition before the claim or in its
+    # own clause shields it ("If you call Sarah, she can be there soon"); one
+    # after it does not ("She's on her way; call 911 if you are hurt").
+    for m in _ARRIVAL_CLAIM_RE.finditer(text):
+        lead = re.split(_CLAUSE_BREAK, text[:m.start()])[-1]
+        tail = re.split(_CLAUSE_BREAK, text[m.end():])[0]
+        if (_ARRIVAL_CONDITION_RE.search(text[:m.start()] + m.group(0) + tail)
+                or _ARRIVAL_HEDGE_RE.search(lead) or _ARRIVAL_ADVICE_RE.search(lead)):
+            continue
+        return True
+    return False
 
 
 # #279: the app cannot send the family a message; only safety flags reach
@@ -393,7 +396,7 @@ def promises_family_message(sentence: str, caregiver_name: str) -> bool:
 
 
 _CALL_911_LINE = "if you need help right now, please call 911"
-_CLAUSE_CUT_RE = re.compile(r"\s*[;,\u2014]\s*|\s+(?=(?:and|but|so)\s)", re.IGNORECASE)
+_CLAUSE_CUT_RE = re.compile(r"\s*[;,\u2014]\s*|\s+(?=(?:and|but|so|because|since|while)\s)", re.IGNORECASE)
 
 
 def strip_arrival_clauses(sentence: str, caregiver_name: str) -> str:
@@ -413,7 +416,7 @@ def strip_arrival_clauses(sentence: str, caregiver_name: str) -> str:
         return ""
     if kept == parts:
         return sentence
-    kept[0] = re.sub(r"^(?:and|but|so)\s+", "", kept[0], flags=re.IGNORECASE)
+    kept[0] = re.sub(r"^(?:and|but|so|because|since|while)\s+", "", kept[0], flags=re.IGNORECASE)
     out = ", ".join(kept).strip()
     out = out[0].upper() + out[1:]
     return out if out[-1] in ".!?" else out + "."
@@ -453,7 +456,9 @@ def appointment_updates(updates: list[str], question: str = "", caregiver_name: 
     if re.search(r"\b(?:today|tonight|tomorrow|yesterday)\b", question, re.IGNORECASE):
         return []  # a relative day needs the calendar; leave it to THINK
     asked_days = {d.lower() for d in _DAY_WORD_RE.findall(question)}
-    asked_names = ({w.lower() for w in re.findall(r"\b[A-Z][a-z]+\b", question)}
+    # "Dr. Lee" and a typed "dr. lee" alike.
+    asked_names = (({w.lower() for w in re.findall(r"\b[A-Z][a-z]+\b", question)}
+                    | {w.lower() for w in re.findall(r"\b(?:dr|doctor)\.?\s+([a-z]{2,})\b", question, re.IGNORECASE)})
                    - _QUESTION_NOT_NAMES - asked_days - _caregiver_parts(caregiver_name)
                    - {d for d in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")})
     asked_kinds = {k.lower() for k in _APPOINTMENT_KIND_RE.findall(question)}
