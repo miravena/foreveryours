@@ -15,7 +15,10 @@ from unittest.mock import patch
 from caregiver import CaregiverFlags
 from memory.store import MemoryStore
 from pipeline import think
+from safety import fastpath
 from pipeline.orchestrator import TurnResult, enforce_flag_honesty, run_turn
+
+FALL_Q = "Did you tell Sarah about my fall?"
 
 _DENIAL_RE = re.compile(r"haven't told|didn't tell|not told", re.IGNORECASE)
 
@@ -184,7 +187,7 @@ class TestFallHonesty(unittest.TestCase):
         is "you" (the senior) is not a family-notification denial at all and
         must survive even when a flag was disclosed this session."""
         unrelated = "I haven't told you how much I enjoy our afternoon chats."
-        self.assertEqual(enforce_flag_honesty(unrelated, True, "Sarah"), unrelated)
+        self.assertEqual(enforce_flag_honesty(unrelated, True, "Sarah", question=FALL_Q), unrelated)
 
     def test_guard_rewrites_a_pronoun_denial_not_just_the_name(self):
         """A second review round caught a false NEGATIVE in the first fix: a
@@ -198,9 +201,41 @@ class TestFallHonesty(unittest.TestCase):
             "I haven't told anyone about your fall.",
             "I haven't told Sarah anything yet.",
         ):
-            rewritten = enforce_flag_honesty(denial, True, "Sarah")
+            rewritten = enforce_flag_honesty(denial, True, "Sarah", question=FALL_Q)
             self.assertNotRegex(rewritten, _DENIAL_RE, denial)
             self.assertIn("Sarah", rewritten)
+
+    def test_guard_keeps_a_denial_when_dad_asks_about_a_private_subject(self):
+        """Review finding: after a fall flag, a true privacy answer must not
+        become a false "I did let Sarah know". The guard decides from the
+        question, so a question about anything but a disclosed event never
+        triggers a rewrite, whatever the reply says."""
+        for question, reply in (
+            ("Did you tell Sarah about the biscuits?", "I haven't told her about it."),
+            ("Don't tell Sarah about the biscuits.", "I haven't told Sarah, because that's between us."),
+            ("Did you tell Sarah about my letter?", "I haven't told Sarah anything yet."),
+            ("Did you tell Sarah my PIN?", "I haven't told Sarah your PIN."),
+        ):
+            self.assertEqual(enforce_flag_honesty(reply, True, "Sarah", question=question), reply, question)
+        # No question known: never rewrite.
+        self.assertEqual(enforce_flag_honesty("I haven't told her.", True, "Sarah"), "I haven't told her.")
+
+    def test_guard_rewrites_only_for_the_event_of_a_flag_actually_disclosed(self):
+        fall = [fastpath.CAREGIVER_FLAG_TEXT["fall"]]
+        driving = [fastpath.CAREGIVER_FLAG_TEXT["driving"]]
+        crisis = [fastpath.CAREGIVER_FLAG_TEXT["crisis"]]
+        reply = "I didn't tell her about that."
+        drive_q = "Did you tell Sarah about my driving?"
+        # A fall flag does not make a driving denial false.
+        self.assertEqual(enforce_flag_honesty(reply, True, "Sarah", disclosed_texts=fall, question=drive_q), reply)
+        out = enforce_flag_honesty(reply, True, "Sarah", disclosed_texts=driving, question=drive_q)
+        self.assertNotRegex(out, _DENIAL_RE)
+        self.assertEqual(out, "I did let Sarah know.")
+        self.assertNotRegex(
+            enforce_flag_honesty("I haven't told Sarah.", True, "Sarah", disclosed_texts=crisis,
+                                 question="Did you tell Sarah I said I want to end my life?"),
+            _DENIAL_RE,
+        )
 
     def test_guard_rewrites_a_real_denial_even_with_an_unrelated_tell_you_later(self):
         """A third review round caught a false NEGATIVE: the "told you"
@@ -208,7 +243,7 @@ class TestFallHonesty(unittest.TestCase):
         you" later in a compound sentence suppressed a real denial earlier
         in it. The exclusion is now tied to the matched denial verb itself."""
         denial = "I haven't told Sarah because I wanted to tell you first."
-        rewritten = enforce_flag_honesty(denial, True, "Sarah")
+        rewritten = enforce_flag_honesty(denial, True, "Sarah", question=FALL_Q)
         self.assertNotRegex(rewritten, _DENIAL_RE, denial)
 
     @patch("pipeline.orchestrator.audit.audit_reply", return_value=("OK", "casual"))

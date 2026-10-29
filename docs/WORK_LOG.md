@@ -9,6 +9,23 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-29: fall-honesty guard decides from the question (#11)
+- **Why:** an independent review of the batch found that the reply-only guard turned true privacy
+  answers into false disclosure claims after a fall flag ("I haven't told Sarah about your private
+  letter" became "I did let Sarah know"). Four rounds of reply-side rules (subject phrases, topic
+  words, allow-lists) each had a counterexample, because the same words can answer "about my fall"
+  or "about the biscuits".
+- **Fix:** `enforce_flag_honesty(..., disclosed_texts, question)` rewrites a denial only when
+  `question` (Dad's utterance this turn) names the event of a disclosed flag
+  (`_FLAG_EVENT_WORDS`). With no question it never rewrites. The replacement drops "just as I told
+  you", because the flag is on the caregiver panel even if Dad's browser never played the line. A
+  disclosed driving note joins `TurnResult.session_flags` on the normal and the fallback path.
+- **Known limits:** a question that names the event about some other matter ("Did you tell Sarah
+  about my fear of falling?") still allows the rewrite. The fast-path flag enters the session flags
+  when its line is synthesized, not when the browser acknowledges playing it.
+- **Tests:** 12 in `tests/test_fall_honesty.py`; `unittest discover` OK; `live_judge_check.py --fake
+  good` 23/23.
+
 ### 2026-10-29 (#11: second review bounce -- shared-profile browser tabs still shared the flag fact)
 - **What:** the previous entry's fix left `run_turn` with a default mode that still read
   `flags.all()` when the caller passed no `session_flags`, on the assumption that webapp.py's

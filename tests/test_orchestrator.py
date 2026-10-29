@@ -918,6 +918,14 @@ class TestDrivingNote(unittest.TestCase):
         self.assertNotIn("HIGH PRIORITY SAFETY ALERT", panel)
         self.assertNotIn("Safety alert raised", panel)
 
+    def test_disclosed_driving_note_enters_the_session_flags(self):
+        """Review finding: the disclosed driving note must be in
+        TurnResult.session_flags, so the next turn's THINK prompt and the
+        honesty guard know Sarah was told."""
+        res, _, _, _, notes = self._turn(self.PLAN, self.ENCOURAGING)
+        self.assertEqual(len(notes), 1, notes)
+        self.assertIn(notes[0].text, res.session_flags)
+
     def test_curly_apostrophe_is_detected_the_same(self):
         _, prompt, _, _, notes = self._turn(self.CURLY, self.ENCOURAGING)
         self.assertIn("plans to drive himself", prompt)

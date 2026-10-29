@@ -236,9 +236,42 @@ _FLAG_DENIAL_RE = re.compile(
     r"(?:haven't told|didn't tell|not told)(?!\s+you\b)", re.IGNORECASE
 )
 
+# The guard decides from Dad's QUESTION, never from the reply alone: no rule
+# on the reply can tell "I haven't told her about it" answering "Did you
+# tell Sarah about my fall?" from the same words answering "Don't tell Sarah
+# about the biscuits". So a denial is rewritten only when Dad's utterance
+# this turn names the event of a flag actually disclosed this session. A
+# question about anything else (biscuits, a letter, his PIN) never triggers
+# a rewrite, so a confidence is never reported as shared.
+#
+# Flag text (safety/fastpath.CAREGIVER_FLAG_TEXT) -> words that name its event.
+_FLAG_EVENT_WORDS = (
+    (re.compile(r"\bfall\b|\bfloor\b|unable to get up|injury", re.IGNORECASE),
+     re.compile(r"\b(?:fall|fell|fallen|floor|get up)\b", re.IGNORECASE)),
+    (re.compile(r"\bdriving\b", re.IGNORECASE),
+     re.compile(r"\b(?:driv\w*|lift)\b", re.IGNORECASE)),
+    (re.compile(r"medical emergency", re.IGNORECASE),
+     re.compile(r"\b(?:chest|breath\w*|bleed\w*|911)\b", re.IGNORECASE)),
+    (re.compile(r"suicidal|\bcrisis\b|severe distress", re.IGNORECASE),
+     re.compile(r"\b(?:crisis|988|end (?:your|my) life|kill (?:yourself|myself)|hurt (?:yourself|myself))\b",
+                re.IGNORECASE)),
+    (re.compile(r"confusion", re.IGNORECASE),
+     re.compile(r"\b(?:confus\w*|where I am)\b", re.IGNORECASE)),
+)
+# Used when the caller passes no flag texts (a direct unit probe): fall only.
+_DEFAULT_DISCLOSED_TEXTS = ("Dad reported a fall",)
+
+
+def _question_names_disclosed_event(question: str, disclosed_texts) -> bool:
+    return any(
+        any(flag_re.search(t) for t in disclosed_texts) and event_re.search(question)
+        for flag_re, event_re in _FLAG_EVENT_WORDS
+    )
+
 
 def enforce_flag_honesty(
-    reply: str, flags_disclosed_this_session: bool, caregiver_name: str | None = None
+    reply: str, flags_disclosed_this_session: bool, caregiver_name: str | None = None,
+    disclosed_texts=None, question: str | None = None,
 ) -> str:
     """Pure guard (#11): when a caregiver flag was disclosed to the
     senior THIS session (flags_disclosed_this_session=True), replace any
@@ -246,7 +279,11 @@ def enforce_flag_honesty(
     (/haven't told|didn't tell|not told/i, see `_FLAG_DENIAL_RE` for the
     "told you" exclusion) with a plain confirmation naming `caregiver_name`.
     When no flag was disclosed this session, `reply` is returned unchanged
-    -- this guard never invents a disclosure that did not happen. It is the
+    -- this guard never invents a disclosure that did not happen. It also
+    returns `reply` unchanged unless `question` (Dad's utterance this turn)
+    names the event of a flag in `disclosed_texts` (this session's disclosed
+    flag texts), so a denial about a private subject is always kept (see
+    `_question_names_disclosed_event`). It is the
     deterministic belt behind the THINK prompt's
     [SAFETY FLAGS SENT THIS SESSION] fact (think.build_prompt's
     session_flags), applied to the continuation reply and to every later
@@ -257,8 +294,14 @@ def enforce_flag_honesty(
     function) and it falls back to "Sarah"."""
     if not flags_disclosed_this_session or not reply or not reply.strip():
         return reply
+    texts = list(disclosed_texts) if disclosed_texts else list(_DEFAULT_DISCLOSED_TEXTS)
+    if not _question_names_disclosed_event(question or "", texts):
+        return reply
     name = caregiver_name or "Sarah"
-    replacement = f"I did let {name} know, just as I told you."
+    # No "just as I told you": the flag is on the caregiver panel whether or
+    # not Dad's browser played the disclosure line, so only this part is
+    # always true.
+    replacement = f"I did let {name} know."
     sentences = _SENTENCE_SPLIT_RE.split(reply)
     fixed = [replacement if _FLAG_DENIAL_RE.search(s) else s for s in sentences]
     return " ".join(fixed)
@@ -2188,7 +2231,8 @@ def run_turn(
                     # is passed so the guard only rewrites a denial that is
                     # actually about telling the family/caregiver, never an
                     # unrelated "I haven't told you ..." sentence.
-                    yield enforce_flag_honesty(s, flag_honesty_active, caregiver_name)
+                    yield enforce_flag_honesty(s, flag_honesty_active, caregiver_name,
+                                               disclosed_texts=session_flags_disclosed, question=transcript)
 
             # Tracks whether THINK's own sentences (and any 988 in them) were
             # DELIVERED, so a refused 988 chunk is never carried as heard.
@@ -2328,7 +2372,9 @@ def run_turn(
     if driving_guard and is_fallback:
         # No background pass on a fallback turn; the note is still owed.
         try:
-            _record_driving_note(flags, caregiver_name, audio_out_dir, on_chunk, result.audio_paths)
+            note = _record_driving_note(flags, caregiver_name, audio_out_dir, on_chunk, result.audio_paths)
+            if note is not None and note.disclosed_to_senior:
+                result.session_flags.append(note.text)
         except Exception as exc:  # pragma: no cover - never fail a turn over a note
             print(f"[orchestrator] driving note failed: {type(exc).__name__}", file=sys.stderr)
 
@@ -2338,7 +2384,12 @@ def run_turn(
                 # After the reply (which already offered the lift), before the
                 # audit's own disclosure, so the lines are heard in order.
                 try:
-                    _record_driving_note(flags, caregiver_name, audio_out_dir, on_chunk, result.audio_paths)
+                    note = _record_driving_note(flags, caregiver_name, audio_out_dir, on_chunk, result.audio_paths)
+                    if note is not None and note.disclosed_to_senior:
+                        # Session-scoped like the audit append below, so a
+                        # later "Did you tell Sarah about my driving?" is
+                        # answered honestly (Refs #11).
+                        result.session_flags.append(note.text)
                 except Exception as exc:  # pragma: no cover - never fail a turn over a note
                     print(f"[orchestrator] driving note failed: {type(exc).__name__}", file=sys.stderr)
             try:
