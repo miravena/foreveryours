@@ -356,8 +356,10 @@ def claims_caregiver_arriving(sentence: str, caregiver_name: str) -> bool:
     or about to check on Dad: something the app never knows (#279). A
     negated or hedged mention in the same clause is not a claim."""
     text = fastpath._normalize(sentence)
-    if text.rstrip().rstrip("\"')").endswith("?"):
-        return False  # "Would you like Sarah to check on you?" asks, it does not claim
+    if text.rstrip().rstrip("\"')").endswith("?") and _QUESTION_START_RE.search(text):
+        # "Would you like Sarah to check on you?" asks; "She's on her way,
+        # are you hurt?" still claims.
+        return False
     subject = _ARRIVAL_SUBJECT.format(name=_name_alternation(caregiver_name))
     if not re.search(subject, text, re.IGNORECASE):
         return False
@@ -453,8 +455,9 @@ def appointment_updates(updates: list[str], question: str = "", caregiver_name: 
     """The caregiver updates that are an appointment, safe to read aloud, and
     about what Dad asked: a day, a name or a kind of appointment he names
     ("on Friday", "with Dr. Lee", "my dentist") must be in the note."""
-    if re.search(r"\b(?:today|tonight|tomorrow|yesterday)\b", question, re.IGNORECASE):
+    if re.search(r"\b(?:today|tonight|tomorrow|yesterday|next\s+(?:week|month))\b", question, re.IGNORECASE):
         return []  # a relative day needs the calendar; leave it to THINK
+    this_week = bool(re.search(r"\bthis\s+week\b", question, re.IGNORECASE))
     asked_days = {d.lower() for d in _DAY_WORD_RE.findall(question)}
     # "Dr. Lee" and a typed "dr. lee" alike.
     asked_names = (({w.lower() for w in re.findall(r"\b[A-Z][a-z]+\b", question)}
@@ -468,6 +471,8 @@ def appointment_updates(updates: list[str], question: str = "", caregiver_name: 
             continue
         lower = set(re.findall(r"[a-z]+", u.lower()))
         if asked_days - lower or asked_names - lower or asked_kinds - lower:
+            continue
+        if this_week and re.search(r"\bnext\s+(?:week|month)\b|\bin\s+\w+\s+weeks?\b", u, re.IGNORECASE):
             continue
         out.append(u)
     return out

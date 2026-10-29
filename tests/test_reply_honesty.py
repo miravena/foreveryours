@@ -45,7 +45,9 @@ class TestArrivalClaims(unittest.TestCase):
                   # Codex review round 2: emergency words do not make it true
                   "Sarah is on her way with emergency help.",
                   # round 6: a hedged first mention does not shield a later claim
-                  "I can't say when Sarah will check on you, but she's on her way."):
+                  "I can't say when Sarah will check on you, but she's on her way.",
+                  # round 7: a trailing question does not shield the claim
+                  "She's on her way, are you hurt?"):
             with self.subTest(s=s):
                 self.assertTrue(claims_caregiver_arriving(s, "Sarah"))
 
@@ -215,6 +217,10 @@ class TestArrivalClauseWithAdvice(unittest.TestCase):
         self.assertEqual(appointment_updates([MEMO_TAN], "Do I have any appointments on Friday?"), [])
         self.assertEqual(appointment_updates([MEMO_TAN], "Do I have any appointments today?"), [])
         self.assertEqual(appointment_updates([MEMO_TAN], "Any appointments tomorrow?"), [])
+        # round 7: a next-week note does not answer "this week"
+        later = "Dad has a check-up with Dr. Tan next week."
+        self.assertEqual(appointment_updates([later], "Do I have any appointments this week?"), [])
+        self.assertEqual(appointment_updates([MEMO_TAN], "Any appointments next week?"), [])
         self.assertEqual(appointment_updates([MEMO_TAN], "What time is my dentist appointment?"), [])
         self.assertEqual(appointment_updates([MEMO_TAN], "What time is my appointment with Dr. Lee?"), [])
         self.assertEqual(appointment_updates([MEMO_TAN], "What time is my appointment with dr. lee?"), [])
