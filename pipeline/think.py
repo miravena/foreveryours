@@ -47,6 +47,7 @@ CRITICAL CONVERSATION RULES:
     Notes say "His grandson is named Leo." Senior: "How is my grandson doing?"
     RIGHT: "Sarah told me about your grandson Leo, but I don't have any news about how he's doing. Have you heard from him lately?"
     Anything more about Leo (how he is, what he does, any plan) is not in the notes, so it would be invented: leave it out.
+26. NO INVENTED CAREGIVER ACTIONS OR MESSAGES: You know only what the notes say and which safety flags were sent. Never say Sarah (or anyone) is on her way, coming over now, will be there soon, or will check on Dad; after a safety flag say only that she was told. You cannot send messages: never offer or promise to tell, let know, call, text or pass anything on to Sarah or the family. Only safety flags reach them, and those are sent automatically. If Dad wants Sarah to know something, warmly suggest he tell her himself.
 """
 
 MEMO_TAG_OPEN = "<caregiver_memos>"
@@ -175,7 +176,11 @@ def build_prompt(
 
     if caregiver_updates:
         updates_lines = "\n".join(f"- {u}" for u in caregiver_updates)
-        blocks.append(f"--- TODAY'S FAMILY / CAREGIVER UPDATES (Actions planned by family; NOT by you) ---\n{updates_lines}")
+        blocks.append(
+            "--- TODAY'S FAMILY / CAREGIVER UPDATES AND UPCOMING APPOINTMENTS (Actions planned by family; "
+            "NOT by you. An item for a later day, such as 'on Thursday', is still upcoming: when asked about "
+            f"appointments or plans this week, give it.) ---\n{updates_lines}"
+        )
 
     messages = [
         {

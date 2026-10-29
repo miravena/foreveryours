@@ -9,6 +9,73 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-29: replies say only what the app knows (#279, #278)
+- **Why:** live T15 got "She's on her way to check on you now" and T13 "I'll let Sarah know we're
+  all set". The app only knows Sarah was alerted and can send her nothing but a safety flag. The
+  v1.0.0 deploy run also had T09 open with "I don't see any appointments" with the Dr. Tan memo in
+  the notes (#278).
+- **Fix:** THINK rule 26, plus three sentence filters in `filter_sentences`:
+  `claims_caregiver_arriving` (cut clause by clause, every turn), `promises_family_message` (turns the
+  fast path did not flag) and `denies_noted_appointment` (only when a note holds the appointment Dad
+  asked about). A reply that never named the noted appointment gets it read back. The updates block
+  header now says a later-day item is still upcoming, the likeliest cause of the T09 denial.
+- **Review:** five OpenAI rounds, each finding pinned in `tests/test_reply_honesty.py`. What the
+  rounds taught: a claim and safety advice share sentences ("She's on her way, don't move your
+  neck"), so cut clauses rather than drop sentences; a condition only shields a claim when it comes
+  before it; a weekday or clock time alone does not mean the reply named the appointment.
+- **Known limits:** keyword floors, not understanding. A relative-day appointment question
+  ("today", "tomorrow") is left to THINK, since the belt has no calendar.
+
+### 2026-10-29 (#275: v5 cut, captions and labels fixed)
+- **What:** The teammate's review in #275 (written against v3) was checked against v4's SRT and
+  the file before building: UTF-8 was valid but six cues carried U+2019 (mojibake in a cp1252
+  player), the LIVE HOSTED SPACE cue ran 0:00-1:43.6, "Not shown to the family" (1:09.8-1:28.0)
+  overlapped the crisis line (starts 1:25.4) with no crisis label, the day-2 shot was a terminal
+  with a "LOCAL PERSISTENCE TEST" tag, and the close ended "the README lists what it misses".
+  v5 (`video/v5/`, draft release `video-v5-draft`) fixes those and nothing else: straight quotes
+  only; a burned-in corner badge plus one 4 s SRT cue per hosted shot; the privacy label ends at
+  1:24.16 and a "Crisis: 988 offered, simulated family alert" label runs 1:32.08-1:43.62; a clean
+  card "Local persistence test - not the hosted Space." for day 2 (the SRT carries it); and the
+  closing line "This is a prototype: it can miss nuance, so it does not replace human judgment
+  or emergency services." (shot 8 re-rendered alone, Kokoro af_heart, speed 0.9, gap 0.4; the
+  other seven narration files are v4's, byte-identical).
+- **Measured on the uploaded release assets (fresh download):** duration 141.43 s (2:21.4,
+  under 2:50); loudness -16.1 LUFS, true peak -5.0 dBTP; no U+2018/2019/201C/201D and no
+  non-ASCII at all in the SRT, no BOM; five `[LIVE HOSTED SPACE]` cues of 4.0 s each;
+  `[Not shown to the family]` 69.83-84.16 s, `Dad: I want to end my life.` starts 85.36 s,
+  `[Crisis: 988 offered, simulated family alert]` 92.08-103.62 s (covers the 988 line,
+  94.79-99.91 s); `[Local persistence test - not the hosted Space.]` 103.62-111.22 s with the
+  same text on the card (frame at 106 s); the new closing sentence is one cue, 128.87-136.45 s.
+  SHA-256 of `foreveryours_demo_v5.mp4`: `96fed0fe8ffb91749f03a50861fbf252857916fe66356c6f90308a001c6caab5`.
+- **v2/v3/v4 assets before the title edits** (compared again after; the edits touch release titles
+  only):
+
+  | Release | Asset | Bytes | SHA-256 |
+  |---|---|---|---|
+  | v4 (`video-v4-draft`) | `foreveryours_demo_v4.mp4` | 15301154 | `d5ef99c5cae625d6ef5f6d8df2dd064068f86a320fa0c47be42c7952d809c5ea` |
+  | v4 | `foreveryours_demo_v4.srt` | 3357 | `ffaab300feaea75cf2b0cc54f1a6a650a01f6d3a6a4e6027fcc75fca4b9a070c` |
+  | v4 | `narrator-candidate-af_bella.wav` | 1344590 | `36d56db4573ab348a75bc0c24621242c60d6c114ec66d9cb5825274d710f2f64` |
+  | v4 | `narrator-candidate-af_heart.wav` | 1277006 | `4b9dd7e1c9349c15fa46e69ac3ef3341dd275232511f9a64297ae37b4072f2a7` |
+  | v4 | `narrator-candidate-af_sarah.wav` | 1256526 | `c9a1b56dd90ae2c9ebdbe15a3170450b3f1ca972ef610cb5d0dbdecb94d6d632` |
+  | v4 | `narrator-candidate-am_adam.wav` | 1248334 | `d9fc18607eebb260c3aef06d99f1feca7d06d76386b334166a82c1c786a35dc5` |
+  | v4 | `narrator-candidate-am_michael.wav` | 1424462 | `07ad1cbefc5893ef8cb82397d9f0fa76520037fcd1dfd208849de2081a283e4b` |
+  | v4 | `narrator-candidate-bf_emma.wav` | 1215566 | `d8603b42ef6a647f2ddd497f745cce98faf7f17b2c89f4b06223277fd746f0bb` |
+  | v4 | `narrator-candidate-bm_george.wav` | 1477710 | `7a289d5b5f0592d492df685cd8a224fc2d59748321fd50a9b5321d3cfb5fac79` |
+  | v3 (`untagged-24c5e4d6b7c6e680fee7`) | `foreveryours_demo_v3.mp4` | 15212006 | `a8c2bbd8180944ca15d81d22c7d17e10981d3edcd5bc19304352df0cacd24c93` |
+  | v3 | `foreveryours_demo_v3.srt` | 3127 | `a1e7b0d1d94c847e6d193c2c75f7b938d46c88c154a2bcfd32a2f8d1fbffb48a` |
+  | v2 (`video-v2-draft`) | `foreveryours_demo_v2.mp4` | 18168949 | `386d6497fb28f8012b39ddb46c576da1389901a40cb2b9fc0ae5b2c4d8dce043` |
+  | v2 | `foreveryours_demo_v2.srt` | 4550 | `a60be69b7d08b7e3edc85317d236bca5b433142514329242d7bcc5567307d9b4` |
+
+- **Gotchas:** the first assemble run aligns every WAV with faster-whisper (about 9 minutes on
+  the 2-core ARM box); later runs reuse `_assemble_v5/align.json`. The new closing sentence is
+  101 characters, over the 84-character caption limit, so it is exempted (`KEEP_WHOLE`) to stay
+  one SRT cue; the burned-in caption wraps to two lines. The crisis label sits over the top
+  of the Caregiver panel's intro paragraph (the free band above "Today:" is too small for a
+  two-line label).
+- **Not done here:** YouTube upload, the Devpost and README video links, and the choice of cut
+  stay with the founder and teammate. The footage is unchanged; the day-2 terminal run is no
+  longer shown, only its question and answer as captions on the card.
+
 ### 2026-10-29: fall-honesty guard decides from the question (#11)
 - **Why:** an independent review of the batch found that the reply-only guard turned true privacy
   answers into false disclosure claims after a fall flag ("I haven't told Sarah about your private
