@@ -110,8 +110,14 @@ CRISIS_PHYSICAL_EMERGENCY_SENTENCE = (
 # alone ("can't reach the phone charger from the sofa") stay near-misses; the
 # two together fire even in a benign-sounding sentence, because a needless flag
 # is cheap and a missed one is not.
+# A room or surface word may sit before "floor" (#280): "lying on the kitchen
+# floor and can't get up" is the same emergency as "on the floor".
+_ON_THE_FLOOR = (
+    r"on\s+(?:the|my)\s+(?:(?:kitchen|bathroom|bedroom|living\s+room|sitting\s+room|dining\s+room|front\s+room|"
+    r"utility\s+room|laundry\s+room|lounge|hall|hallway|landing|garage|cold|hard|wet|bare)\s+)?(?:floor|ground)"
+)
 _DOWN_PLACE = (
-    r"\b(?:on\s+the\s+(?:floor|ground)|hit\s+the\s+floor|down\s+here"
+    r"\b(?:" + _ON_THE_FLOOR + r"|hit\s+the\s+floor|down\s+here"
     r"|(?:had|took)\s+a\s+(?:bad\s+|little\s+|nasty\s+)?fall"
     r"|fell" + _NOT_A_FALL + r"|fallen" + _NOT_A_FALL + r")\b"
 )
@@ -125,7 +131,7 @@ _CANNOT_SUMMON_HELP = (
     r"|get\s+up\b|move\b)"
 )
 _DOWN_FOR_LONG = (
-    r"\b(?:been|lying|lain|lay|stuck)\s+(?:\w+\s+){0,2}?(?:on\s+the\s+(?:floor|ground)|down\s+here)\b"
+    r"\b(?:been|lying|lain|lay|stuck)\s+(?:\w+\s+){0,2}?(?:" + _ON_THE_FLOOR + r"|down\s+here)\b"
     r".*\b(?:for\s+(?:hours|ages|a\s+long\s+time|(?:an?|one|two|three|four|five|six|several|a\s+few|many|\d+)\s+hours?)"
     r"|all\s+(?:night|day|morning|afternoon)|since\s+(?:last\s+night|this\s+morning|yesterday|breakfast|lunch))\b"
 )

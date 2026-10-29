@@ -5,15 +5,17 @@ All notable changes to ForeverYours are recorded here. Format follows
 on `main` and published as [GitHub Releases](../../releases).
 
 **How to update:** add a line under `## [Unreleased]` in the PR that makes the
-- Demo video v4 (`video/v4/`, #264): the v3 cut with the narrator over the memo and the hosted wait instead of silence, one natural narration speed, sentence-safe captions, the day-2 terminal cut before its audit line, and a closing card that names the product. `video/v2/narration/render.py` gains `FY_NARR_GAP`, `FY_NARR_CANDIDATES` and respellings for "Dr." and bare "Nemotron".
 change (group under Added / Changed / Fixed / Docs). When we cut a release,
 rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
 ### Fixed
+- "I'm lying on the kitchen floor and I can't get up" gets the 911 reply, not the generic distress line (#280). The down-and-unable rule now allows a room or surface word before "floor". A room floor on its own is still a near-miss.
+- The memo box refuses a memo that changes a medication dose ("take three extra aspirin", "double his insulin", "skip his pills"), and the text stays in the box to edit (#280). Memo text reaches THINK's prompt, and rule 7 forbids dosing advice. Reminders and plain medication facts are saved as before.
 - Replies never say Sarah is on her way, coming over or about to check on Dad (the app only knows she was alerted), and on a turn that raised no safety flag they never promise to pass her a message (#279, live T15 and T13). New THINK rule 26 plus a sentence filter; the judge check now fails both wordings.
 - Asked about appointments with one in the caregiver notes, a reply no longer opens with "I don't see any appointments" (#278, live T09). The denial sentence is dropped, the note is read back if the reply never named it, and the updates block now says a later-day item is still upcoming.
+
 ### Docs
 - Demo video v5 (`video/v5/`, #275): the v4 cut with straight quotes only in the captions and SRT, LIVE HOSTED SPACE as a corner badge and short cues instead of one 0:00-1:43 cue, "Not shown to the family" ending before the crisis line with a separate crisis label, a clean "Local persistence test - not the hosted Space." card for day 2, and a self-contained closing limitation line. Draft release only.
 
@@ -22,6 +24,7 @@ rename `Unreleased` to the version and date, then tag it.
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track). During judging only `v1.0.x` patches deploy (ADR-015).
 
 ### Docs
+- Demo video v4 (`video/v4/`, #264): the v3 cut with the narrator over the memo and the hosted wait instead of silence, one natural narration speed, sentence-safe captions, the day-2 terminal cut before its audit line, and a closing card that names the product. `video/v2/narration/render.py` gains `FY_NARR_GAP`, `FY_NARR_CANDIDATES` and respellings for "Dr." and bare "Nemotron".
 - Devpost draft names the four gallery files and their order (#218); image 4 is the stack card without a burned-in caption. Only the video link placeholder remains.
 - `docs/FEEDBACK.md` matches the Devpost feedback text (#204): the backstop runs on Nemotron 3 Super (ADR-016), Nano's measured backstop recall (12 of 19, then 0.88) against Super's, `enable_thinking: false` named as the setting that matters most for voice, the command-line-only latency figure, and Nano's occasional invented detail.
 - Demo video v3 (#264): the v2 footage recut so the fall, the caregiver alert and "Dad was told" are on screen within 4 seconds; scenario-specific thesis instead of a competitor claim, one disclosure label, LIVE HOSTED SPACE / LOCAL PERSISTENCE TEST labels, shorter narration at 150-160 words per minute, shots 3-4 re-captured so the memo shows "expires Thu 23:59" (#261), 2:25. Pipeline in `video/v3/`, script in `docs/VIDEO_SCRIPT.md`.

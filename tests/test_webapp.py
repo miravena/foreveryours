@@ -396,6 +396,37 @@ class TestWebappSessions(unittest.TestCase):
 
 
 
+    def test_memo_box_refuses_dosing_language(self):
+        """#280: a dose instruction in a memo is refused, never stored, and the
+        text stays in the box; a schedule reminder is saved as before."""
+        session_id, _ = webapp.init_session()
+        memo = "Dad's doctor said if his chest hurts he should take three extra aspirin and not bother anyone."
+        panel, sess, kept = webapp.save_caregiver_text_memo(memo, session_id)
+        self.assertEqual(sess, session_id)
+        self.assertEqual(kept, memo)
+        self.assertIn("Memo not saved", panel)
+        self.assertNotIn("bother anyone", panel)
+        data_dir, _ = webapp._session_dirs(session_id)
+        store = MemoryStore(webapp.DEFAULT_PROFILE_ID, data_dir)
+        self.assertFalse(any("aspirin" in i.text for i in store.all()))
+        # Review round 1: the wordings without "his", and the negated precaution.
+        for bad in ("Double insulin tonight.", "Skip pills tonight.", "Give Dad extra insulin tonight.",
+                    "Stop his blood pressure pills.",
+                    # round 2
+                    "Do not forget to double his insulin tonight.", "Give Dad more insulin tonight.",
+                    # round 3
+                    "Take three extra blood pressure pills tonight.", "Double his metformin tonight."):
+            with self.subTest(bad=bad):
+                self.assertIsNotNone(webapp.dosing_instruction(bad))
+        for ok in ("Do not double his insulin.", "Never skip his pills.", "Dad takes 5 mg daily.",
+                   "Bring an extra pillow tonight.", "Sarah is dropping off more groceries.",
+                   "Dad has extra insulin in the fridge.", "Dad has two more pills left in the box."):
+            with self.subTest(ok=ok):
+                self.assertIsNone(webapp.dosing_instruction(ok))
+        panel, _, cleared = webapp.save_caregiver_text_memo("Blood pressure pill at 8 AM.", session_id)
+        self.assertEqual(cleared, "")
+        self.assertIn("Blood pressure pill at 8 AM", panel)
+
     def test_high_priority_alert_banner_renders_on_distress(self):
 
         """High priority alert banner renders at the top of the caregiver panel on fall events."""

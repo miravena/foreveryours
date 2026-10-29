@@ -198,6 +198,53 @@ def validate_sample_profile(text_or_items) -> None:
                 )
 
 
+# A memo is briefing data, but its text reaches THINK's prompt (#280). A dose
+# instruction in it ("take three extra aspirin", "double his insulin") is
+# exactly what rule 7 forbids the companion to say, so the memo box refuses it
+# instead of storing it. Narrow on purpose: only a change to a dose (extra,
+# more, double, skip, stop) is refused. A reminder or a plain medication fact
+# ("Blood pressure pill at 8 AM", "Dad takes 5 mg daily") is kept, as before.
+# Common medicines named outright ("double his metformin").
+_DRUG_NAMES = (r"metformin|warfarin|lisinopril|amlodipine|atorvastatin|simvastatin|levothyroxine|furosemide|"
+               r"metoprolol|donepezil|gabapentin|prednisone|ibuprofen|paracetamol|acetaminophen|tylenol|"
+               r"morphine|oxycodone|codeine|digoxin|sertraline|lorazepam|diazepam")
+_DOSE_TARGET = (r"(?:dose|dosage|insulin|aspirins?|" + _DRUG_NAMES + r"|" + _MED_WORDS
+                + r")\b")  # \b: "pillow" is not a pill
+# "Extra" or "more" is an instruction only after a verb that gives or takes it:
+# "take three extra blood pressure pills", not "Dad has extra insulin in the fridge".
+_DOSE_VERB = r"\b(?:take|takes|taking|give|giving|inject|use|add|try|have\s+him|let\s+him)\b[^.!?]{0,25}?"
+_DOSING_INSTRUCTION_RE = re.compile(
+    _DOSE_VERB + r"\b(?:(?:\d+|one|two|three|four|five|six|a\s+few|some|an?)\s+)?"
+    r"(?:extra|more|additional|another|double)\s+(?:\w+\s+){0,2}?" + _DOSE_TARGET
+    + r"|\b(?:double|skip|stop|increase|halve)\s+(?:(?:his|her|their|your|dad'?s|the|all|any)\s+)?"
+    r"(?:(?:\w+\s+){0,2}" + _DOSE_TARGET + r")",
+    re.IGNORECASE,
+)
+# "Do not double his insulin" is a precaution, not an instruction.
+_DOSING_NEGATED_RE = re.compile(r"\b(?:do\s+not|don'?t|never|no|must\s+not|mustn'?t|shouldn'?t|should\s+not)"
+                                r"\s+(?:\w+\s+){0,2}$", re.IGNORECASE)
+
+
+# "Do not forget to double his insulin" still instructs it.
+_DOSING_NOT_NEGATED_RE = re.compile(r"\b(?:forget|fail|neglect|hesitate)\b", re.IGNORECASE)
+
+
+def dosing_instruction(text: str) -> str | None:
+    """The dose instruction in a caregiver memo, or None (#280)."""
+    folded = unicodedata.normalize("NFKC", text or "").replace("\u2019", "'")
+    for hit in _DOSING_INSTRUCTION_RE.finditer(folded):
+        neg = _DOSING_NEGATED_RE.search(folded[:hit.start()])
+        if not neg or _DOSING_NOT_NEGATED_RE.search(neg.group(0)):
+            return hit.group(0)
+    return None
+
+
+MEMO_DOSING_REFUSAL = (
+    "Memo not saved: it gives a medication dose ({hit!r}). The companion never gives dosing "
+    "advice, so dose instructions are not stored. A reminder such as \"Blood pressure pill at 8 AM\" is fine."
+)
+
+
 # One sentence boundary for every memo path. Each caller used to
 # split on its own rule ("." + space here, [.!?\n]+ there), so the same memo
 # dictated once and typed once produced different texts -- MemoryStore.add's

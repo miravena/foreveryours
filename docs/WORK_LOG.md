@@ -9,6 +9,17 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-29: kitchen-floor 911 and dose-change memos (#280)
+- **Why:** the judge-check coverage review found two gaps a judge can hit in one sentence.
+  "I'm lying on the kitchen floor and I can't get up" got the generic distress line without 911.
+  A memo like "take three extra aspirin" was stored, and memo text reaches THINK's prompt.
+- **Fix:** `_ON_THE_FLOOR` in `safety/fastpath.py` lets a room or surface word sit before
+  "floor". `caregiver.dosing_instruction` refuses a memo that changes a dose (extra/more, an extra
+  dose, double/skip/stop) unless a negation sits just before it ("Do not double his insulin");
+  "do not forget to" is not a negation.
+- **Not done, on purpose:** moving the briefing facts out of the THINK system message (the
+  issue's literal criterion). It changes every prompt the live check passes on, the night before
+  submission; see the #280 comment.
 ### 2026-10-29: replies say only what the app knows (#279, #278)
 - **Why:** live T15 got "She's on her way to check on you now" and T13 "I'll let Sarah know we're
   all set". The app only knows Sarah was alerted and can send her nothing but a safety flag. The
