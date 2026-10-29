@@ -9,6 +9,22 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-29: replies say only what the app knows (#279, #278)
+- **Why:** live T15 got "She's on her way to check on you now" and T13 "I'll let Sarah know we're
+  all set". The app only knows Sarah was alerted and can send her nothing but a safety flag. The
+  v1.0.0 deploy run also had T09 open with "I don't see any appointments" with the Dr. Tan memo in
+  the notes (#278).
+- **Fix:** THINK rule 26, plus three sentence filters in `filter_sentences`:
+  `claims_caregiver_arriving` (cut clause by clause, every turn), `promises_family_message` (turns the
+  fast path did not flag) and `denies_noted_appointment` (only when a note holds the appointment Dad
+  asked about). A reply that never named the noted appointment gets it read back. The updates block
+  header now says a later-day item is still upcoming, the likeliest cause of the T09 denial.
+- **Review:** five OpenAI rounds, each finding pinned in `tests/test_reply_honesty.py`. What the
+  rounds taught: a claim and safety advice share sentences ("She's on her way, don't move your
+  neck"), so cut clauses rather than drop sentences; a condition only shields a claim when it comes
+  before it; a weekday or clock time alone does not mean the reply named the appointment.
+- **Known limits:** keyword floors, not understanding. A relative-day appointment question
+  ("today", "tomorrow") is left to THINK, since the belt has no calendar.
 ### 2026-10-29: fall-honesty guard decides from the question (#11)
 - **Why:** an independent review of the batch found that the reply-only guard turned true privacy
   answers into false disclosure claims after a fall flag ("I haven't told Sarah about your private
