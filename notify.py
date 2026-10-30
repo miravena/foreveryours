@@ -56,6 +56,9 @@ def _clean(text: str) -> str:
     return _KEY_SHAPED.sub("[redacted]", " ".join(str(text).split()))[:_MAX_FIELD]
 
 
+scrub = _clean  # the key-shape scrubber, public for guardrails.py's owner alerts
+
+
 @dataclass(frozen=True)
 class Message:
     subject: str
@@ -145,22 +148,30 @@ class SmtpNotifier(_Base):
             raise ConfigError("FY_NOTIFY_SMTP_SECURITY must be starttls, ssl or none")
 
     def _deliver(self, msg: Message) -> None:
-        mail = EmailMessage()
-        mail["Subject"], mail["From"], mail["To"] = msg.subject, self.sender, self.to
-        mail.set_content(msg.body)
-        # Verified TLS only: the credentials and the alert must not be readable
-        # by whoever impersonates the server.
-        context = ssl.create_default_context()
-        if self.security == "ssl":
-            client = smtplib.SMTP_SSL(self.host, self.port, timeout=self.timeout, context=context)
-        else:
-            client = smtplib.SMTP(self.host, self.port, timeout=self.timeout)
-        with client as smtp:
-            if self.security == "starttls":
-                smtp.starttls(context=context)
-            if self.user:
-                smtp.login(self.user, self.password)
-            smtp.send_message(mail)
+        send_smtp(self.host, self.port, self.user, self.password, self.sender, self.to,
+                  self.security, msg.subject, msg.body, self.timeout)
+
+
+def send_smtp(host: str, port: int, user: str, password: str, sender: str, to: str,
+              security: str, subject: str, body: str, timeout: float = _TIMEOUT_S) -> None:
+    """The one SMTP transport: caregiver notifications and the owner alerts
+    (guardrails.py) both send through it. Raises on any failure."""
+    mail = EmailMessage()
+    mail["Subject"], mail["From"], mail["To"] = subject, sender, to
+    mail.set_content(body)
+    # Verified TLS only: the credentials and the alert must not be readable
+    # by whoever impersonates the server.
+    context = ssl.create_default_context()
+    if security == "ssl":
+        client = smtplib.SMTP_SSL(host, port, timeout=timeout, context=context)
+    else:
+        client = smtplib.SMTP(host, port, timeout=timeout)
+    with client as smtp:
+        if security == "starttls":
+            smtp.starttls(context=context)
+        if user:
+            smtp.login(user, password)
+        smtp.send_message(mail)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -188,14 +199,21 @@ class WebhookNotifier(_Base):
     def _deliver(self, msg: Message) -> None:
         payload = {"text": msg.text, "severity": msg.severity, "told": msg.told,
                    "household": msg.household, "timestamp": msg.timestamp}
-        req = urllib.request.Request(
-            self.url, data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}, method="POST",
-        )
-        with self._opener(req, timeout=self.timeout) as resp:
-            status = getattr(resp, "status", 200)
-        if not 200 <= int(status) < 300:
-            raise DeliveryError(f"webhook answered {status}")
+        post_http(self.url, json.dumps(payload).encode("utf-8"),
+                  {"Content-Type": "application/json"}, self._opener, self.timeout)
+
+
+def post_http(url: str, data: bytes, headers: dict[str, str], opener=None,
+              timeout: float = _TIMEOUT_S) -> None:
+    """The one HTTP POST transport (no redirects followed): the caregiver
+    webhook and the owner alerts (guardrails.py) both send through it. Raises
+    DeliveryError unless the endpoint answers 2xx."""
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    open_ = opener or _no_redirect_opener().open
+    with open_(req, timeout=timeout) as resp:
+        status = getattr(resp, "status", 200)
+    if not 200 <= int(status) < 300:
+        raise DeliveryError(f"webhook answered {status}")
 
 
 class _Broken:

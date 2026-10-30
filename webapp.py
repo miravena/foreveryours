@@ -100,6 +100,7 @@ from caregiver import (
 )
 from memory.expiry import expiry_label
 from memory.store import CAREGIVER_SOURCES, MemoryScope, MemoryStore, PrivacyLevel
+import guardrails
 import notify
 from pipeline import hear
 from pipeline.audit import DEFAULT_AUDIT_MODEL
@@ -129,6 +130,10 @@ SAMPLE_CLIP_LABELS = (
 if not all(name in SAMPLE_SCRIPTS for name in SAMPLE_CLIPS):
     raise RuntimeError("a sample clip has no script in samples/generate_samples.py")
 MAX_DAILY_REQUESTS = int(os.environ.get("MAX_DAILY_REQUESTS", "50"))
+# Abuse guardrails (#37): input caps, the process-wide hosted-turn budget,
+# per-client limits and owner alerts. One shared instance; tests swap it with
+# patch.object(webapp, "GUARDRAILS", ...).
+GUARDRAILS = guardrails.GUARDRAILS
 # Audio input bounds, checked before any ASR runs. 25 MB is the ceiling
 # OpenAI-compatible transcription endpoints enforce; 120 s is far above any demo
 # utterance. MAX_AUDIO_UPLOAD_BYTES is also Gradio's launch(max_file_size=...).
@@ -681,15 +686,19 @@ def _will_call_nebius() -> bool:
     return bool(os.environ.get("NEBIUS_API_KEY", "").strip())
 
 
-def _cap_notice(spoke: bool, flagged: bool) -> str:
-    """The daily-cap footnote on a capped fast-path turn. It claims only what
+def _cap_notice(spoke: bool, flagged: bool, busy: bool = False) -> str:
+    """The cap footnote on a capped fast-path turn. It claims only what
     happened: "still played" only when reply audio was produced (a TTS failure
     or timeout leaves the reply as text), and "the family has been
     notified" only when this turn recorded a caregiver flag (Codex review of
-    the publish, P2)."""
+    the publish, P2). `busy` is the process-wide or per-client limit (#37):
+    the same footnote, but it says to try again shortly, not tomorrow."""
     said = ("the safety message above still played" if spoke
             else "the safety message above is shown as text because speech was unavailable")
     family = " and the family has been notified" if flagged else ""
+    if busy:
+        return ("\n\n_This demo is busy right now, so the companion can't continue "
+                f"the conversation for a moment -- {said}{family}. Please try again shortly._")
     return ("\n\n_This demo has hit its daily request cap, so the companion can't continue "
             f"the conversation until tomorrow -- {said}{family}._")
 
@@ -760,8 +769,21 @@ def _transcription_failed(exc: Exception) -> str:
     return "I couldn't make out that recording -- please try recording again, or type what Dad says instead."
 
 
-def _cap_decision(data_dir: Path, transcript: str) -> tuple[bool, bool]:
-    """Returns `(block_turn, allow_hosted_call)` for this turn.
+def _hosted_turn_allowed(data_dir: Path, client_key: str | None) -> tuple[bool, bool]:
+    """`(allowed, busy)` for a turn that is about to spend a hosted call. The
+    process-wide budget and this client's limits come first (`busy` True when
+    they say no); then the per-session daily cap. A turn the session cap
+    refuses gives its shared-budget slot back."""
+    if not GUARDRAILS.admit_hosted_turn(client_key):
+        return False, True
+    if _rate_limit_ok(data_dir):
+        return True, False
+    GUARDRAILS.refund_hosted_turn(client_key)
+    return False, False
+
+
+def _cap_decision(data_dir: Path, transcript: str, client_key: str | None = None) -> tuple[bool, bool, bool]:
+    """Returns `(block_turn, allow_hosted_call, busy)` for this turn.
 
     Invariant: the offline safety fast-path runs before every hosted-call cap;
     a cap only withholds the paid continuation; call `_rate_limit_ok` here and
@@ -770,12 +792,16 @@ def _cap_decision(data_dir: Path, transcript: str) -> tuple[bool, bool]:
     `allow_hosted_call` False), while a capped ordinary utterance keeps the
     daily-cap message (`block_turn` True). `_rate_limit_ok` only counts a turn
     when it is under the cap, so a capped emergency turn never moves the
-    counter, and the fast-path check is pure. Any later cap (the process-wide
-    one) folds into `capped` here -- never a new early return in a
-    handler."""
+    counter, and the fast-path check is pure. The process-wide budget and the
+    per-client limits (#37) fold into `capped` here -- never a new early return
+    in a handler; `busy` only picks the wording ("busy, try again shortly"
+    instead of "daily cap, try again tomorrow")."""
     fast_triggered = fastpath.check(transcript).triggered
-    capped = _will_call_nebius() and not _rate_limit_ok(data_dir)
-    return capped and not fast_triggered, not capped
+    capped = busy = False
+    if _will_call_nebius():
+        allowed, busy = _hosted_turn_allowed(data_dir, client_key)
+        capped = not allowed
+    return capped and not fast_triggered, not capped, busy
 
 
 _SESSION_ID_RE = re.compile(r"[0-9a-f]{32}")
@@ -797,6 +823,24 @@ def _session_root(session_id: str) -> Path:
     if os.path.dirname(root) != base:
         raise ValueError("invalid session id")
     return Path(root)
+
+
+BUSY_REPLY = guardrails.BUSY_REPLY
+
+
+def _resolve_session(session_id_val: str | None, client_key: str | None) -> str:
+    """The session a turn runs in: the given one, or a fresh household when
+    there is none or the id is malformed. A fresh one counts toward this
+    client's new-session limit (#37)."""
+    created = not session_id_val
+    session_id_val = session_id_val or _new_session()
+    if not SHARED_PROFILE:
+        checked = _normalize_or_new_session(session_id_val)
+        created = created or checked != session_id_val
+        session_id_val = checked
+    if created:
+        GUARDRAILS.note_new_session(client_key)
+    return session_id_val
 
 
 def _normalize_or_new_session(session_id: str) -> str:
@@ -1039,8 +1083,9 @@ def _clear_session_audio(audio_dir: Path) -> None:
         wav.unlink(missing_ok=True)
 
 
-def init_session() -> tuple[str, str]:
+def init_session(request: gr.Request | None = None) -> tuple[str, str]:
     session_id = _new_session()
+    GUARDRAILS.note_new_session(GUARDRAILS.client_key(request))
     return session_id, _format_caregiver_panel(session_id)
 
 
@@ -1383,10 +1428,9 @@ def run_demo_turn(
     # A missing session_id here means the Gradio State expired mid-demo (#83,
     # #80 3.C7): a fresh, unbriefed household is about to answer, so say so
     # rather than silently looking like a reset conversation.
+    client_key = GUARDRAILS.client_key(request)
     session_expired = _session_really_expired(session_id_val, history)
-    session_id_val = session_id_val or _new_session()
-    if not SHARED_PROFILE:
-        session_id_val = _normalize_or_new_session(session_id_val)
+    session_id_val = _resolve_session(session_id_val, client_key)
 
     simulated_hour = 10
     if "Sundowning" in simulated_time_str:
@@ -1398,6 +1442,7 @@ def run_demo_turn(
         audio_in, actual_text, history, session_id_val, simulated_hour,
         is_proactive=is_proactive, trigger_type=trigger_type,
         flags_key=_flags_key(session_id_val, request),
+        client_key=client_key,
     )
     if session_expired:
         out = (
@@ -1452,10 +1497,9 @@ def run_demo_turn_streaming(
         session_id_val = session_id
         simulated_time_str = simulated_time_in or "Morning (Default)"
 
+    client_key = GUARDRAILS.client_key(request)
     session_expired = _session_really_expired(session_id_val, history)
-    session_id_val = session_id_val or _new_session()
-    if not SHARED_PROFILE:
-        session_id_val = _normalize_or_new_session(session_id_val)
+    session_id_val = _resolve_session(session_id_val, client_key)
 
     simulated_hour = 10
     if "Sundowning" in simulated_time_str:
@@ -1487,6 +1531,7 @@ def run_demo_turn_streaming(
                 audio_in, actual_text, history, session_id_val, simulated_hour,
                 session_expired, is_proactive, trigger_type, consumer=consumer,
                 flags_key=_flags_key(session_id_val, request),
+                client_key=client_key,
             )
         finally:
             if acquired:
@@ -1505,6 +1550,7 @@ def _run_demo_turn_streaming_impl(
     trigger_type: str,
     consumer: "_ChunkConsumer | None" = None,
     flags_key: str | None = None,
+    client_key: str | None = None,
 ):
     import queue
     import threading
@@ -1550,9 +1596,18 @@ def _run_demo_turn_streaming_impl(
         yield (*out, session_id_val, "", None)
         return
 
-    block_turn, allow_hosted_call = _cap_decision(data_dir, transcript)
+    # Too long: refused before the safety scan, the cap or any model (#37). The
+    # typed text goes back into the box; an over-long transcript has none to hand back.
+    too_long = None if is_proactive else GUARDRAILS.input_refusal(transcript)
+    if too_long:
+        out = (too_long, None, history, panel(), "### 📊 Acoustic Biomarkers\n_Nothing was sent_")
+        if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
+        yield (*out, session_id_val, actual_text or "", None)
+        return
+
+    block_turn, allow_hosted_call, busy = _cap_decision(data_dir, transcript, client_key)
     if block_turn:
-        out = ("This demo has hit its daily request cap -- please try again tomorrow.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_Rate limited_")
+        out = (BUSY_REPLY if busy else "This demo has hit its daily request cap -- please try again tomorrow.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_Rate limited_")
         if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
         yield (*out, session_id_val, "", None)
         return
@@ -1696,7 +1751,7 @@ def _run_demo_turn_streaming_impl(
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
     if not allow_hosted_call:
-        transcript_and_reply += _cap_notice(spoke, bool(result.caregiver_flag))
+        transcript_and_reply += _cap_notice(spoke, bool(result.caregiver_flag), busy)
         biomarker_str = CAP_BIOMARKERS
     elif wpm > 0:
         biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
@@ -1774,6 +1829,7 @@ def _run_demo_turn(
     is_proactive: bool = False,
     trigger_type: str = "silence",
     flags_key: str | None = None,
+    client_key: str | None = None,
 ) -> tuple[str, str | None, list[dict], str, str]:
     """Registers the turn as in-progress (#148) before any other work, and
     always deregisters it in `finally` -- every branch below returns a
@@ -1786,6 +1842,7 @@ def _run_demo_turn(
         return _run_demo_turn_impl(
             audio_in, text_in, history, session_id, simulated_hour,
             is_proactive=is_proactive, trigger_type=trigger_type, flags_key=flags_key,
+            client_key=client_key,
         )
 
 
@@ -1798,6 +1855,7 @@ def _run_demo_turn_impl(
     is_proactive: bool = False,
     trigger_type: str = "silence",
     flags_key: str | None = None,
+    client_key: str | None = None,
 ) -> tuple[str, str | None, list[dict], str, str]:
     if flags_key is None:
         flags_key = _flags_key(session_id)
@@ -1826,10 +1884,14 @@ def _run_demo_turn_impl(
     # Cap only what's actually about to spend a Nebius call -- not the empty
     # sends and no-key misses handled above. A fast-path utterance at the cap
     # still runs, with only its THINK continuation withheld (#81 A1).
-    block_turn, allow_hosted_call = _cap_decision(data_dir, transcript)
+    too_long = None if is_proactive else GUARDRAILS.input_refusal(transcript)
+    if too_long:  # refused before the safety scan, the cap or any model (#37)
+        return too_long, None, history, panel(), "### 📊 Acoustic Biomarkers\n_Nothing was sent_"
+
+    block_turn, allow_hosted_call, busy = _cap_decision(data_dir, transcript, client_key)
     if block_turn:
         return (
-            "This demo has hit its daily request cap -- please try again tomorrow.",
+            BUSY_REPLY if busy else "This demo has hit its daily request cap -- please try again tomorrow.",
             None,
             history,
             panel(),
@@ -1924,7 +1986,7 @@ def _run_demo_turn_impl(
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
     if not allow_hosted_call:
-        transcript_and_reply += _cap_notice(bool(reply_audio), bool(result.caregiver_flag))
+        transcript_and_reply += _cap_notice(bool(reply_audio), bool(result.caregiver_flag), busy)
         biomarker_str = CAP_BIOMARKERS
     elif wpm > 0:
         biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
@@ -1945,6 +2007,18 @@ def _session_id_invalid(session_id: str) -> bool:
     return False
 
 
+class MemoTooLarge(ValueError):
+    """A memo over FY_MAX_MEMO_CHARS / FY_MAX_MEMO_FACTS reached the store
+    writer. The handlers check first and show `str(exc)`; this is the backstop
+    that keeps the quadratic MemoryStore.add loop away from a huge memo (#37)."""
+
+
+def _memo_refusal(memo_text: str | None) -> str | None:
+    """Refusal text if the memo is over the size or fact cap, else None. Pure:
+    it stores nothing and the fact splitter only sees text under the char cap."""
+    return GUARDRAILS.memo_refusal(memo_text, lambda text: len(split_memo_facts(text)))
+
+
 def _save_memo_text(session_id: str, memo_text: str, scope: str | None = None) -> None:
     """The one place caregiver memo text is written to a session's store:
     the memo box and the interview (#206) both come through here, so fact
@@ -1954,6 +2028,9 @@ def _save_memo_text(session_id: str, memo_text: str, scope: str | None = None) -
     never did); the interview calls caregiver.validate_sample_profile first.
     `scope` is None for the memo box (the store infers it); the interview passes
     the question's declared scope so "Sarah visits at 15:00" is TEMPORARY too."""
+    refusal = _memo_refusal(memo_text)
+    if refusal:
+        raise MemoTooLarge(refusal)
     extra = {"scope": scope} if scope else {}
     data_dir, _ = _session_dirs(session_id)
     # A conversation turn's background extraction can still be writing
@@ -1986,6 +2063,9 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
         with _session_active(session_id, refuse_if_deleted=True):
             if not memo_text or not memo_text.strip():
                 return _format_caregiver_panel(session_id), session_id, ""
+            too_big = _memo_refusal(memo_text)  # before anything scans or stores it (#37)
+            if too_big:  # nothing is stored; the text stays in the box to shorten
+                return "⚠️ " + too_big + "\n\n" + _format_caregiver_panel(session_id), session_id, memo_text
             hit = dosing_instruction(memo_text)
             if hit:  # #280: nothing reaches the store; the text stays in the box to edit
                 return ("⚠️ " + MEMO_DOSING_REFUSAL.format(hit=hit) + "\n\n"
@@ -2015,6 +2095,9 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
                 return _format_caregiver_panel(session_id), session_id
             if refusal is not None:  # nothing reaches the store
                 return "⚠️ " + refusal.replace("what Dad says", "the memo") + "\n\n" + _format_caregiver_panel(session_id), session_id
+            too_big = _memo_refusal(transcript)  # before anything scans or stores it (#37)
+            if too_big:  # nothing is stored; a voice memo has no box to hand text back to
+                return "⚠️ " + too_big + "\n\n" + _format_caregiver_panel(session_id), session_id
             hit = dosing_instruction(transcript)
             if hit:  # #280: a spoken dose instruction is refused the same way
                 return "⚠️ " + MEMO_DOSING_REFUSAL.format(hit=hit) + "\n\n" + _format_caregiver_panel(session_id), session_id
@@ -2167,6 +2250,14 @@ def interview_confirm(answer: str | None, state, session_id: str | None) -> tupl
                 return panel()
             if not answer.strip():
                 return panel("⚠️ Type an answer, or skip this question.", answer)
+            q = INTERVIEW_QUESTIONS[i]
+            too_big = _memo_refusal(answer)  # before anything scans or stores it (#37)
+            memo = None
+            if not too_big:
+                memo = interview_answer_memo(q["key"], answer)
+                too_big = _memo_refusal(memo)  # the "avoid" rewrite adds words
+            if too_big:  # nothing is saved, the question stays open, the answer stays in the box
+                return panel(html.escape("⚠️ " + too_big), answer)
             try:
                 validate_sample_profile(answer)
             except ValueError as exc:
@@ -2177,8 +2268,7 @@ def interview_confirm(answer: str | None, state, session_id: str | None) -> tupl
                     html.escape(f"⚠️ Not saved: the answer contains {what}. "
                                 "Describe people, routines and preferences only, or skip this question."),
                     answer)
-            q = INTERVIEW_QUESTIONS[i]
-            _save_memo_text(session_id, interview_answer_memo(q["key"], answer), scope=q["scope"])
+            _save_memo_text(session_id, memo, scope=q["scope"])
             state["answered"].append(q["key"])
             return panel()
     except SessionGone:
@@ -2726,4 +2816,5 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=int(os.environ.get("PORT", "7860")),
         max_file_size=f"{MAX_AUDIO_UPLOAD_BYTES}b",  # Gradio refuses oversize uploads too
+        enable_monitoring=False,  # no /monitoring dashboard: it lists usage and request details to anyone
     )

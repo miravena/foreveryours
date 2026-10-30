@@ -9,6 +9,26 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-30: abuse guardrails and owner alerts (#37)
+- **Why:** a security review found three ways a script could hurt a judged, owner-paid demo:
+  `safety/fastpath.check` is quadratic on tens of thousands of characters and holds the GIL (one
+  typed input freezes the app), `MAX_DAILY_REQUESTS` is per session (open sessions, spend credits), and
+  `MemoryStore.add` is quadratic in a memo's facts (one huge memo stalls every save).
+- **Change:** `guardrails.py` (new, shipped to the Space via `STAGE_FILES`): input caps checked before
+  `_cap_decision`, the safety scan and any model call; a process-wide hourly/daily budget and per-visitor
+  limits folded into `_cap_decision`, so a spent budget takes the existing `allow_hosted_call=False` path
+  (fast path speaks and flags; THINK, AUDIT, extraction withheld; "busy, try again shortly" wording);
+  owner alerts over `notify.py`'s SMTP/HTTP transports (now module functions `send_smtp`, `post_http`).
+  `notify.py` behaviour is unchanged. Also: espeak `--`, `enable_monitoring=False`, driving note reworded.
+- **Client address:** on a Space the socket peer is Hugging Face's proxy, so keying on it would throttle all
+  judges together. `X-Forwarded-For` is read from the right, skipping private hops, taking the first
+  public address (a visitor can only forge the left side). Not verified against the live Space (a
+  rule for this work: never probe it), so the first line the app logs, `client identity: ...
+  resolved=yes|no`, is the check after deploy; `FY_CLIENT_IP_SOURCE=off` is the switch if it misbehaves.
+- **Gotcha:** `ipaddress.is_global` is False for documentation ranges (192.0.2/24, 198.51.100/24,
+  203.0.113/24), so tests use real public addresses.
+- **Verify:** see the PR for the suite and the two local live judge runs.
+
 ### 2026-10-30: the no-listening answer is fixed text (live T05/T06 flake, #37)
 - **Why:** 2 of the last 8 live runs failed T05/T06: "Sarah can't hear our conversation, but she
   does see safety flags if I send any." True, but the check needs the limit ("only"). Rule 19 is

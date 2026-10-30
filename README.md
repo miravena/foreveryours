@@ -224,6 +224,45 @@ the winners announcement the Space moves back to free ZeroGPU and PRO is cancell
 **Uptime.** A scheduled GitHub Actions check (see *Uptime monitor* above) opens an Issue for both
 maintainers if the demo stops answering, and closes it when it recovers.
 
+**Abuse guardrails and owner alerts** (`guardrails.py`, #37). The per-session cap (`MAX_DAILY_REQUESTS`, described
+under *Web demo* below) does not stop a script that opens many sessions, and a huge input could freeze the app for everyone, so a
+public deployment also has these limits. Every one is an environment variable with a generous default
+(a Space *variable* or `.env`; the same names are in `.env.example`); a normal judge session never
+meets them. Counters are in memory and reset on a restart. None of them ever blocks a safety reply:
+when a budget is spent, the fast path still speaks, tells the senior and flags the family, and only
+the paid model calls are withheld (the reply says the demo is busy and to try again shortly).
+
+| Variable | Default | What it limits |
+|---|---|---|
+| `FY_MAX_INPUT_CHARS` | 2000 | One typed message or speech transcript. Over it: a short refusal, no model call, nothing stored, the typed text stays in the box. |
+| `FY_MAX_MEMO_CHARS` | 2000 | One caregiver memo (typed or spoken) or interview answer. Over it: refused, nothing saved. |
+| `FY_MAX_MEMO_FACTS` | 30 | Separate facts in one memo. |
+| `FY_GLOBAL_TURNS_PER_HOUR` | 600 | Hosted (Nebius) turns, all visitors together, rolling hour. |
+| `FY_GLOBAL_TURNS_PER_DAY` | 3000 | The same, per UTC day. |
+| `FY_CLIENT_TURNS_PER_HOUR` | 120 | Hosted turns from one visitor address. |
+| `FY_CLIENT_NEW_SESSIONS_PER_HOUR` | 30 | Sessions one visitor address may start; over it, its turns answer "busy". |
+| `FY_CLIENT_IP_SOURCE` | `auto` | `auto`, `peer`, `forwarded` or `off`. See below. |
+| `FY_OWNER_ALERT_WEBHOOK` | unset | Alerts off unless this or the SMTP settings are set. A URL that accepts a plain POST body, e.g. an [ntfy.sh](https://ntfy.sh) topic. |
+| `FY_OWNER_ALERT_SMTP_HOST`, `FY_OWNER_ALERT_SMTP_PORT`, `FY_OWNER_ALERT_SMTP_USER`, `FY_OWNER_ALERT_SMTP_PASSWORD`, `FY_OWNER_ALERT_SMTP_SECURITY`, `FY_OWNER_ALERT_TO`, `FY_OWNER_ALERT_FROM` | unset | E-mail alerts, sent through the same SMTP code as the caregiver notification but with their own settings (those are always off on a Space). |
+| `FY_OWNER_ALERTS_PER_HOUR` | 6 | At most this many alerts an hour (a flood of throttled visitors can use at most half). |
+| `FY_ALERT_REFUSALS_PER_HOUR` | 20 | Alert when more oversize inputs than this are refused in an hour. |
+
+Alerts go out when daily hosted usage crosses 50%, 80% and 100% of `FY_GLOBAL_TURNS_PER_DAY`, when
+the hourly cap is hit, when a visitor is throttled (once per visitor per hour) and when oversize
+refusals pass their threshold. Each carries counts, the limit, a short reason and a UTC time, and
+nothing else: no text a visitor typed, no session id, no address, no key. Each event also writes one
+counts-only log line.
+
+*Per-visitor limits and the client address.* On a Space the app sits behind Hugging Face's proxy, so
+the socket peer is the proxy, the same for everyone. The visitor's address is read from
+`X-Forwarded-For` from the right: each proxy appends the address it received the request from,
+and a visitor can only add entries on the left, so the first public address from the right is the one
+Hugging Face's edge saw and cannot be chosen by the visitor. `X-Real-IP` is not trusted. Off a Space
+the socket peer is used and forwarded headers are ignored. If no reliable address is found the
+per-visitor limits are skipped (the global ones still apply). Only a salted hash of the address is
+kept, in memory, never written to disk or a log. If the address source ever misbehaves,
+`FY_CLIENT_IP_SOURCE=off` switches the per-visitor limits off without a code change.
+
 ### Cloudflare & Cloud Hosting
 
 - **Cloudflare Pages**: Deploys the landing page and presentation directly from `docs/index.html` with zero build commands.
@@ -257,7 +296,8 @@ if you're iterating and hitting it. Audio is bounded before any speech recogniti
 an upload over `MAX_AUDIO_UPLOAD_BYTES` (default 25 MB, also passed to Gradio as
 `max_file_size`) or a recording longer than `MAX_AUDIO_SECONDS` (default 120) is refused, and a
 recording that can't be decoded or transcribed gets a short "record again, or type instead"
-reply that keeps the session; none of these count against the daily cap.
+reply that keeps the session; none of these count against the daily cap. Input size, the process-wide
+budget, per-visitor limits and owner alerts are under *Hosting for the judging period* above.
 
 ### Nebius access
 

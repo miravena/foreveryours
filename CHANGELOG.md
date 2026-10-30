@@ -10,6 +10,16 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Added
+- Abuse guardrails for the public demo (#37, `guardrails.py`): size limits on typed text, speech transcripts, memos and interview answers (`FY_MAX_INPUT_CHARS`, `FY_MAX_MEMO_CHARS`, `FY_MAX_MEMO_FACTS`); a process-wide budget for hosted turns (`FY_GLOBAL_TURNS_PER_HOUR`, `FY_GLOBAL_TURNS_PER_DAY`) and per-visitor limits (`FY_CLIENT_TURNS_PER_HOUR`, `FY_CLIENT_NEW_SESSIONS_PER_HOUR`) keyed by a salted hash of the client address. A spent budget answers "busy" and withholds only THINK, AUDIT and extraction: a fall or crisis phrase still gets the fast-path reply and the flag. Defaults are generous; every limit is an environment variable (`.env.example`, README).
+- Owner alerts, off unless `FY_OWNER_ALERT_WEBHOOK` (e.g. an ntfy.sh topic) or `FY_OWNER_ALERT_SMTP_*` is set: daily usage at 50/80/100%, the hourly cap, a throttled visitor and a burst of oversize refusals, at most `FY_OWNER_ALERTS_PER_HOUR` an hour, counts only.
+- `SECURITY.md` describes the limits and alerts.
+
+### Fixed
+- One huge typed input could freeze the app for everyone (the safety scan is quadratic on tens of thousands of characters), unlimited new sessions could spend the owner's Nebius credits past the per-session cap, and one huge memo could block every visitor's memo saves (#37).
+- espeak is called with `--` before the sentence, so a sentence that starts with "-" is spoken, not read as an option; the Gradio `/monitoring` dashboard is off.
+- The driving-plan note no longer suggests "shall I let Sarah know?", which rule 26 forbids: it suggests Dad ask Sarah for a lift himself.
+
 ## [1.0.3] - 2026-10-30
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.2 plus the fixes below. During judging only `v1.0.x` patches deploy (ADR-015).
