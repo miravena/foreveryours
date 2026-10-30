@@ -17,9 +17,15 @@ Kept from v5 (#275): straight quotes only, the LIVE HOSTED SPACE corner badge pl
 cue per hosted shot, the privacy label ending before the crisis line with a separate crisis
 label, the clean day-2 card, the closing line, about -16 LUFS, no music.
 
+v6b (#304), captions only, the same audio: the fall label and the crisis label say nothing is
+sent ("simulated alert, nothing sent"); two long companion lines are split into two cues; no
+caption cue is shorter than 0.5 s or overlaps the next dialogue cue. The word-timing cache is
+keyed to the content of each WAV, so a re-recorded reply (day 2) is aligned again, not reused.
+
 Usage (from the repo root):  .venv/bin/python video/v6/assemble.py [<build_dir>]
 Output: <build>/foreveryours_demo_v6.mp4 and .srt, work files in <build>/_assemble_v6/.
 """
+import hashlib
 import importlib.util
 import json
 import os
@@ -47,9 +53,86 @@ TIMELINE = os.path.join(HERE, "timeline.json")
 MAX_SECONDS = 169.0     # under 2:50
 FLAG_BY = 12.0          # the fall flag; v5's 5 s cannot hold once Dad speaks the line and it is heard
 MAX_GAP = 1.5           # no silence this long outside the companion's own pauses
-LIVE, LOCAL, CRISIS_LBL, CURLY = v5.LIVE, v5.LOCAL, v5.CRISIS_LBL, v5.CURLY
+LIVE, LOCAL, CURLY = v5.LIVE, v5.LOCAL, v5.CURLY
 TAG, LBL = v5.TAG, v5.LBL
 APPT_TAKE = os.environ.get("APPT_TAKE", "appt_t1")
+# v6b: the labels say what happened to the alert. Two lines each (ASS \N); the fall label is a
+# 44 pt style so its second line fits the caregiver panel.
+FALL_LBL = "Dad was told · simulated alert, nothing sent"
+CRISIS_LBL = "Crisis: 988 offered ·\\Nsimulated alert, nothing sent"
+FALL_LBL_POS = (1427, 180)   # one line, in the band between the panel rule and the "Today:" row
+LABEL2 = "Label2"
+MIN_CUE = 0.5           # no caption event (SRT or ASS) shorter than this
+# Long companion lines, each split into two cues; the time is shared out by word count.
+SPLITS = {
+    "I'm letting your family know right now so someone can check on you.":
+        ("I'm letting your family know right now", "so someone can check on you."),
+    "Please call or text 988 to speak with someone who can help right now.":
+        ("Please call or text 988", "to speak with someone who can help right now."),
+}
+ASS_HEAD = v5.ASS_HEAD.replace("\n[Events]",
+                               "Style: Label2,DejaVu Sans,36,&H00FFFFFF,&H00FFFFFF,&H00267A1E,&H00267A1E,"
+                               "1,0,0,0,100,100,0,0,3,16,0,5,0,0,0,1\n\n[Events]")
+
+
+def file_sig(path):
+    """Content hash of a WAV, or None when it is not there."""
+    if not os.path.isfile(path):
+        return None
+    return hashlib.sha1(open(path, "rb").read()).hexdigest()
+
+
+def load_cache(cache_p):
+    """The word-timing cache (path -> whisper words), keeping only entries whose WAV is unchanged.
+    Day 2 was re-recorded after the first v6 build, and the old word times, kept under the same
+    path, put the Leo cue at zero length (#304). Entries are checked against a content hash."""
+    if not os.path.exists(cache_p):
+        return {}
+    raw = json.load(open(cache_p))
+    sigs = raw.pop("__sig__", {})
+    kept = {k: v for k, v in raw.items() if file_sig(k) is not None and sigs.get(k) == file_sig(k)}
+    dropped = sorted(set(raw) - set(kept))
+    if dropped:
+        print(f"align cache: re-aligning {len(dropped)} changed or unrecorded WAV(s): "
+              + ", ".join(os.path.basename(k) for k in dropped))
+    return kept
+
+
+def save_cache(cache, cache_p):
+    out = dict(cache)
+    out["__sig__"] = {k: file_sig(k) for k in cache if file_sig(k) is not None}
+    json.dump(out, open(cache_p, "w"), indent=1)
+
+
+def settle(events):
+    """Dialogue events (start, end, style, text), sorted: none shorter than MIN_CUE, and none
+    overlapping the next one. A short cue is lengthened into the gap after it; if the next cue
+    starts too soon it is pushed to follow. Anything still overlapping stops the build."""
+    out = sorted(events)
+    for i in range(len(out)):
+        a, b, st, t = out[i]
+        if b - a < MIN_CUE:
+            b = a + MIN_CUE
+            if i + 1 < len(out) and out[i + 1][0] < b:
+                na, nb, nst, nt = out[i + 1]
+                out[i + 1] = (b, max(nb, b + MIN_CUE), nst, nt)
+            out[i] = (a, b, st, t)
+        out.sort()
+    for (a1, b1, s1, t1), (a2, b2, s2, t2) in zip(out, out[1:]):
+        if a2 < b1 - 0.001:
+            sys.exit(f"caption overlap: {t1!r} ({a1:.2f}-{b1:.2f}) and {t2!r} ({a2:.2f}-{b2:.2f})")
+    return out
+
+
+def split_long(s, e, chunk, used):
+    """One caption chunk, or two when it is a SPLITS line (the split point is by word count)."""
+    if chunk not in SPLITS:
+        return [(s, e, chunk)]
+    first, rest = SPLITS[chunk]
+    used.add(chunk)
+    n1, n2 = len(first.split()), len(rest.split())
+    mid = s + (e - s) * n1 / (n1 + n2)
+    return [(s, mid, first), (mid, e, rest)]
 
 
 def silences(wav, db=-40, d=MAX_GAP):
@@ -66,7 +149,8 @@ def main():
     shots = {k: json.load(open(os.path.join(CAP, f"{k}.json"))) for k in ("fall", APPT_TAKE, "crisis", "day2")}
     dad_meta = json.load(open(os.path.join(DAD, "lines.json")))
     cache_p = os.path.join(WORK, "align.json")
-    cache = json.load(open(cache_p)) if os.path.exists(cache_p) else {}
+    cache = load_cache(cache_p)
+    used_splits = set()
     tl = v2.Timeline()
     seg = lambda name: os.path.join(WORK, f"seg_{len(tl.segments):02d}_{name}.mp4")  # noqa: E731
     dad_turns, pauses, badges, srt_only = [], [], [], []
@@ -99,7 +183,8 @@ def main():
     def companion(wav, text, at):
         tl.audio.append((at, wav, "companion"))
         for s, e, c in v2.timed_chunks(text, wav, cache):
-            tl.caps.append((at + s, at + e, "Companion", "Companion: " + c))
+            for ss, ee, cc in split_long(s, e, c, used_splits):
+                tl.caps.append((at + ss, at + ee, "Companion", "Companion: " + cc))
         for s, e in silences(wav, d=0.3):    # the companion's own pauses, as placed on the timeline
             pauses.append((round(at + s, 2), round(at + e, 2)))
         return v2.probe_duration(wav)
@@ -135,7 +220,7 @@ def main():
     flag_at = g1(km["fall_flag_visible"])
     if flag_at >= FLAG_BY:
         sys.exit(f"the caregiver flag appears at {flag_at:.2f}s, not before {FLAG_BY}s")
-    tl.labels.append((flag_at, g1(end), "Label", *LBL, "Dad was told"))
+    tl.labels.append((flag_at, g1(end), LABEL2, *FALL_LBL_POS, FALL_LBL))
     tl.add(seg("fall"), v2.seg_clip(seg("fall"), s1["clip"], A, end))
     tl.shots.append((1, start, tl.t))
     hosted(start, tl.t)
@@ -251,7 +336,9 @@ def main():
         tl.add(seg(f"card{n}"), v2.seg_still(seg(f"card{n}"), png, dur))
         tl.shots.append((n, start, tl.t))
 
-    json.dump(cache, open(cache_p, "w"), indent=1)
+    save_cache(cache, cache_p)
+    if used_splits != set(SPLITS):
+        sys.exit(f"split lines not found in the companion text: {sorted(set(SPLITS) - used_splits)}")
     total = tl.t
     print(f"timeline: {total:.2f}s")
     for n, a, b in tl.shots:
@@ -300,10 +387,10 @@ def main():
         sys.exit(f"dead air (>= {MAX_GAP}s at -40 dB) outside the companion's pauses: {gaps}")
 
     # ---- captions: ASS (burned in) and SRT (sidecar), both from this timeline
-    events = sorted(tl.caps)
+    events = settle(tl.caps)
     ass = os.path.join(WORK, "captions.ass")
     with open(ass, "w") as fh:
-        fh.write(v5.ASS_HEAD)
+        fh.write(ASS_HEAD)
         for a, b, style, text in events:
             fh.write(f"Dialogue: 0,{v2.ts_ass(a)},{v2.ts_ass(b)},{style},,0,0,0,,{text}\n")
         for a, b, style, x, y, text in tl.labels:
@@ -319,6 +406,9 @@ def main():
         bad = sorted({c for c in open(path, encoding="utf-8").read() if c in CURLY})
         if bad:
             sys.exit(f"{path} still has curly quotes: {bad}")
+    short = [(round(b - a, 3), t) for a, b, _, t in srt if b - a < MIN_CUE - 0.001]
+    if short:
+        sys.exit(f"caption events shorter than {MIN_CUE} s: {short}")
     hosted_cues = [b - a for a, b, _, t in srt if LIVE in t]
     if max(hosted_cues) > 6.0:
         sys.exit(f"a LIVE HOSTED SPACE cue runs {max(hosted_cues):.1f} s")
