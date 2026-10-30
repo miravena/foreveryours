@@ -25,14 +25,11 @@ The companion the family briefs: your voice in Dad's day when you can't be there
 ## Inspiration
 
 An older adult tells a general-purpose voice assistant "I fell earlier today and I'm scared." It
-answers with sympathy, the turn ends, and nobody in the family is told. That is the scenario we
-kept coming back to. The assistants that are good at conversation have no concept of the person
-who isn't in the room: the daughter who knows Dad loves jazz, that his grandson is Leo, that
+answers with sympathy, but nobody in the family is told. We built ForeverYours around the daughter
+who isn't in the room. Assistants that are good at conversation have no concept of her: she knows
+Dad loves jazz, that his grandson is Leo, that
 driving is a sore subject, and that she is dropping off groceries at 4 PM. That knowledge lives in
 the family and never reaches the AI.
-
-ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
-there, and never reports anything to the family that it hasn't first said to him out loud.
 
 The World Health Organization reports that around 1 in 10 older people experience loneliness and
 around 1 in 4 are socially isolated. We did not set out to solve loneliness with software. We set
@@ -47,10 +44,9 @@ interviews. -->
 
 ## What it does
 
-ForeverYours is a voice-first companion for an older adult, built around two people: the senior
-who talks to it, and the caregiver who briefs it. The hosted demo shows both at once, side by
-side. It is built for people who cannot or will not use a screen: no app to learn, no typing, no
-reading. The senior only talks, and hears the answer.
+ForeverYours is a voice companion for an older adult, briefed by their caregiver. The older adult
+speaks and hears the reply, with no app to learn, typing or reading required. The hosted demo shows
+both sides together.
 
 - **A worrying remark is handled out loud, on both sides of the screen.** Dad says "I fell down
   earlier and I'm scared." Before any model is called, the companion asks whether he is hurt and
@@ -69,14 +65,12 @@ reading. The senior only talks, and hears the answer.
   Ask "Is anyone coming by today?" and it answers that Sarah is dropping off groceries at 4 PM.
   Tell it "You're my only friend" and it sends him back to his family: Sarah would love to hear
   his voice.
-- **The caregiver sees what the AI knows and what it flagged.** Every briefed item is labelled
-  permanent or temporary. Every safety flag records whether the senior was told and which layer
-  raised it: the safety rules before the model, or the Nemotron backstop after the reply. The
-  code cannot record a flag without stating whether it was disclosed; if the spoken line cannot
-  be produced, the flag shows "NOT yet disclosed" instead of being counted as told.
-- **The caregiver sees the alert she would receive.** Under each new alert the column shows the
-  exact message Sarah would be sent (the kind of alert, its severity, "Senior told: yes", and no
-  transcript), marked "Not sent: notifications are off in this demo".
+- **The caregiver can inspect the briefing and safety flags.** Briefed items are labelled
+  permanent or temporary. Each flag identifies the layer that raised it (the safety rules before
+  the model, or the Nemotron backstop after the reply) and whether the senior was told; if the
+  spoken line cannot be produced, it says "NOT yet disclosed". A preview shows the alert Sarah
+  would receive, including its kind, severity and disclosure status, without a transcript.
+  Notifications are off in this demo.
 - **It says what it is.** The page opens with a notice that this is an AI companion, not a human.
   Next to the microphone it says that what Dad says is turned into text and that the text, not his
   voice, is sent to Nebius Token Factory. A footer names which model does what.
@@ -121,16 +115,10 @@ dispatcher. A caregiver flag is a notification, not a 911 call.
 
 ## Why not just use ChatGPT voice mode?
 
-ChatGPT's voice mode is a better conversationalist than we are, and it has memory. The difference
-is who the memory is for and who gets told. ChatGPT remembers for the person talking to it.
-ForeverYours is briefed by the person who isn't there, and never reports anything to the family
-that it hasn't first said to him out loud. When Dad tells a general assistant "I fell earlier
-today and I'm scared", it answers kindly and the turn ends; nobody in the family finds out,
-because no general assistant has a concept of the daughter who is not in the room. ForeverYours
-was built from that second person outward: she briefs it, she sees what it knows and what it
-flagged, and the one thing she needs to hear about is said to Dad out loud in the same breath it
-reaches her column. That last part is not a policy; the code cannot record a safety flag without
-stating whether the senior was told.
+ChatGPT remembers for the person talking to it. ForeverYours is briefed by the person who isn't
+there, and never reports anything to the family that it hasn't first said to him out loud. She can
+see what it knows and what it flagged; each safety flag records whether the senior was told. The
+difference is who supplies the context and who needs to hear when something is wrong.
 
 <!-- #20 section 3 paragraph with the corrected #14 sentence; "reaches her column" because nothing
 is sent on the Space. -->
@@ -262,6 +250,7 @@ so everything in this entry was built during it.
 | Space page | https://huggingface.co/spaces/elevenbaselab/foreveryours |
 | Repository | https://github.com/miravena/foreveryours (MIT) |
 | Video | **PLACEHOLDER (#5): public YouTube link, under 3 minutes. Do not submit with this line.** |
+| Thumbnail | `00-thumbnail.png` from the `gallery-draft` release (1800x1200, 3:2, the ratio the form asks for). |
 | Gallery images | Upload four 1920x1080 files from the `gallery-draft` release (collaborators only; #218), in this order: `01-fall.png`, `02-briefed-memory.png`, `03-crisis.png`, `04c-stack-card-clean.png`. Captions below. |
 | Representative | SirTehTarik (decided in #6; enters the submission) |
 | Builders & Brews city | Leave blank (neither team member attended) |
@@ -312,10 +301,9 @@ flag, but Nano caught only 12 of 19 true events on the first set (0.88 recall on
 set, below our 0.90 floor), while Super caught all of them at about a third of Ultra's cost.
 
 **How would you rate Nemotron's output quality? (1-10)** **TEAM PICK**, then:
-Warm and conversational, and it used the caregiver's briefing naturally. Instruction-following was
-good once the prompt was strict. It fell short on brevity (verbose by default, which a voice
-product for older adults can't afford) and it sometimes added plausible details that were never
-in the briefing. As a safety check, Nano alone missed falls described in other words; Super did not.
+Warm and conversational, with natural use of the caregiver's briefing. Instruction-following
+improved with a strict prompt. Nano needed prompting for shorter replies and sometimes invented
+plausible details. In our safety evaluation, Nano missed paraphrased falls; Super did not.
 
 **Fine-tuned, prompt-engineered, or out of the box?**
 Prompt-engineered, no fine-tuning. A numbered rule list in the system prompt (short turns, never
@@ -355,9 +343,8 @@ that says plainly what reasoning tokens cost a real-time app and how to turn the
 case-insensitive model IDs, or clearer guidance on them.
 
 **What do you most hope to see from the Nemotron team next?**
-A small model with safety-grade recall for detecting distress in conversation, so a voice
-companion doesn't have to pay for a 120B check on every turn, and a Nemotron speech model served on
-Token Factory.
+A small model with better recall for conversational distress, reducing the need for a 120B check
+on every turn, and a Nemotron speech model served on Token Factory.
 
 **Which AI tools did you use while building?**
 Coding assistants: Claude Code (Anthropic Claude models), Google Antigravity (Gemini), GitHub
@@ -403,15 +390,9 @@ two runs. Cap: MAX_DAILY_REQUESTS=50 keyed per browser session, fast-path exempt
 
 ## Challenges we ran into
 
-- **The sponsor stack is text-only.** Token Factory has no speech endpoint, so recognition and
-  synthesis run locally. That is also why the safety step works with no network.
-- **Reasoning tokens ate the latency budget.** The first live turn took 4.22 s to first audio.
-  Turning reasoning off brought it to about 0.9 s on the command line.
 - **Deterministic safety rules are a tuning problem.** "Help me remember Leo" must not alert
   anyone; "help me, I'm scared" must. Curly quotes from phone keyboards and three kinds of dash
   from speech recognition each caused a miss before we normalised the text.
-- **A small model as a safety net misses things.** Our first backstop, Nano, missed five of six
-  falls described in other words. We measured instead of assuming, and moved the backstop to Super.
 - **Correcting memory is harder than storing it.** "My daughter is Sarah, not Susan" was first
   stored next to the old fact. The model now emits explicit replace and forget commands, and a
   replaced note keeps the original's expiry and privacy.
@@ -428,20 +409,14 @@ correction CHANGELOG.md (#54, #34), pipeline/think.py:289-291. -->
 - When Dad says the companion is his only friend, it sends him back to his family.
 - Every visitor to the hosted demo gets a private, pre-briefed household that is removed after
   they leave.
-- We wrote down where it fails (below), with the numbers.
 
 ## What we learned
 
-- Put the safety check in front of the model, not behind it: the highest-stakes reply is then also
-  the fastest one and the one that works offline.
 - Honesty is cheaper to enforce in a function signature than in a policy document.
 - Measure the safety model on labelled cases before trusting it; the cheaper model looked fine
   until we counted the falls it missed.
-- Write down what the sponsor stack cannot do as carefully as what it can.
 
 ## Known limitations
-
-Written down on purpose, so the judges and any family know where this stops.
 
 - A fall described in other words ("I went flying in the garden", "I came a cropper on the path")
   is not caught by the rules. Slips, tumbles, "a bit of a fall", losing one's footing, and a floor
@@ -530,7 +505,9 @@ Seen, not claimed, and worth a look before the freeze:
   model's reply told Dad to call 988, not 911, although THINK rule 23 says a physical emergency
   goes to 911. The Super backstop then raised "(distress) ... ✅ Dad was told · raised by:
   Nemotron backstop, after the reply". Do not use this sentence in the video or the testing
-  instructions until the 988/911 wording is fixed.
+  instructions until the 988/911 wording is fixed. Re-run on `43c95d0`, 2026-10-30: the rules now
+  fire ("raised by: safety rules, before the model") and the reply says "call 911", so the Known
+  limitations line holds.
 
 Not claimed, because the Space does not do it: an outbound notification; per-turn "what was
 retrieved" display; any hosted latency figure; day-2 recall on the hosted link (households are
