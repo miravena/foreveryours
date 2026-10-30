@@ -102,6 +102,28 @@ def norm_word(w):
     return re.sub(r"[^a-z0-9]", "", w.lower().replace("\u2019", "'"))
 
 
+def quiet_after(wav, t0, t_max, frame=0.01, hold=0.15):
+    """Where to end a clip after the word that ends at about `t0`: the start of the first
+    silence of at least `hold` seconds (frames under 3% of the file's loudest 10 ms frame)
+    between `t0` and `t_max`. 0.15 s, because a word can dip for a few frames before its last
+    sound ("distress"), and a sentence pause is longer. With no such silence, the quietest
+    frame in that range, so the cut never runs into the next word."""
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", wav, "-ac", "1", "-ar", "16000",
+                          "-f", "f32le", "-"], capture_output=True, check=True).stdout
+    x = np.frombuffer(raw, dtype=np.float32)
+    n = int(16000 * frame)
+    rms = np.sqrt(np.mean(x[: len(x) // n * n].reshape(-1, n) ** 2, axis=1))
+    quiet = rms < 0.03 * float(rms.max() or 1.0)
+    need = max(1, int(round(hold / frame)))
+    start, stop = int(t0 / frame), min(len(rms), int(t_max / frame))
+    for k in range(start, max(start, stop - need)):
+        if quiet[k:k + need].all():
+            return k * frame
+    if stop <= start:
+        return t0
+    return (start + int(np.argmin(rms[start:stop]))) * frame
+
+
 def trim_reply(wav, text, n_sentences, out, cache):
     """Cut a companion reply after its first n sentences, at the whisper end time of the last
     word of those sentences; returns (trimmed wav, kept text)."""
@@ -115,9 +137,11 @@ def trim_reply(wav, text, n_sentences, out, cache):
     if not hits:
         sys.exit(f"cannot find the cut word {last!r} near word {guess} of {wav}")
     i = min(hits, key=lambda k: abs(k - guess))
-    cut = ws[i]["e"] + 0.15
-    if i + 1 < len(ws):
-        cut = min(cut, ws[i + 1]["s"] - 0.02)
+    # Whisper ends a word early on a soft tail ("distress", "you"), so its end time alone cut
+    # the last word short in the first v5 build. Cut in the first real silence after it instead,
+    # read from the audio, and never past the next word.
+    limit = ws[i + 1]["s"] + 0.25 if i + 1 < len(ws) else ws[i]["e"] + 0.8
+    cut = quiet_after(wav, ws[i]["e"], limit) + 0.05
     v2.run(["ffmpeg", "-y", "-loglevel", "error", "-i", wav, "-t", f"{cut:.3f}",
             "-af", f"afade=t=out:st={max(0.0, cut - 0.08):.3f}:d=0.08", out])
     return out, kept
