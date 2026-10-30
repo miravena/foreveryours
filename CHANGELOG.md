@@ -10,6 +10,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Fixed
+- The companion's spoken reply no longer stops in the middle of a word on a phone or a laptop (#194). Measured in a real browser, the reply played its first 1.3-1.8 s, went silent for 1.3-3.3 s, then played the rest: Gradio's streaming encoder keeps the tail of each sentence until the turn ends, and its player re-reads the playlist only about every two seconds. Each sentence is now sent as 0.4 s slices, followed by a one-millisecond silent nudge while the turn finishes in the background; the browser then has the whole sentence about a second after the first sound.
+
 ## [1.0.3] - 2026-10-30
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.2 plus the fixes below. During judging only `v1.0.x` patches deploy (ADR-015).

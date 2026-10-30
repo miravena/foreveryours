@@ -679,7 +679,9 @@ class TestEmptyTranscriptArity(unittest.TestCase):
                 # The reply audio rides its own CHUNK yield(s), once;
                 # the final yield carries none, so check the delivered chunk.
                 self.assertIsNone(last[1], "the final yield must not re-send the reply audio")
-                delivered = [o[1] for o in outputs if isinstance(o[1], str)]
+                # (a real WAV chunk now arrives as short slices of WAV bytes; the first
+                # one stands for the chunk here, and an unreadable one stays a path)
+                delivered = [o[1] for o in outputs if isinstance(o[1], (str, bytes))]
                 spoken = (last[0], delivered[0] if delivered else None, *last[2:5])
                 self._assert_capped_fast_path_reply(spoken, session_id, reply_text, flag_text)
 
