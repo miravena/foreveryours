@@ -1,0 +1,12 @@
+{
+ "n1": {"text": "That was Dad, speaking out loud. He can also type, if he prefers."},
+ "n2": {"text": "ForeverYours is a voice companion for Dad, briefed by his family. When his safety is at stake, it raises a flag for his daughter, and tells him first, out loud. Everything else he says stays between them.", "reuse": "narration_v5/shot2.wav"},
+ "n3": {"text": "His daughter briefs it once, from work. One line: a check-up with Dr. Tan on Thursday. Nothing to set up on Dad's side.", "reuse": "narration_v5/shot3.wav"},
+ "n4a": {"text": "When Dad asks, it already knows what she typed."},
+ "n4b": {"text": "The reply is written by NVIDIA Nemotron on Nebius Token Factory."},
+ "n5a": {"text": "What he says in private stays private. His daughter sees no flag, and none of his words."},
+ "n5b": {"text": "Danger is different. Safety rules catch this before the model does."},
+ "n6": {"text": "Next day, in a local test, it's still briefed.", "reuse": "narration_v5/shot6.wav"},
+ "n7": {"text": "Two models on Nebius Token Factory: Nemotron 3 Nano writes the replies, and Nemotron 3 Super is the safety backstop. Hearing and voice run on the app's own server, so his voice recording never goes to Nebius.", "reuse": "narration_v5/shot7.wav"},
+ "n8": {"text": "This is a prototype: it can miss nuance, so it does not replace human judgment or emergency services. Try it yourself, no login, at the link on screen.", "reuse": "narration_v5/shot8.wav"}
+}

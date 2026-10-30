@@ -14,6 +14,7 @@ rename `Unreleased` to the version and date, then tag it.
 - "I slipped in the bathroom", "I ended up on the rug" and "I lost my footing" get the fall reply and the flag (#198). "It slipped my mind", "slipped out", "slipped my shoes off" and the like stay calm.
 
 ### Docs
+- Demo video v6 (`video/v6/`, #304): Dad speaks every line into the live Space's microphone (the transcript shows what it heard), the narrator covers every hearing and model wait so there is no dead air, one line says he can also type, and all hosted shots are re-captured on the current build. `check_v6.py` checks the uploaded assets. Draft release only.
 - Known limitations: a fall the rules still miss ("I went flying", "I came a cropper"), the background check's occasional "Review suggested" on a good reply, and the usage limits (#204).
 
 ## [1.0.5] - 2026-10-30
