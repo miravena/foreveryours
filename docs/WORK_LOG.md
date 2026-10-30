@@ -9,6 +9,31 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-30: the spoken reply no longer goes silent mid-word on a phone (#194)
+- **Why:** the founder heard "very choppy" audio on an Android phone in Chrome after clicking the
+  sample clip "Dad asks what's happening today". The input clip is clean PCM; it was the companion's
+  reply.
+- **Measured** (headless Chromium, desktop and Pixel 7 emulation, local server with a live key, then
+  the public Space read-only, one turn each): the reply is one 3.3 s sentence and reached the browser
+  as two HLS segments. The first (1.4-1.8 s of audio) arrived about 0.1 s after the sentence was
+  synthesized, the second 2.4-3.5 s later, when the turn's generator ended. The player ran dry at
+  1.32 s and stalled **1.28 s, 3.29 s, 2.26 s, 3.29 s** on four local runs and **2.39 s, 1.38 s** on
+  the Space, always inside the word being spoken. The decoded audio is continuous (no gap or click at
+  the join): the silence is delivery, not the 200 ms sentence padding.
+- **Cause:** (1) `AacStreamEncoder.take` returns only the frames finished when a chunk arrives and
+  leaves the rest "for the next chunk or flush()"; (2) after the last sentence the generator waits
+  seconds for the background AUDIT thread (the drain loop), so the stream is not flushed until then;
+  (3) the browser re-reads the playlist about once per `#EXT-X-TARGETDURATION` (the longest segment so
+  far, rounded up), which a 1.4-1.8 s first segment makes 2 s.
+- **Fix:** `_reply_audio_parts` cuts each sentence WAV into 0.4 s slices (target duration 1, a re-read
+  about every 0.5 s); `_pump_chunk` sends 1 ms of silence every 0.15 s, up to 8 times, after the last
+  slice so Gradio collects the finished frames. No extra first-sound latency: the first slice goes
+  out at the same moment the whole sentence did. After: no stall inside speech on four local runs;
+  the whole reply was in the browser about 1 s after the first sound (the last 0.28 s, silent
+  padding, still arrives at the end of the turn).
+- **Gotcha:** a unit test cannot hear this; `tests/test_reply_audio_smooth.py` pins the slicing and
+  the yield order only. Re-measure in a browser after any Gradio upgrade.
+
 ### 2026-10-30: the no-listening answer is fixed text (live T05/T06 flake, #37)
 - **Why:** 2 of the last 8 live runs failed T05/T06: "Sarah can't hear our conversation, but she
   does see safety flags if I send any." True, but the check needs the limit ("only"). Rule 19 is
