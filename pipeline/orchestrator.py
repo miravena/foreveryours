@@ -1556,7 +1556,7 @@ _LISTENING_ANSWER = ("No, {name} can't hear what we talk about, and no one is li
 def _listening_answer(transcript: str, caregiver_name: str) -> str | None:
     """Fixed answer to "Is Sarah listening to us?" (T05/T06), or None when the
     turn is not that question. The caller still lets the safety fast path win."""
-    if not is_listening_question(transcript):
+    if not is_listening_question(transcript, caregiver_name or "Sarah"):
         return None
     return _LISTENING_ANSWER.format(name=caregiver_name or "Sarah")
 

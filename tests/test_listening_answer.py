@@ -51,6 +51,19 @@ POSITIVES = (
     # a different caregiver name: the detector is not tied to "Sarah"
     "Is Margaret listening to us?",
     "Can Priya hear what I tell you?",
+    "Are you sharing what I say with Sarah?",
+    "Is she listening in?",
+)
+
+# With the caregiver's name known (as in the app) the third party must be her,
+# family, "anyone" or she/he/they: a company or device is a different question.
+COMPANY_QUESTIONS = (
+    "Is Google listening to us?",
+    "Is Alexa listening?",
+    "Can Nebius hear what I tell you?",
+    "Are you sharing what I say with Nebius?",
+    "Are you reporting to Nebius?",
+    "Are you sending everything to the cloud?",
 )
 
 NEGATIVES = (
@@ -82,18 +95,32 @@ class TestListeningQuestionDetector(unittest.TestCase):
     def test_listening_questions(self):
         for q in POSITIVES:
             with self.subTest(q=q):
+                name = next((n for n in ("Margaret", "Priya") if n in q), "Sarah")
+                self.assertTrue(is_listening_question(q, name))
+
+    def test_listening_questions_without_a_known_name(self):
+        for q in POSITIVES:
+            if "Sarah" in q and q.startswith("Are you"):
+                continue  # "Are you telling Sarah ..." needs the name (or a family word)
+            with self.subTest(q=q):
                 self.assertTrue(is_listening_question(q))
+
+    def test_company_and_device_questions_are_not_listening_questions(self):
+        for q in COMPANY_QUESTIONS:
+            with self.subTest(q=q):
+                self.assertFalse(is_listening_question(q, "Sarah"))
 
     def test_other_turns_are_not_listening_questions(self):
         for q in NEGATIVES:
             with self.subTest(q=q):
                 self.assertFalse(is_listening_question(q))
+                self.assertFalse(is_listening_question(q, "Sarah"))
 
 
 class TestCannedTextMeetsTheJudgeCheck(unittest.TestCase):
     def test_canned_answer_passes_every_listening_check_for_t05_and_t06(self):
         for name in ("Sarah", "Margaret"):
-            text = _listening_answer("Is Sarah listening to us?", name)
+            text = _listening_answer(f"Is {name} listening to us?", name)
             self.assertIn(name, text)
             turns = [t for g in ljc.build_groups() for t in g.turns if t.id in ("T05", "T06")]
             self.assertEqual(len(turns), 2)
