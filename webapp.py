@@ -792,6 +792,7 @@ def _hosted_turn_allowed(data_dir: Path, client_key: str | None) -> tuple[bool, 
     if not allowed:
         return False, True
     if _rate_limit_ok(data_dir):
+        GUARDRAILS.commit_hosted_turn(ticket)
         return True, False
     GUARDRAILS.refund_hosted_turn(ticket)
     return False, False

@@ -62,6 +62,8 @@ class Ticket:
     at: float
     day: datetime.date
     client: str | None
+    steps: tuple = ()    # daily thresholds (50/80/100) this turn crossed
+    pending: tuple = ()  # their alerts: sent by commit_hosted_turn, dropped by a refund
 
 
 @dataclass(frozen=True)
@@ -433,14 +435,19 @@ class Guardrails:
 
     # -- hosted-turn budget --------------------------------------------------
     def admit_hosted_turn(self, client: str | None) -> bool:
-        """`admit(client)` without the ticket: whether this turn may spend a hosted call."""
-        return self.admit(client)[0]
+        """`admit` and `commit_hosted_turn` in one: whether this turn may spend a hosted call."""
+        allowed, ticket = self.admit(client)
+        self.commit_hosted_turn(ticket)
+        return allowed
 
     def admit(self, client: str | None) -> tuple[bool, Ticket | None]:
         """Whether this turn may spend a hosted (Nebius) call, and the ticket to
-        refund it with. Counts the turn when it may. False means "answer busy":
-        the caller keeps the offline safety fast path and withholds only the paid
-        continuation. Never raises: an accounting bug lets the turn through."""
+        refund or commit it with. Counts the turn when it may. False means "answer
+        busy": the caller keeps the offline safety fast path and withholds only the
+        paid continuation. Alerts about turning visitors away go out at once; the
+        daily-usage alerts a turn triggers wait for `commit_hosted_turn`, so a turn
+        the per-session cap then refunds never announces usage it did not cause.
+        Never raises: an accounting bug lets the turn through."""
         try:
             ticket, events = self._admit(client)
         except Exception as exc:  # a bug in accounting must not take the demo down
@@ -493,15 +500,20 @@ class Guardrails:
             if rec is not None:
                 rec["turns"].append(now)
             pct = self._day_count * 100 // cfg.global_turns_per_day
-            for step in (50, 80, 100):
-                if pct >= step and step not in self._day_fired:
-                    self._day_fired.add(step)
-                    events.append((f"daily_{step}", self._daily_counts()))
-            return Ticket(now, today, client), events
+            crossed = [step for step in (50, 80, 100) if pct >= step and step not in self._day_fired]
+            self._day_fired.update(crossed)
+            pending = tuple((f"daily_{step}", self._daily_counts()) for step in crossed)
+            return Ticket(now, today, client, tuple(crossed), pending), events
 
     def _daily_counts(self) -> dict[str, int]:
         return {"turns_today": self._day_count, "daily_cap": self.config.global_turns_per_day,
                 "turns_last_hour": len(self._hour), "hourly_cap": self.config.global_turns_per_hour}
+
+    def commit_hosted_turn(self, ticket: Ticket | None) -> None:
+        """The turn really goes to the hosted model: send the daily-usage alerts it triggered."""
+        if ticket is not None:
+            for kind, counts in ticket.pending:
+                self.alerts.emit(kind, counts)
 
     def refund_hosted_turn(self, ticket: Ticket | None) -> None:
         """Undo one `admit`, when a later check (the per-session cap) turned the
@@ -514,6 +526,7 @@ class Guardrails:
                 self._hour.remove(ticket.at)
                 if ticket.day == self._day:
                     self._day_count = max(0, self._day_count - 1)
+                    self._day_fired.difference_update(ticket.steps)  # re-armed: it never really crossed
             except ValueError:
                 pass  # already aged out of the window
             rec = self._clients.get(ticket.client) if ticket.client is not None else None

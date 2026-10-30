@@ -503,6 +503,20 @@ class TestOwnerAlerts(unittest.TestCase):
         self.assertIn("turns_today: 5", sent[0][1])
         self.assertIn("daily_cap: 10", sent[0][1])
 
+    def test_a_refunded_turn_announces_no_usage_it_did_not_cause(self):
+        """Review of #37: the shared budget is charged before the per-session cap runs."""
+        guard, sent, _ = make_guard(global_turns_per_day=2, global_turns_per_hour=100)
+        allowed, first = guard.admit(None)
+        guard.commit_hosted_turn(first)
+        self.assertEqual(len(sent), 1)  # 50%
+        allowed, second = guard.admit(None)  # would take usage to 100% ...
+        guard.refund_hosted_turn(second)  # ... but the session cap turned it away
+        self.assertEqual(len(sent), 1)
+        allowed, third = guard.admit(None)  # a turn that really goes ahead
+        guard.commit_hosted_turn(third)
+        self.assertEqual([t for t, _ in sent][1:], ["ForeverYours demo: daily budget 80%",
+                                                    "ForeverYours demo: daily budget used up"])
+
     def test_thresholds_rearm_on_the_next_day(self):
         guard, sent, clock = make_guard(global_turns_per_day=2, global_turns_per_hour=100)
         for _ in range(3):
