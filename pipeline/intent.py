@@ -110,11 +110,11 @@ def _listening_re(caregiver_name: str) -> re.Pattern:
     return re.compile(
         # Is Sarah listening (in / to us)?  Is anyone listening?  Is Sarah watching me?
         r"\b(?:is|are)\s+" + who + r"\s+(?:\w+\s+){0,2}?"
-        r"(?:" + _OVERHEARING + r"(?:\s+(?:in|on)\b|\s+to\s+(?:us|me|you|this|everything|our|what|my)\b|\s*[?.!,]|\s*$|\s+(?:right\s+now|now|all|always|too)\b)"
-        r"|(?:hearing|watching)\s+(?:us|me|this|everything|over)\b)"
+        r"(?:" + _OVERHEARING + r"(?:\s+(?:in|on)\b|\s+to\s+(?:us|me|everything|(?:" + _WHAT_I_SAY + r"))\b|\s*[?.!,]|\s*$|\s+(?:right\s+now|now|all|always|too)\b)"
+        r"|(?:hearing|watching)\s+(?:us|me|everything|(?:" + _WHAT_I_SAY + r"))\b)"
         # Can Sarah hear what I tell you?  Can anyone hear us?  Can Sarah see what I say?
         r"|\b(?:can|could|does|do|did|will|would)\s+" + who + r"\s+(?:\w+\s+){0,2}?"
-        r"(?:(?:hear|overhear|listen\s+to)\s+(?:" + _WHAT_I_SAY + r"|us|me|this|everything|anything)\b"
+        r"(?:(?:hear|overhear|listen\s+to)\s+(?:" + _WHAT_I_SAY + r"|us|me|everything)\b"
         r"|(?:see|read|know)\s+(?:" + _WHAT_I_SAY + r")\b"
         r"|listen\s+in\b)"
         # Are you reporting to Sarah?  Are you telling Sarah everything?  Are you sharing what I say with Sarah?
@@ -130,7 +130,15 @@ def _listening_re(caregiver_name: str) -> re.Pattern:
 def is_listening_question(transcript: str, caregiver_name: str = "") -> bool:
     """True when the senior asks whether the caregiver (or anyone) can hear,
     see or is being told what he says to the assistant."""
-    return bool(transcript) and bool(_listening_re(caregiver_name or "").search(transcript))
+    if not transcript:
+        return False
+    m = _listening_re(caregiver_name or "").search(transcript)
+    if not m:
+        return False
+    # Standalone only: "Is Sarah listening to us? What time is my appointment?"
+    # is two questions, and THINK must get the other one too.
+    rest = (transcript[:m.start()] + " " + transcript[m.end():]).strip(" \t,.!?")
+    return not re.search(r"[?.!]\s*\S|\b(?:and|also|what|when|where|who|how|why|which|can|could|do|does|is|are)\b", rest, re.IGNORECASE)
 
 
 def detect_intent(transcript: str) -> Intent:
