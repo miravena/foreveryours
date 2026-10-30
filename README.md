@@ -179,10 +179,20 @@ To click through the web demo the way a judge does, start the app (`.venv/bin/py
 `.venv/bin/python scripts/ui_smoke.py` (add `--offline-ok` when the app runs without a key, `--url` for
 another port, `--out` for the screenshot directory, default `/tmp/ui-smoke/`). It uses Playwright and
 headless Chromium (`pip install playwright`), clicks each "Try this first" chip and sample clip, sends a typed
-message, loads the sample family, saves a text memo, walks the guided interview and sends the fall phrase,
-waits on page state, saves a screenshot per step and exits non-zero if any step fails. It needs a browser
-and a running server, so it is not part of the unittest suite or CI; run it against a local server, not the
-public Space.
+message, loads the sample family, saves a text memo, walks the guided interview and sends the fall phrase.
+It also touches every other control: the Record button with a fake microphone (Chromium plays
+`samples/senior_distress.wav` as the mic) with Pause, Resume, Stop and the device dropdown, the recorded
+clip's player, the upload button and the X that clears the audio input, the caregiver "Record Voice Memo" and
+"Type Note" tabs, every accordion, Enter to send, that the companion's reply audio element receives audio and
+plays, and the guardrails (a 2,001-character message or memo gets the polite refusal and no reply).
+`--device pixel7`, `--device iphone14` or `--device all` repeat the run with Playwright's phone emulation
+(viewport, touch, user agent; still Chromium, so not the real phone's browser) and print `LAYOUT` lines for
+horizontal overflow, controls off the screen, clipped text and overlapping controls; `--only TEXT` runs just the
+steps whose name contains TEXT. It waits on page state, saves a screenshot per step and size and exits non-zero
+if any step fails. It needs a browser and a running server, so it is not part of the unittest suite or CI;
+run it against a local server, not the public Space. A full run opens many sessions, so a server with the
+default per-visitor limits may refuse some: raise `FY_CLIENT_NEW_SESSIONS_PER_HOUR` and `MAX_DAILY_REQUESTS`
+for the local run.
 
 `beat1` runs fully offline. `beat2` needs `NEBIUS_API_KEY` set — it calls a real open-weight
 model with no fallback, so without a key it fails loudly with a clear message rather than

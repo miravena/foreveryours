@@ -9,6 +9,26 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-30: the browser smoke test touches every control, at desktop and phone sizes (#280)
+- **What:** `scripts/ui_smoke.py` grew from 11 steps to 27. New: the Record button with a fake
+  microphone (Chromium plays `samples/senior_distress.wav` as the mic) with Pause, Resume, Stop and the
+  device dropdown (each of the three fake devices records); the recorded clip's own player (play, speed,
+  skip, volume, reset, trim, download); the upload button, a file that is not audio, and the X that clears
+  the audio input; the caregiver "Type Note" and "Record Voice Memo" tabs (recorded with the fake mic, and
+  uploaded); every accordion; Enter and Shift+Enter; that the companion's reply audio element receives
+  streamed segments and plays to its end; the 2,001-character message and memo refusals (#37). `--device
+  desktop|pixel7|iphone14|all` uses `playwright.devices`; each size also gets a layout check (horizontal
+  scroll, controls off the screen, clipped text, overlapping controls) printed as `LAYOUT` lines.
+- **Gotchas:** the memo widget starts in record mode, so its file input does not exist until its own
+  "Upload file" button is clicked; both audio widgets have a Record button, so the memo step must pick the
+  second one. A full run opens roughly 30 sessions per size, which the default per-visitor limit (30 new
+  sessions an hour) would refuse: raise `FY_CLIENT_NEW_SESSIONS_PER_HOUR`, `FY_CLIENT_TURNS_PER_HOUR` and
+  `MAX_DAILY_REQUESTS` on the local server. Playwright's phone emulation is still Chromium, not the
+  phone's own browser.
+- **Result:** no layout finding (no overflow, off-screen control, clipped text or overlap) at desktop,
+  Pixel 7 or iPhone 14. After a refused over-long message the "Companion's reply" player shows an empty
+  `0:00 / 0:00` player with a pause icon (cosmetic, not changed here).
+
 ### 2026-10-30: the spoken reply no longer goes silent mid-word on a phone (#194)
 - **Why:** the founder heard "very choppy" audio on an Android phone in Chrome after clicking the
   sample clip "Dad asks what's happening today". The input clip is clean PCM; it was the companion's

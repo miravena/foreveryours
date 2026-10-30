@@ -10,6 +10,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Added
+- `scripts/ui_smoke.py` now touches every control a judge can reach (#280): the Record button with a fake microphone (Pause, Resume, Stop, the device dropdown, the clip's player), the upload button and the X that clears the audio input, the caregiver "Record Voice Memo" and "Type Note" tabs, every accordion, Enter to send, that the companion's reply audio plays, and the 2,001-character guardrail refusals. A `--device desktop|pixel7|iphone14|all` flag repeats the run with phone emulation and reports layout problems, and `--only TEXT` runs selected steps.
+
 ## [1.0.4] - 2026-10-30
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.3 plus abuse limits, owner alerts, smooth reply audio on phones and a browser smoke test. During judging only `v1.0.x` patches deploy (ADR-015).
