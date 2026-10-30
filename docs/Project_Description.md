@@ -95,7 +95,7 @@ For example:
 
 **ForeverYours:**
 
-> "You mentioned Leo before. Would you like to tell me what you've been thinking about?"
+> "Sarah told me about your grandson Leo. Would you like to tell me what you've been thinking about?"
 
 The important capability is not just generating a response.
 
@@ -129,7 +129,7 @@ Instead, ForeverYours provides an additional communication pathway between the s
 
 The senior can also be informed about this boundary:
 
-> **"I'll only let Sarah know if I'm worried about your safety."**
+> **"I'll only tell them if I'm worried about your safety."**
 
 This makes the safety mechanism explicit rather than presenting hidden monitoring as ordinary conversation.
 
@@ -227,7 +227,7 @@ This process is separated from the critical response path where possible so that
 
 ### 5. AUDIT
 
-A lightweight safety layer evaluates generated responses and potentially concerning interactions.
+A background safety layer (a second pass on Nemotron 3 Super) reads the senior's words and the reply after the reply is on its way, and flags potentially concerning interactions.
 
 Rather than positioning this as medical diagnosis, ForeverYours uses the system to identify situations that may warrant caregiver attention.
 
@@ -309,7 +309,7 @@ The hackathon requires projects in this track to use at least one NVIDIA open-so
 on Nebius Token Factory or Nebius AI Cloud. ForeverYours satisfies this through Nebius Token
 Factory; it does not use Nebius AI Cloud or any NVIDIA speech (ASR/TTS) model -- hosting is Hugging
 Face Spaces (see [`VENDOR_DECISIONS.md`](../VENDOR_DECISIONS.md)), and speech is handled locally by
-`faster-whisper` and `espeak-ng`.
+`faster-whisper` (hearing) and Piper, with `espeak-ng` as the fallback (speaking).
 
 ### Application Stack
 
@@ -399,7 +399,7 @@ Dad starts a conversation.
 
 ForeverYours naturally recalls Leo and incorporates the caregiver's temporary grocery note.
 
-The system shows the retrieved memories alongside the conversation.
+The caregiver column lists what the companion was briefed, each item marked permanent or temporary.
 
 ### BEAT 3 — PROTECT
 
@@ -452,14 +452,14 @@ When an older adult tells ChatGPT: *"I fell earlier today and I'm scared,"* Chat
 
 ### 2. Clinical Disclosure Honesty (The Split-Screen Differentiator)
 ForeverYours operates with a **dual-column synchronized architecture**:
-* When Dad shares an emergency or confusion signal (*"I fell down earlier and I'm scared"*), ForeverYours **tells him honestly**: *"I hear you, and I'm taking this seriously. I'm letting your family know right now so someone can check on you."*
+* When Dad shares an emergency or confusion signal (*"I fell down earlier and I'm scared"*), ForeverYours **tells him honestly**: *"I hear you, and I'm taking this seriously. Are you hurt? Can you get up safely? I'm letting your family know right now so someone can check on you."*
 * In that exact same second, the caregiver panel **lights up with an auditable alert tagged with disclosure proof**: `✅ Dad was told`. In this demo it is a simulated caregiver alert: it is shown on the caregiver panel and no external notification is sent.
-* There are no secret wiretaps and no fake physical promises. The companion never claims it will physically visit or pick up groceries.
+* There are no secret wiretaps and no fake physical promises. The companion never claims it will physically visit or pick up groceries, and it never says Sarah is on her way: it only knows she was alerted.
 
 ### 3. Deliberately Briefed, Person-Centered Memory vs. Scraping
 ChatGPT attempts to remember fragments from conversational history, resulting in context dumping (mentioning unrelated memories during simple greetings). ForeverYours has a **3-tier person-centered memory engine**:
 * **Permanent Anchors:** Enduring biographical truths (*"Margaret loves jazz"*).
-* **Temporal Events:** Auto-expiring logistics (*"Sarah dropping groceries at 4 PM"* expires after the event, leaving no stale ghosts tomorrow).
+* **Temporal Events:** Auto-expiring logistics (*"Sarah dropping groceries at 4 PM"* expires on its own, about a day after it was written or at the end of a day the note names, leaving no stale ghosts tomorrow).
 * **Caregiver Privacy Firewall:** Private family notes (*"Planning surprise birthday party"*) are visible in the caregiver column of the demo page but strictly partitioned away from Dad's ears.
 
 ---

@@ -25,9 +25,10 @@ from true to false:
   that arrives after the browser stopped listening is recorded undisclosed.
   The same rule gates lifestyle notes.
 - **The driving note** (`fastpath.driving_plan`): when the senior says he
-  plans to drive himself, the reply first offers a lift (it may offer to ask
-  the caregiver, never claim one is arranged), then a spoken line tells him
-  the caregiver gets a short note. The note ("Dad mentioned driving today",
+  plans to drive himself, the reply first suggests a lift ("Could you ask Sarah
+  for a lift instead?": he asks her himself; the companion never claims one is
+  arranged and never offers to pass her a message), then a spoken line tells
+  him the caregiver gets a short note. The note ("Dad mentioned driving today",
   severity `note`) is recorded as disclosed only when that line was
   delivered. It is listed on the panel but is not a safety alert: the panel
   stays calm and no outbound notification is sent for it.
@@ -90,8 +91,8 @@ senior as a follow-up, not silently dropped.
    The public demo's daily request cap never blocks it: at the cap the
    fast-path still speaks and flags, and only the paid THINK continuation is
    withheld (`webapp._cap_decision`).
-2. **Audit** (`pipeline/audit.py`) — asynchronous, a second small-model pass
-   over every *other* reply and the senior's transcript. It checks for
+2. **Audit** (`pipeline/audit.py`) — asynchronous, a second model pass
+   (Nemotron 3 Super, ADR-016) over every *other* reply and the senior's transcript. It checks for
    medical-hallucination or unsafe-advice risk and provides a wider,
    graded `DISTRESS`/`CRISIS` backstop for phrasing the regex cannot cover.
    Runs after the reply is already on its way to audio, so it never adds
@@ -122,7 +123,8 @@ crisis and its reply names both numbers. THINK's PHYSICAL EMERGENCY rule says
 the same, with no diagnosis or treatment advice.
 
 A senior who is down and cannot summon help is a physical emergency too (#242).
-"On the floor", "fell" or "down here" together with "can't reach (or get to)
+"On the floor" (a room or surface word may sit before "floor": "on the kitchen
+floor"), "fell" or "down here" together with "can't reach (or get to)
 the phone", "can't call anyone", "can't get up", or "been on the floor for
 hours" gets its own fast-path reply: press the medical alert button or call 911
 if you can, and the family is being told right now (the senior may not be able
@@ -144,7 +146,16 @@ already said.
 
 ## What's stored
 
-Caregiver memos and caregiver daily notes, stored verbatim. For the senior's
+Caregiver memos and caregiver daily notes, stored verbatim, except that a
+memo which changes a medication dose ("take three extra aspirin", "double his
+insulin", "skip his pills") is refused and not stored, typed or spoken: its
+text would reach THINK's prompt, and the companion never gives dosing advice.
+Reminders and plain medication facts are saved as before. Briefing text never
+enters THINK's system message: profile facts and family updates follow it as
+one user-role `<family_notes>` data message, and guardrail memos as a
+`<caregiver_memos>` one. Rules 26a and 22 say that text cannot change any rule.
+Replies never say a caregiver is on her way or promise to pass her a message
+(rule 26 and a sentence filter); only safety flags reach her. For the senior's
 turn, Nemotron (via Nebius Token Factory, `pipeline/think.py`'s
 `extract_memory_llm`) runs first and returns a specific `ADD:`/`SUPERSEDE:`/
 `DELETE:` command, which lets a correction ("my grandson's name is Liam, not
