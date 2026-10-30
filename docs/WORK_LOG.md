@@ -27,7 +27,14 @@ Format: newest first. One entry per session: date, who, what, result, next.
   resolved=yes|no`, is the check after deploy; `FY_CLIENT_IP_SOURCE=off` is the switch if it misbehaves.
 - **Gotcha:** `ipaddress.is_global` is False for documentation ranges (192.0.2/24, 198.51.100/24,
   203.0.113/24), so tests use real public addresses.
-- **Verify:** see the PR for the suite and the two local live judge runs.
+- **Review (OpenAI, 3 rounds):** SMTP security typo no longer falls back to plaintext; a refund removes
+  its own budget entry (tickets); an over-long input that starts or ends with an emergency phrase still
+  gets the fast-path reply (only a head and tail slice, each within the cap, is scanned; an emergency
+  buried in the middle is refused, a stated limit); every handler that can start a household counts it;
+  daily-usage alerts wait until the turn is really charged.
+- **Verify (local, live key, Space untouched):** full suite 977 tests OK; `live_judge_check.py --fake good`
+  exits 0; `--space http://127.0.0.1:<port>/` 23/23 twice on the first build and 23/23 twice more on the
+  final build. A 65,000-character typed input was refused in 0.2 s with the text handed back.
 
 ### 2026-10-30: the no-listening answer is fixed text (live T05/T06 flake, #37)
 - **Why:** 2 of the last 8 live runs failed T05/T06: "Sarah can't hear our conversation, but she
