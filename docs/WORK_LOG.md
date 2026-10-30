@@ -25,6 +25,9 @@ Format: newest first. One entry per session: date, who, what, result, next.
   with the fixed text. The baseline did not reproduce the T05/T06 flake in 3 runs (about 1 in 4 per
   run was expected), so this shows no regression, not a measured gain; the gain is that the
   failing wording can no longer be spoken (`tests/test_listening_answer.py`).
+- **After review:** the detector was narrowed three times by the OpenAI review (recording questions,
+  company recipients like Nebius, and non-standalone or music questions all go to THINK now), then
+  two more live runs on the final branch code: 23, 23 (T05/T06 pass with the fixed text).
 - **Test change:** two tests in `test_invented_household_facts.py` used "Is Sarah listening to us?" /
   "Can Sarah hear what I tell you?" to check that the detail guard keeps a privacy answer in any
   words. Those two questions now get the fixed text, so the tests use phrasings the detector does
