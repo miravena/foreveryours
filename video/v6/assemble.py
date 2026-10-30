@@ -210,7 +210,9 @@ def main():
     km, t1 = s1["key_moments"], s1["dad_turns"][0]
     ra = replies(s1)[0]
     A = km["fall_record_clicked"] - 0.5
-    fall_wav, fall_text = v5.trim_reply(ra["path"], s1["reply"], 4, os.path.join(WORK, "fall_reply_cut.wav"), cache)
+    fall_cut = os.path.join(WORK, "fall_reply_cut.wav")
+    cache.pop(fall_cut, None)   # trim_reply rewrites this file: its word times must be taken again
+    fall_wav, fall_text = v5.trim_reply(ra["path"], s1["reply"], 4, fall_cut, cache)
     end = ra["starts_playing_at"] + v2.probe_duration(fall_wav) + 0.6
     start = tl.t
     g1 = lambda t: start + t - A  # noqa: E731
@@ -277,8 +279,9 @@ def main():
     k5 = s5["key_moments"]
     tl5, tc5 = s5["dad_turns"]
     r1, r2 = replies(s5)
-    crisis_wav, crisis_text = v5.trim_reply(r2["path"], s5["reply"][1], 3,
-                                            os.path.join(WORK, "crisis_reply_cut.wav"), cache)
+    crisis_cut = os.path.join(WORK, "crisis_reply_cut.wav")
+    cache.pop(crisis_cut, None)   # trim_reply rewrites this file: its word times must be taken again
+    crisis_wav, crisis_text = v5.trim_reply(r2["path"], s5["reply"][1], 3, crisis_cut, cache)
     A5 = k5["lonely_record_clicked"] - 0.1
     CUT, FREEZE = r1["starts_playing_at"] + r1["duration"] + 0.05, 0.25
     RESUME = k5["crisis_record_clicked"]
