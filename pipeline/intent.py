@@ -177,7 +177,7 @@ _QUESTION_OPENER_RE = re.compile(
 # quantity or a catch-up word, so "I missed my pill. Can I take the dog out?" stays two
 # topics for THINK.
 _DOSE_QUANTITY_RE = re.compile(
-    r"\b(?:two|2|three|double|twice|extra|another|more|both|half|a\s+second|one\s+more|catch\s+up|make\s+up|the\s+rest|them\s+all|it\s+all)\b",
+    r"\b(?:two|2|three|double|twice|extra|another|more|both|half|a\s+second|one\s+more|catch\s+up|make\s+up|the\s+rest|them\s+all|it\s+all|it|them|that|these|those)\b",
     re.IGNORECASE)
 # ... and a second question joined to the first ("Can I take two pills and what
 # is for dinner?") is left to THINK as well.
@@ -190,7 +190,7 @@ _JOINED_QUESTION_RE = re.compile(
 def is_medication_dose_question(transcript: str) -> bool:
     """True when the senior asks whether to take, skip, double or change a
     medicine or dose, or says he missed one. Standalone only: "Can I take two
-    tonight? And what is for dinner?" has another question THINK must answer."""
+    tonight? And what is for dinner?" has another request THINK must answer."""
     if not transcript or not _MED_RE.search(transcript):
         return False
     text = transcript.replace("\u2019", "'")
@@ -207,7 +207,10 @@ def is_medication_dose_question(transcript: str) -> bool:
             return False
         if ask or _MED_MISSED_RE.search(part):
             found = True
-        elif "?" in part or _QUESTION_OPENER_RE.match(part):
+        elif not has_med and len(part.split()) > 3:
+            # Any other sentence ("Tell me about my grandson.", "Can I take the
+            # dog out?") is a request THINK must answer; fixed text only for a
+            # turn that is all about the medicine. "Oh dear." is no request.
             return False
     return found
 

@@ -1629,12 +1629,14 @@ def caregiver_only_topics(private_notes: list[str], open_texts: list[str], careg
     return frozenset(topics)
 
 
-# "I don't know whether you had a fall" and "I'm not sure why" claim nothing, and
-# "last fall" / "in the fall" is the season. A hedge followed by "but" is still a claim.
+# "I don't know whether you had a fall" claims nothing (but "I don't know when you
+# had your fall" does), and "last fall" / "in the fall" is the season. A hedge
+# followed by "but" is still a claim.
 _UNSURE_RE = re.compile(
-    r"\b(?:i\s+(?:don't|do\s+not|can't|cannot|couldn't)\s+(?:know|say|tell|see|have|find|recall|remember)|i(?:'m|\s+am)\s+not\s+sure|"
-    r"i(?:'m|\s+am)\s+unsure|no\s+idea|not\s+(?:noted|written)|isn't\s+(?:noted|written)|nothing\s+(?:noted|written)|"
-    r"whether|i\s+wonder)\b", re.IGNORECASE)
+    r"\b(?:i\s+(?:don't|do\s+not|can't|cannot|couldn't)\s+(?:know|say|tell|be\s+sure)\s+(?:whether|if)"
+    r"|i(?:'m|\s+am)\s+(?:not|un)\s*(?:sure|certain)\s+(?:whether|if)"
+    r"|(?:no\s+idea|i\s+wonder)\s+(?:whether|if)"
+    r"|i\s+(?:don't|do\s+not)\s+have\s+(?:\w+\s+){0,3}(?:noted|written))\b", re.IGNORECASE)
 _BUT_RE = re.compile(r"\b(?:but|though|however|although|except)\b", re.IGNORECASE)
 _SEASON_RE = re.compile(
     r"\b(?:(?:in\s+the|in|this|last|next|every|each|early|late|come|until|since\s+last|by\s+the\s+end\s+of)\s+(?:the\s+)?(?:fall|spring|summer|winter)"

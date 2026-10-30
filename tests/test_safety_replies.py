@@ -114,13 +114,15 @@ class TestCaregiverOnlyTopics(unittest.TestCase):
     def test_sentences(self):
         topics = frozenset({"fall", "hearing"})
         for s in ("You've been using a cane since your fall last fall.", "It was after you fell.",
+                  # Codex round 2: a hedge on another word does not shield the claim
+                  "I don't know when you had your fall.", "Your hearing has worsened, whether you notice it or not.",
                   "Your hearing is not what it was.", "Falls happen.",
                   "I'm not sure, but I know you had a fall."):
             with self.subTest(s=s):
                 self.assertTrue(states_caregiver_only_topic(s, topics))
         for s in ("Glad to hear that.", "I enjoy a good chat.", "Would you like some music?",
                   # Codex round 1: an honest "I don't know" and the season claim nothing
-                  "I don't know whether you had a fall.", "I'm not sure why you use it.",
+                  "I don't know whether you had a fall.", "I'm not sure if it was a fall.",
                   "The leaves come down in the fall.", "Last fall was lovely."):
             with self.subTest(s=s):
                 self.assertFalse(states_caregiver_only_topic(s, topics))
@@ -206,6 +208,8 @@ class TestMedicationQuestion(unittest.TestCase):
     POSITIVES = (
         PILL_QUESTION,
         "Can I take two tonight? I missed my pill.",
+        "I missed my pill. Should I take it now?",
+        "I missed my pill. Oh dear. Can I take another?",
         "Should I take my pill now?",
         "Can I skip my tablet tonight?",
         "I missed my dose.",
@@ -219,6 +223,8 @@ class TestMedicationQuestion(unittest.TestCase):
         # a second question beside the medicine one goes to THINK (Codex round 1)
         "I missed my pill. Can I take the dog out?",
         "Can I take two pills and what is for dinner?",
+        "I missed my pill. Tell me about my grandson.",
+        "Should I take my pill? Tell me today's schedule.",
         "Can I take my pill with tea? And is Sarah coming?",
         "Can I take two biscuits?",
         "Should I take the dog out?",
