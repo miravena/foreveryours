@@ -55,11 +55,12 @@ CRISIS_DISCLOSURE_LINE_NO_988 = "I am also letting {caregiver} know that you may
 # no lecture. enforce_driving_alternative() still checks the reply after.
 DRIVING_CONTINUATION_NOTE = (
     "The person plans to drive himself. Offer, first, that {caregiver} or family "
-    "could give him a lift or drive him, as an offer to pass on, for example "
-    "\"{caregiver} could take you, shall I let {caregiver} know?\". Never say a lift "
+    "could give him a lift or drive him, and suggest he ask {caregiver} for one "
+    "himself, for example \"Could you ask {caregiver} for a lift instead?\". Never say a lift "
     "is arranged, booked or on its way, and never say you will drive or take him "
-    "yourself (rules 4, 5 and 25); do not praise or encourage the drive, and do not "
-    "lecture him: it is his choice (rule 16); then rule 12."
+    "yourself (rules 4, 5 and 25); never offer to tell, let know, call or message "
+    "{caregiver} or anyone for him (rule 26); do not praise or encourage the drive, "
+    "and do not lecture him: it is his choice (rule 16); then rule 12."
 )
 # Spoken after the reply on a driving-plan turn; the low-severity note
 # (fastpath.CAREGIVER_FLAG_TEXT["driving"]) is recorded as disclosed only when
