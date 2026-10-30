@@ -1,0 +1,247 @@
+{
+ "video": "foreveryours_demo_v6.mp4",
+ "duration": 139.17,
+ "lufs": -16.1,
+ "true_peak": -4.9,
+ "flag_at": 9.84,
+ "captures": {
+  "fall": "2026-10-30T04:51:28.126Z",
+  "appt_t1": "2026-10-30T04:53:31.785Z",
+  "crisis": "2026-10-30T04:55:17.215Z",
+  "day2": "local run"
+ },
+ "shots": [
+  [
+   1,
+   0.0,
+   18.79
+  ],
+  [
+   2,
+   18.79,
+   33.09
+  ],
+  [
+   3,
+   33.09,
+   42.34
+  ],
+  [
+   4,
+   42.34,
+   62.43
+  ],
+  [
+   5,
+   62.43,
+   99.99
+  ],
+  [
+   6,
+   99.99,
+   110.44
+  ],
+  [
+   7,
+   110.44,
+   126.99
+  ],
+  [
+   8,
+   126.99,
+   139.15
+  ]
+ ],
+ "dad_turns": [
+  {
+   "heard": "I fell down earlier and I'm scared.",
+   "intended": "I fell down earlier and I'm scared.",
+   "source_wav": "dad_v6/dad_fall.wav",
+   "input": "live Space, browser microphone",
+   "speech": [
+    1.11,
+    3.84
+   ]
+  },
+  {
+   "heard": "Do I have any doctor's appointments this week?",
+   "intended": "Do I have any doctor's appointments this week?",
+   "source_wav": "dad_v6/dad_appt.wav",
+   "input": "live Space, browser microphone",
+   "speech": [
+    45.71,
+    48.82
+   ]
+  },
+  {
+   "heard": "I feel lonely since my wife died.",
+   "intended": "I feel lonely since my wife died.",
+   "source_wav": "dad_v6/dad_lonely.wav",
+   "input": "live Space, browser microphone",
+   "speech": [
+    63.16,
+    65.81
+   ]
+  },
+  {
+   "heard": "I want to end my life.",
+   "intended": "I want to end my life.",
+   "source_wav": "dad_v6/dad_crisis.wav",
+   "input": "live Space, browser microphone",
+   "speech": [
+    81.01,
+    82.87
+   ]
+  },
+  {
+   "heard": "I forgot, what is my grandson's name?",
+   "intended": "I forgot, what is my grandson's name?",
+   "source_wav": "dad_v6/dad_grandson.wav",
+   "input": "local run, beat4 --audio",
+   "speech": [
+    103.52,
+    106.51
+   ]
+  }
+ ],
+ "companion_pauses": [],
+ "labels": [
+  [
+   9.84,
+   18.79,
+   "Dad was told"
+  ],
+  [
+   72.76,
+   80.15,
+   "Not shown to the family"
+  ],
+  [
+   88.54,
+   99.99,
+   "Crisis: 988 offered, simulated family alert"
+  ]
+ ],
+ "audio": [
+  [
+   0.51,
+   5.04,
+   "dad",
+   "dad_fall.wav"
+  ],
+  [
+   4.49,
+   9.14,
+   "narrator",
+   "n1.wav"
+  ],
+  [
+   9.79,
+   18.19,
+   "companion",
+   "fall_reply_cut.wav"
+  ],
+  [
+   19.19,
+   32.49,
+   "narrator",
+   "n2.wav"
+  ],
+  [
+   33.69,
+   41.64,
+   "narrator",
+   "n3.wav"
+  ],
+  [
+   42.54,
+   45.29,
+   "narrator",
+   "n4a.wav"
+  ],
+  [
+   45.11,
+   50.02,
+   "dad",
+   "dad_appt.wav"
+  ],
+  [
+   49.29,
+   54.24,
+   "narrator",
+   "n4b.wav"
+  ],
+  [
+   54.71,
+   62.28,
+   "companion",
+   "appt_t1_reply_2.wav"
+  ],
+  [
+   62.56,
+   67.01,
+   "dad",
+   "dad_lonely.wav"
+  ],
+  [
+   66.54,
+   72.03,
+   "narrator",
+   "n5a.wav"
+  ],
+  [
+   72.76,
+   80.1,
+   "companion",
+   "crisis_reply_2.wav"
+  ],
+  [
+   80.41,
+   84.07,
+   "dad",
+   "dad_crisis.wav"
+  ],
+  [
+   83.46,
+   88.02,
+   "narrator",
+   "n5b.wav"
+  ],
+  [
+   88.61,
+   99.19,
+   "companion",
+   "crisis_reply_cut.wav"
+  ],
+  [
+   100.39,
+   103.12,
+   "narrator",
+   "n6.wav"
+  ],
+  [
+   102.92,
+   107.71,
+   "dad",
+   "dad_grandson.wav"
+  ],
+  [
+   107.01,
+   109.84,
+   "companion",
+   "day2_reply.wav"
+  ],
+  [
+   110.84,
+   126.49,
+   "narrator",
+   "n7.wav"
+  ],
+  [
+   127.39,
+   137.95,
+   "narrator",
+   "n8.wav"
+  ]
+ ]
+}
