@@ -4,7 +4,7 @@
 against the repo alone. Paste only the prose under each heading into the Devpost form; HTML
 comments and the "Reviewer notes" section at the end are evidence for the two reviewers and are
 never pasted. One placeholder must be filled before submitting: the video link (#5). Search this file
-for "PLACEHOLDER". The gallery files are named in "Form fields" (#218).
+for "PLACEHOLDER". Fields marked "TEAM PICK" are the team's own answers. The gallery files are named in "Form fields" (#218).
 
 Checked on 2026-10-26 against the live Space, build `bb1a021` (the "Build:" line in the Space's
 "About this demo household" accordion), which is the same commit as `main`, through the Space's
@@ -282,6 +282,94 @@ so everything in this entry was built during it.
 <!-- Captions follow the final four on #218 (fall, briefed memory, crisis, stack card). Image 4 is the
 v4 video's stack card rendered without its burned-in caption; 04-stack.png (the page footer) is
 unreadable at thumbnail size. Images are uploaded to the Devpost form, not kept in the repo. -->
+
+## Additional info page (judges only)
+
+The form's "Additional info" page asks these. Fields marked **TEAM PICK** are the team's own
+answer or score; the fleet doesn't pick them. Paste the prose as written.
+
+| Field | Value |
+|---|---|
+| Upload a file | Leave empty |
+| Submitter Type, Organization Name, Country of Residence, Canada province | **TEAM PICK** (Organization "N/A" unless you enter as an organization; province "N/A" unless someone lives in Canada) |
+| Track | Personal AI |
+| New or existing prior to August 26, 2026 | New |
+| If existing, how you updated it | Leave empty |
+| Public code repository | https://github.com/miravena/foreveryours |
+| Working demo | https://elevenbaselab-foreveryours.hf.space |
+| Did you use Tavily? | No |
+| Builders & Brews city | Leave blank |
+| Age of majority; not a sponsor employee | Each team member confirms for themselves |
+| Learning level; AI value for career | **TEAM PICK** |
+| The three 1-10 scores below | **TEAM PICK** for the number; the text after it can be pasted |
+
+**Which model(s) did you use, and why that size/variant?**
+NVIDIA Nemotron 3 Nano 30B (A3B) writes the spoken reply and extracts memory notes, because a voice
+turn has to start speaking in about a second and Nano is fast and cheap enough for every turn.
+NVIDIA Nemotron 3 Super 120B (A12B) is the background safety backstop that reads each turn after
+the reply. We chose it with a labelled evaluation across Nano, Super and Ultra: none raised a false
+flag, but Nano caught only 12 of 19 true events on the first set (0.88 recall on a later 43-row
+set, below our 0.90 floor), while Super caught all of them at about a third of Ultra's cost.
+
+**How would you rate Nemotron's output quality? (1-10)** **TEAM PICK**, then:
+Warm and conversational, and it used the caregiver's briefing naturally. Instruction-following was
+good once the prompt was strict. It fell short on brevity (verbose by default, which a voice
+product for older adults can't afford) and it sometimes added plausible details that were never
+in the briefing. As a safety check, Nano alone missed falls described in other words; Super did not.
+
+**Fine-tuned, prompt-engineered, or out of the box?**
+Prompt-engineered, no fine-tuning. A numbered rule list in the system prompt (short turns, never
+invent family details, point a lonely senior back to his family, 911 for a physical emergency),
+the caregiver's briefing injected as memory, reasoning turned off with `enable_thinking: false`,
+and temperature 0.6 for the reply, 0.0 for the safety check. The highest-stakes cases (falls,
+crisis phrases) are caught by deterministic rules before any model is called.
+
+**How did Nemotron compare to other models for similar tasks?**
+In the product we compared only Nemotron models, on our own labelled safety set: Super caught
+every true event where Ultra reached 0.95, at about a third of Ultra's cost, and Nano was the right size for the live reply but
+not for safety on its own. We did not run another vendor's model in the app, so we can't make a
+fair cross-vendor claim.
+
+**Which Nebius capabilities were most valuable, and how?**
+Nebius Token Factory's OpenAI-compatible API: one base URL and one key for all three calls (reply,
+memory extraction, safety backstop), so switching the backstop from Nano to Super was a one-line
+model-ID change. Streaming let us speak the first sentence while the model was still writing the
+rest. We used serverless API access only, with no GPU instances or our own deployment; speech
+recognition and synthesis run on the app's own server because Token Factory has no speech endpoint.
+
+**How likely are you to recommend Nemotron on Nebius? (1-10)** **TEAM PICK**, then:
+It was quick to start (credits activated simply, standard OpenAI SDK), fast enough for voice once
+reasoning was off, and the Nano/Super/Ultra range on one endpoint made it easy to measure and pick
+the right size for each job.
+
+**How does running Nemotron on Nebius compare to previous cloud or local environments? (1-10)**
+**TEAM PICK**, then:
+No hardware to manage and no model to host, so the team spent its time on the product and the
+safety evaluation. The one costly surprise was hidden reasoning tokens: our first live turn took
+4.22 s to first audio until we found `enable_thinking: false`, after which it was about 0.9 s on
+the command line.
+
+**What features or improvements would have helped?**
+A speech-to-text endpoint, so voice apps don't have to run recognition themselves; documentation
+that says plainly what reasoning tokens cost a real-time app and how to turn them off; and
+case-insensitive model IDs, or clearer guidance on them.
+
+**What do you most hope to see from the Nemotron team next?**
+A small model with safety-grade recall for detecting distress in conversation, so a voice
+companion doesn't have to pay for a 120B check on every turn, and a Nemotron speech model served on
+Token Factory.
+
+**Which AI tools did you use while building?**
+Coding assistants: Claude Code (Anthropic Claude models), Google Antigravity (Gemini), GitHub
+Copilot, Kiro and OpenCode, plus OpenAI Codex as an automated code reviewer on every non-trivial
+change. Each commit records which assistant helped in an `Assisted-by` line. In the product:
+NVIDIA Nemotron 3 Nano and Super on Nebius Token Factory, faster-whisper for hearing and Piper for
+the voice.
+
+<!-- Sources: How we used NVIDIA Nemotron and Feedback sections above; ADR-010, ADR-016 (Ultra
+"about 3x Super's cost"); pipeline/think.py:275-281 and pipeline/audit.py:63-65 (temperature,
+enable_thinking); docs/FEEDBACK.md. AI tools: Assisted-by trailers in `git log` (ClaudeCode,
+Antigravity, Copilot, Kiro, opencode, codex). Field list from the live form, 2026-10-30. -->
 
 ## Testing instructions
 
