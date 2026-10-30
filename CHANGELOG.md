@@ -10,6 +10,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Docs
+- The Devpost draft says why ForeverYours fits the Personal AI track (private, persistent memory, family-chosen context, acts), from `docs/Project_Description.md`.
+
 ## [1.0.3] - 2026-10-30
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.2 plus the fixes below. During judging only `v1.0.x` patches deploy (ADR-015).

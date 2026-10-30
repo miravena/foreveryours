@@ -120,6 +120,22 @@ dispatcher. A caregiver flag is a notification, not a 911 call.
 - Not claimed: AUDIT as a feature, biomarkers, proactive triggers, circadian mode, "clinical-grade",
   "Zero-Screen" (#20 AC 3). Those panels are dev-mode only and hidden on the Space. -->
 
+## Why this is Personal AI
+
+The track asks for a private assistant that keeps your data under your control, with persistent
+memory, the information you choose, and the ability to act across your day. ForeverYours is that
+assistant for Dad:
+
+- **Private by design.** His family never hears or reads what he says. Only a short safety flag
+  reaches Sarah, and Dad is told each time one is sent.
+- **Persistent memory.** What Sarah briefs stays: permanent facts, and notes that expire on their
+  own. Memory carries over to the next day.
+- **Context the family chooses.** Sarah decides what the companion knows, by typed or spoken memo
+  or a five-question interview. The companion treats her notes as data, not instructions.
+- **It acts.** It answers his schedule from her notes, steers a plan to drive towards a lift, and
+  raises the caregiver alert for a fall or a crisis. The alert is simulated on the panel in this
+  demo; nothing is sent.
+
 ## Why not just use ChatGPT voice mode?
 
 ChatGPT's voice mode is a better conversationalist than we are, and it has memory. The difference
