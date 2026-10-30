@@ -10,6 +10,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Changed
+- The type box no longer suggests "Who is Sarah?". The default household does not say who she is, so the answer was weak. It suggests "What's my grandson's name?" instead.
+
 ### Added
 - `scripts/ui_smoke.py`: a local Playwright smoke test that opens the web demo in Chromium and clicks what a judge clicks (chips, sample clips, Send, sample family, memo, guided interview, the fall alert), with a screenshot per step and a non-zero exit on any failure. Run by hand against a local server; not part of the suite or CI (#280).
 

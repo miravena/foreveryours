@@ -33,7 +33,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 
 FALL = "I fell down earlier and I'm scared"
-TYPED = "Who is Sarah?"
+TYPED = "What's my grandson's name?"  # the placeholder's own example
 MEMO = "Dad has a check-up with Dr. Tan on Thursday at 10 AM."
 INTERVIEW_ANSWER = "Sarah is his daughter. His grandson Leo is nine. Rosa next door is his oldest friend."
 CLIPS = (
