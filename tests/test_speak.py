@@ -39,7 +39,7 @@ class TestSpeak(unittest.TestCase):
             results = list(speak.speak_sentences(sentences, self.out_dir))
             self.assertEqual(len(results), 2)
             self.assertEqual(mock_subproc.call_count, 2)
-            # Verify espeak-ng was invoked with proper parameters (-s 150, -p 45, -w <out_path>, <text>)
+            # Verify espeak-ng was invoked with proper parameters (-s 150, -p 45, -w <out_path>, --, <text>)
             call1_args = mock_subproc.call_args_list[0][0][0]
             self.assertEqual(call1_args[0], "/usr/bin/espeak-ng")
             self.assertEqual(call1_args[1], "-s")
@@ -47,7 +47,8 @@ class TestSpeak(unittest.TestCase):
             self.assertEqual(call1_args[3], "-p")
             self.assertEqual(call1_args[4], "45")
             self.assertEqual(call1_args[5], "-w")
-            self.assertEqual(call1_args[7], "Good morning.")
+            self.assertEqual(call1_args[7], "--")  # a sentence starting with "-" is never an option (#37)
+            self.assertEqual(call1_args[8], "Good morning.")
 
     def test_multi_sentence_endurance_no_silence(self):
         # Regression test for #28: on Linux, one long-lived in-process engine
