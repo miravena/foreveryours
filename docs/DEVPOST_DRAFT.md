@@ -265,6 +265,7 @@ so everything in this entry was built during it.
 | Video | **PLACEHOLDER (#5): public YouTube link, under 3 minutes. Do not submit with this line.** |
 | Gallery images | Upload four 1920x1080 files from the `gallery-draft` release (collaborators only; #218), in this order: `01-fall.png`, `02-briefed-memory.png`, `03-crisis.png`, `04c-stack-card-clean.png`. Captions below. |
 | Representative | SirTehTarik (decided in #6; enters the submission) |
+| Builders & Brews city | Leave blank (neither team member attended) |
 
 <!-- Track docs/HACKATHON_RULES.md "Personal AI". Both URLs answered on 2026-10-26; the direct
 *.hf.space address is listed first per the #20 coverage-check comment. -->
