@@ -56,6 +56,15 @@ def _env_int(env, name: str, default: int) -> int:
 
 
 @dataclass(frozen=True)
+class Ticket:
+    """One admitted hosted turn: what `refund_hosted_turn` takes back, so a
+    refund removes exactly its own entry even when other turns were admitted since."""
+    at: float
+    day: datetime.date
+    client: str | None
+
+
+@dataclass(frozen=True)
 class Config:
     max_input_chars: int = 2000
     max_memo_chars: int = 2000
@@ -228,14 +237,17 @@ class OwnerAlerts:
             out.append(post)
         host, to = (env.get("FY_OWNER_ALERT_SMTP_HOST") or "").strip(), (env.get("FY_OWNER_ALERT_TO") or "").strip()
         if host and to:
+            security = (env.get("FY_OWNER_ALERT_SMTP_SECURITY") or "starttls").strip().lower()
+            if security not in ("starttls", "ssl", "none"):
+                security = "starttls"  # a typo must never fall through to plaintext login
+
             def mail(subject: str, body: str) -> None:
                 user = env.get("FY_OWNER_ALERT_SMTP_USER", "")
                 notify.send_smtp(
                     host, _env_int(env, "FY_OWNER_ALERT_SMTP_PORT", 587), user,
                     env.get("FY_OWNER_ALERT_SMTP_PASSWORD", ""),
                     (env.get("FY_OWNER_ALERT_FROM") or user or to).strip(), to,
-                    (env.get("FY_OWNER_ALERT_SMTP_SECURITY") or "starttls").strip().lower(),
-                    subject, body)
+                    security, subject, body)
             out.append(mail)
         return out
 
@@ -413,19 +425,24 @@ class Guardrails:
 
     # -- hosted-turn budget --------------------------------------------------
     def admit_hosted_turn(self, client: str | None) -> bool:
-        """Whether this turn may spend a hosted (Nebius) call. Counts it when it may.
-        False means "answer busy": the caller keeps the offline safety fast path
-        and withholds only the paid continuation. Never raises."""
+        """`admit(client)` without the ticket: whether this turn may spend a hosted call."""
+        return self.admit(client)[0]
+
+    def admit(self, client: str | None) -> tuple[bool, Ticket | None]:
+        """Whether this turn may spend a hosted (Nebius) call, and the ticket to
+        refund it with. Counts the turn when it may. False means "answer busy":
+        the caller keeps the offline safety fast path and withholds only the paid
+        continuation. Never raises: an accounting bug lets the turn through."""
         try:
-            admitted, events = self._admit(client)
+            ticket, events = self._admit(client)
         except Exception as exc:  # a bug in accounting must not take the demo down
             print(f"[guardrails] budget check failed: {type(exc).__name__}", file=sys.stderr)
-            return True
+            return True, None
         for kind, counts in events:  # outside the lock; emit() never raises
             self.alerts.emit(kind, counts)
-        return admitted
+        return ticket is not None, ticket
 
-    def _admit(self, client: str | None) -> tuple[bool, list]:
+    def _admit(self, client: str | None) -> tuple[Ticket | None, list]:
         cfg, now, events = self.config, self._clock(), []
         today = datetime.datetime.fromtimestamp(now, tz=datetime.timezone.utc).date()
         with self._lock:
@@ -448,7 +465,7 @@ class Guardrails:
                             "new_sessions_last_hour": len(rec["sessions"]),
                             "new_session_limit": cfg.client_new_sessions_per_hour,
                             "clients_tracked": len(self._clients)}))
-                    return False, events
+                    return None, events
             if len(self._hour) >= cfg.global_turns_per_hour:
                 if not self._hour_alerted:
                     self._hour_alerted = True
@@ -456,12 +473,12 @@ class Guardrails:
                                                   "hourly_cap": cfg.global_turns_per_hour,
                                                   "turns_today": self._day_count,
                                                   "daily_cap": cfg.global_turns_per_day}))
-                return False, events
+                return None, events
             if self._day_count >= cfg.global_turns_per_day:
                 if 100 not in self._day_fired:  # also covers a cap lowered mid-day
                     self._day_fired.add(100)
                     events.append(("daily_100", self._daily_counts()))
-                return False, events
+                return None, events
             self._hour_alerted = False  # room again: arm the hourly alert for the next time
             self._hour.append(now)
             self._day_count += 1
@@ -472,22 +489,31 @@ class Guardrails:
                 if pct >= step and step not in self._day_fired:
                     self._day_fired.add(step)
                     events.append((f"daily_{step}", self._daily_counts()))
-            return True, events
+            return Ticket(now, today, client), events
 
     def _daily_counts(self) -> dict[str, int]:
         return {"turns_today": self._day_count, "daily_cap": self.config.global_turns_per_day,
                 "turns_last_hour": len(self._hour), "hourly_cap": self.config.global_turns_per_hour}
 
-    def refund_hosted_turn(self, client: str | None) -> None:
-        """Undo `admit_hosted_turn` when a later check (the per-session cap)
-        turned the same turn away, so it does not eat the shared budget."""
+    def refund_hosted_turn(self, ticket: Ticket | None) -> None:
+        """Undo one `admit`, when a later check (the per-session cap) turned the
+        same turn away, so it does not eat the shared budget. Removes that
+        ticket's own entries, never a newer turn's."""
+        if ticket is None:
+            return
         with self._lock:
-            if self._hour:
-                self._hour.pop()
-                self._day_count = max(0, self._day_count - 1)
-            rec = self._clients.get(client) if client is not None else None
-            if rec is not None and rec["turns"]:
-                rec["turns"].pop()
+            try:
+                self._hour.remove(ticket.at)
+                if ticket.day == self._day:
+                    self._day_count = max(0, self._day_count - 1)
+            except ValueError:
+                pass  # already aged out of the window
+            rec = self._clients.get(ticket.client) if ticket.client is not None else None
+            if rec is not None:
+                try:
+                    rec["turns"].remove(ticket.at)
+                except ValueError:
+                    pass
 
 
 GUARDRAILS = Guardrails()

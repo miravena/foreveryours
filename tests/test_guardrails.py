@@ -237,9 +237,24 @@ class TestGlobalBudget(unittest.TestCase):
 
     def test_refund_gives_the_slot_back(self):
         guard, _, _ = make_guard(global_turns_per_hour=1, client_turns_per_hour=1)
+        allowed, ticket = guard.admit("c1")
+        self.assertTrue(allowed)
+        self.assertFalse(guard.admit_hosted_turn("c1"))
+        guard.refund_hosted_turn(ticket)
         self.assertTrue(guard.admit_hosted_turn("c1"))
-        guard.refund_hosted_turn("c1")
-        self.assertTrue(guard.admit_hosted_turn("c1"))
+
+    def test_a_refund_removes_its_own_entry_not_a_newer_turns(self):
+        guard, _, clock = make_guard(global_turns_per_hour=2, client_turns_per_hour=5)
+        _, first = guard.admit("a")
+        clock.advance(1000)
+        guard.admit("b")  # admitted after A, before A is refunded
+        guard.refund_hosted_turn(first)
+        self.assertEqual(list(guard._hour), [T0 + 1000])
+        clock.advance(2700)  # A's old slot would have expired by now; B's has not
+        self.assertEqual(len(guard._hour), 1)
+        self.assertTrue(guard.admit_hosted_turn(None))
+        self.assertFalse(guard.admit_hosted_turn(None))  # still 2 per hour: B's turn counts in full
+        guard.refund_hosted_turn(None)  # a turn admitted by the fail-open path has no ticket
 
     def test_an_accounting_bug_fails_open(self):
         guard, _, _ = make_guard()
@@ -516,6 +531,14 @@ class TestOwnerAlerts(unittest.TestCase):
             alerts.emit("hourly_cap", {"turns_last_hour": 600})
         args = smtp.call_args.args
         self.assertEqual((args[0], args[1], args[5], args[6]), ("smtp.example.com", 587, "owner@example.com", "starttls"))
+
+    def test_an_invalid_smtp_security_setting_falls_back_to_starttls_never_plaintext(self):
+        env = {"FY_OWNER_ALERT_SMTP_HOST": "smtp.example.com", "FY_OWNER_ALERT_TO": "owner@example.com",
+               "FY_OWNER_ALERT_SMTP_SECURITY": "startls"}
+        alerts = OwnerAlerts(6, Clock(), env=env, spawn=lambda fn: fn())
+        with patch.object(notify, "send_smtp") as smtp:
+            alerts.emit("hourly_cap", {"turns_last_hour": 600})
+        self.assertEqual(smtp.call_args.args[6], "starttls")
 
     def test_the_body_is_scrubbed_for_key_shaped_strings(self):
         sent: list = []

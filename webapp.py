@@ -774,11 +774,12 @@ def _hosted_turn_allowed(data_dir: Path, client_key: str | None) -> tuple[bool, 
     process-wide budget and this client's limits come first (`busy` True when
     they say no); then the per-session daily cap. A turn the session cap
     refuses gives its shared-budget slot back."""
-    if not GUARDRAILS.admit_hosted_turn(client_key):
+    allowed, ticket = GUARDRAILS.admit(client_key)
+    if not allowed:
         return False, True
     if _rate_limit_ok(data_dir):
         return True, False
-    GUARDRAILS.refund_hosted_turn(client_key)
+    GUARDRAILS.refund_hosted_turn(ticket)
     return False, False
 
 
