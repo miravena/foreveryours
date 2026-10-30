@@ -50,6 +50,23 @@ pass, and how does the senior hear the 988 line once, not twice?
    A generated but refused 988 is not evidence: the disclosure then gives the line, and the
    carry records it as heard only if that disclosure was accepted. The line is US-only; non-US numbers are tracked in #89, and the fixture header says so.
 
+6. **Amendment (2026-10-30, #199): unambiguous indirect goodbyes join the regex tier.** A live probe,
+   "I've said my goodbyes. I'm ready to go now.", was answered "Take all the time you need ... Whenever
+   you're ready" with no check-in and no 988; only the AUDIT pass flagged it, after the reply. The
+   regex tier now also fires on `said/made (all) my (last/final) goodbyes`, `this is (my) goodbye`
+   (not "this is goodbye for now", "until", "then"), `I won't / will not / am not going to be here
+   (or around) much longer`, `(put/putting/got/getting/set/setting) my affairs in order`, `giving
+   (away) my things/stuff/belongings/possessions` (not when followed by "to charity/the library/church
+   ..."), and `ready to leave this world`. `I'm ready to go (now)` fires only as a whole clause and only
+   beside a first-person goodbye or death context in the same utterance (`my goodbyes`, `I've had a
+   good life`, `my time has come`, `I'm dying`); a bare "I'm ready to go" stays backstop-tier, as item 2
+   says, and "ready to go to the shops / home / for a walk" never fires. One idiom is added: "said my
+   goodbyes to Sarah at the door / gate / station". Near-misses ("my friend said her goodbyes at the
+   funeral", "said goodbye to Sarah at the door") are in `tests/test_fastpath.py` and the fixture.
+   The "I have said my goodbyes" rows in `tests/test_orchestrator.py`, which needed a backstop-tier
+   phrase, now use "I have been saving up my sleeping pills" (the AUDIT prompt still carries the
+   goodbyes example for phrasings the regex does not reach).
+
 ## Rationale
 
 The regex tier answers in under 50 ms with a fixed line and cannot hallucinate, so every phrase

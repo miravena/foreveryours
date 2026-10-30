@@ -297,3 +297,16 @@ class TestPrompt(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCaregiverOnlyTopicExemptions(unittest.TestCase):
+    """OpenAI review: a question or general prevention advice states nothing private."""
+
+    def test_questions_and_prevention_advice_are_kept(self):
+        from pipeline.orchestrator import states_caregiver_only_topic
+        topics = frozenset({"fall"})
+        for s in ("Have you had a fall recently?", "Please keep walkways clear to prevent falls.",
+                  "If you ever fall, press your alert button."):
+            with self.subTest(s=s):
+                self.assertFalse(states_caregiver_only_topic(s, topics))
+        self.assertTrue(states_caregiver_only_topic("You use it since your fall last spring.", topics))

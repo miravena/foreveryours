@@ -1265,7 +1265,12 @@ def _format_caregiver_panel(session_id: str | None) -> str:
     turn_count = _get_turn_count(data_dir)
     
     simulated = bool(distress_flags) and _alert_is_simulated(distress_flags[-1])
-    if not distress_flags:
+    # An AUDIT "unsafe reply" flag is listed below, so the header must not say
+    # "No safety concerns" beside it. It is a review note, not the red alert card.
+    audit_flags = [f for f in flag_items if f.severity == "audit"]
+    if not distress_flags and audit_flags:
+        wellbeing_status = "🟡 **Review suggested · the safety check flagged a reply**"
+    elif not distress_flags:
         wellbeing_status = "🟢 **Calm · No safety concerns**"
     elif simulated:
         wellbeing_status = SIMULATED_ALERT_SUMMARY

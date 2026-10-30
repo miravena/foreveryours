@@ -141,6 +141,82 @@ def is_listening_question(transcript: str, caregiver_name: str = "") -> bool:
     return not re.search(r"[?.!]\s*\S|\b(?:and|also|what|when|where|who|how|why|which|can|could|do|does|is|are)\b", rest, re.IGNORECASE)
 
 
+# "Can I take two tonight to catch up?", "Should I skip my pill?", "I missed my
+# dose" (#280, THINK rule 7). The companion never advises on medicines or doses,
+# and live the model answered with sympathy and a change of subject, never
+# saying "don't double up, ask a doctor". The orchestrator answers these with
+# fixed text. A medicine word must be in the utterance, so "Can I take two
+# biscuits?" and "Should I take the dog out?" are not matched. Only a request
+# to take, skip, double or change something, or a report of a missed dose, is:
+# "What time is my pill?" is a schedule question and goes on as before.
+_MED_WORD = r"(?:pills?|tablets?|capsules?|doses?|dosages?|medicines?|medications?|meds|inhalers?|injections?|insulin)"
+_MED_RE = re.compile(r"\b" + _MED_WORD + r"\b", re.IGNORECASE)
+_MED_ASK_RE = re.compile(
+    r"\b(?:can|could|may|should|shall|ought|must)\s+i\s+(?:just\s+|also\s+|maybe\s+)?"
+    r"(?:take|have|double|skip|miss|stop|swap|halve|split|crush|mix|combine|leave|cut|up|increase|reduce|change)\b"
+    r"|\bis\s+it\s+(?:ok|okay|alright|all\s+right|safe|fine|bad|wrong)\s+(?:for\s+me\s+)?(?:to|if\s+i)\s+"
+    r"(?:take|have|skip|miss|double|stop|swap|leave|forget)\b"
+    r"|\bwhat\s+(?:if|happens\s+if|should\s+i\s+do\s+if)\s+i\s+(?:miss|skip|forget|forgot|missed|double|take\s+too)\b"
+    r"|\bhow\s+(?:many|much)\b[^.?!]*\b(?:should|can|do)\s+i\s+take\b"
+    r"|\bwhat\s+(?:dose|dosage)\b",
+    re.IGNORECASE,
+)
+_MED_MISSED_RE = re.compile(
+    r"\bi(?:'ve|\s+have)?\s+(?:just\s+|totally\s+|completely\s+)?(?:missed|forgot|forgotten|skipped)\b[^.?!]*?"
+    r"\b" + _MED_WORD + r"\b",
+    re.IGNORECASE,
+)
+
+
+_QUESTION_OPENER_RE = re.compile(
+    r"(?:what|when|where|who|how|why|which|is|are|do|does|did|can|could|will|would|shall|should)\b", re.IGNORECASE)
+
+
+# A dose sentence with no medicine word of its own ("Can I take two tonight to
+# catch up?") counts only when another sentence names a medicine and only with a
+# quantity or a catch-up word, so "I missed my pill. Can I take the dog out?" stays two
+# topics for THINK.
+_DOSE_QUANTITY_RE = re.compile(
+    r"\b(?:two|2|three|double|twice|extra|another|more|both|half|a\s+second|one\s+more|catch\s+up|make\s+up|the\s+rest|them\s+all|it\s+all|it|them|that|these|those)\b",
+    re.IGNORECASE)
+# ... and a second question joined to the first ("Can I take two pills and what
+# is for dinner?") is left to THINK as well.
+_JOINED_QUESTION_RE = re.compile(
+    r"\b(?:and|also|then|plus)\s+(?:what|when|where|who|how|why|which|is|are|do|does|did|can|could|will|would|should|shall)\b"
+    r"|[,;]\s*(?:what|when|where|who|how|why|which)\b",
+    re.IGNORECASE)
+
+
+def is_medication_dose_question(transcript: str) -> bool:
+    """True when the senior asks whether to take, skip, double or change a
+    medicine or dose, or says he missed one. Standalone only: "Can I take two
+    tonight? And what is for dinner?" has another request THINK must answer."""
+    if not transcript or not _MED_RE.search(transcript):
+        return False
+    text = transcript.replace("\u2019", "'")
+    found = False
+    for part in re.split(r"(?<=[.?!])\s+|\n+", text):
+        part = part.strip()
+        if not part:
+            continue
+        has_med = bool(_MED_RE.search(part))
+        ask = bool(_MED_ASK_RE.search(part))
+        if ask and not has_med and not _DOSE_QUANTITY_RE.search(part):
+            ask = False  # "Can I take the dog out?" is another question
+        if ask and _JOINED_QUESTION_RE.search(part):
+            return False
+        if ask or _MED_MISSED_RE.search(part):
+            found = True
+        elif "?" in part or _QUESTION_OPENER_RE.match(part):
+            return False  # "Who visits?", "What time is my pill tomorrow?": THINK answers
+        elif not has_med and len(part.split()) > 3:
+            # Any other sentence ("Tell me about my grandson.", "Can I take the
+            # dog out?") is a request THINK must answer; fixed text only for a
+            # turn that is all about the medicine. "Oh dear." is no request.
+            return False
+    return found
+
+
 def detect_intent(transcript: str) -> Intent:
     """Classifies the senior's utterance to gate memory retrieval and prompt construction."""
     if not transcript:
