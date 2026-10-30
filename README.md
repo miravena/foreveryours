@@ -175,6 +175,15 @@ pytest tests/
 Before pushing, `scripts/smoke.sh` (~10s, no key needed) runs the tests plus `beat1`, `beat3`
 and `day2` in a throwaway copy of the repo and checks each beat's output.
 
+To click through the web demo the way a judge does, start the app (`.venv/bin/python webapp.py`) and run
+`.venv/bin/python scripts/ui_smoke.py` (add `--offline-ok` when the app runs without a key, `--url` for
+another port, `--out` for the screenshot directory, default `/tmp/ui-smoke/`). It uses Playwright and
+headless Chromium (`pip install playwright`), clicks each "Try this first" chip and sample clip, sends a typed
+message, loads the sample family, saves a text memo, walks the guided interview and sends the fall phrase,
+waits on page state, saves a screenshot per step and exits non-zero if any step fails. It needs a browser
+and a running server, so it is not part of the unittest suite or CI; run it against a local server, not the
+public Space.
+
 `beat1` runs fully offline. `beat2` needs `NEBIUS_API_KEY` set — it calls a real open-weight
 model with no fallback, so without a key it fails loudly with a clear message rather than
 returning a mocked reply. `beat3`'s immediate safety reassurance is offline (fast-path, no LLM),
