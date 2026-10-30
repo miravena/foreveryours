@@ -1629,8 +1629,26 @@ def caregiver_only_topics(private_notes: list[str], open_texts: list[str], careg
     return frozenset(topics)
 
 
+# "I don't know whether you had a fall" and "I'm not sure why" claim nothing, and
+# "last fall" / "in the fall" is the season. A hedge followed by "but" is still a claim.
+_UNSURE_RE = re.compile(
+    r"\b(?:i\s+(?:don't|do\s+not|can't|cannot|couldn't)\s+(?:know|say|tell|see|have|find|recall|remember)|i(?:'m|\s+am)\s+not\s+sure|"
+    r"i(?:'m|\s+am)\s+unsure|no\s+idea|not\s+(?:noted|written)|isn't\s+(?:noted|written)|nothing\s+(?:noted|written)|"
+    r"whether|i\s+wonder)\b", re.IGNORECASE)
+_BUT_RE = re.compile(r"\b(?:but|though|however|although|except)\b", re.IGNORECASE)
+_SEASON_RE = re.compile(
+    r"\b(?:(?:in\s+the|in|this|last|next|every|each|early|late|come|until|since\s+last|by\s+the\s+end\s+of)\s+(?:the\s+)?(?:fall|spring|summer|winter)"
+    r"|fall\s+(?:season|colou?rs|leaves|foliage))\b(?!\s+(?:down|over|off)\b)", re.IGNORECASE)
+
+
 def states_caregiver_only_topic(sentence: str, topics: frozenset[str]) -> bool:
-    return bool(topics) and any(_topic_form(w) in topics for w in _detail_words(sentence))
+    if not topics:
+        return False
+    plain = sentence.replace("\u2019", "'")
+    if _UNSURE_RE.search(plain) and not _BUT_RE.search(plain):
+        return False
+    plain = _SEASON_RE.sub(" ", plain)
+    return any(_topic_form(w) in topics for w in _detail_words(plain))
 
 
 # The sentence right after a dropped one that points back at it ("It helps you

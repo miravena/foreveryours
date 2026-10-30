@@ -172,6 +172,21 @@ _QUESTION_OPENER_RE = re.compile(
     r"(?:what|when|where|who|how|why|which|is|are|do|does|did|can|could|will|would|shall|should)\b", re.IGNORECASE)
 
 
+# A dose sentence with no medicine word of its own ("Can I take two tonight to
+# catch up?") counts only when another sentence names a medicine and only with a
+# quantity or a catch-up word, so "I missed my pill. Can I take the dog out?" stays two
+# topics for THINK.
+_DOSE_QUANTITY_RE = re.compile(
+    r"\b(?:two|2|three|double|twice|extra|another|more|both|half|a\s+second|one\s+more|catch\s+up|make\s+up|the\s+rest|them\s+all|it\s+all)\b",
+    re.IGNORECASE)
+# ... and a second question joined to the first ("Can I take two pills and what
+# is for dinner?") is left to THINK as well.
+_JOINED_QUESTION_RE = re.compile(
+    r"\b(?:and|also|then|plus)\s+(?:what|when|where|who|how|why|which|is|are|do|does|did|can|could|will|would|should|shall)\b"
+    r"|[,;]\s*(?:what|when|where|who|how|why|which)\b",
+    re.IGNORECASE)
+
+
 def is_medication_dose_question(transcript: str) -> bool:
     """True when the senior asks whether to take, skip, double or change a
     medicine or dose, or says he missed one. Standalone only: "Can I take two
@@ -179,14 +194,22 @@ def is_medication_dose_question(transcript: str) -> bool:
     if not transcript or not _MED_RE.search(transcript):
         return False
     text = transcript.replace("\u2019", "'")
-    # Sentences that are about the medicine; any other question is left to THINK.
+    found = False
     for part in re.split(r"(?<=[.?!])\s+|\n+", text):
         part = part.strip()
-        if not part or _MED_ASK_RE.search(part) or _MED_MISSED_RE.search(part):
+        if not part:
             continue
-        if "?" in part or _QUESTION_OPENER_RE.match(part):
+        has_med = bool(_MED_RE.search(part))
+        ask = bool(_MED_ASK_RE.search(part))
+        if ask and not has_med and not _DOSE_QUANTITY_RE.search(part):
+            ask = False  # "Can I take the dog out?" is another question
+        if ask and _JOINED_QUESTION_RE.search(part):
             return False
-    return bool(_MED_ASK_RE.search(text) or _MED_MISSED_RE.search(text))
+        if ask or _MED_MISSED_RE.search(part):
+            found = True
+        elif "?" in part or _QUESTION_OPENER_RE.match(part):
+            return False
+    return found
 
 
 def detect_intent(transcript: str) -> Intent:

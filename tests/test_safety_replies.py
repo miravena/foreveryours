@@ -114,10 +114,14 @@ class TestCaregiverOnlyTopics(unittest.TestCase):
     def test_sentences(self):
         topics = frozenset({"fall", "hearing"})
         for s in ("You've been using a cane since your fall last fall.", "It was after you fell.",
-                  "Your hearing is not what it was.", "Falls happen."):
+                  "Your hearing is not what it was.", "Falls happen.",
+                  "I'm not sure, but I know you had a fall."):
             with self.subTest(s=s):
                 self.assertTrue(states_caregiver_only_topic(s, topics))
-        for s in ("Glad to hear that.", "I enjoy a good chat.", "Would you like some music?"):
+        for s in ("Glad to hear that.", "I enjoy a good chat.", "Would you like some music?",
+                  # Codex round 1: an honest "I don't know" and the season claim nothing
+                  "I don't know whether you had a fall.", "I'm not sure why you use it.",
+                  "The leaves come down in the fall.", "Last fall was lovely."):
             with self.subTest(s=s):
                 self.assertFalse(states_caregiver_only_topic(s, topics))
 
@@ -212,6 +216,10 @@ class TestMedicationQuestion(unittest.TestCase):
         "Can I take my pill with tea?",
     )
     NEGATIVES = (
+        # a second question beside the medicine one goes to THINK (Codex round 1)
+        "I missed my pill. Can I take the dog out?",
+        "Can I take two pills and what is for dinner?",
+        "Can I take my pill with tea? And is Sarah coming?",
         "Can I take two biscuits?",
         "Should I take the dog out?",
         "What time is my pill?",
