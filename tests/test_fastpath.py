@@ -702,5 +702,69 @@ class TestDrivingPlan(unittest.TestCase):
         self.assertNotIn("shop", text)  # never quotes the utterance
 
 
+class TestIndirectGoodbyes(unittest.TestCase):
+    """#199, ADR-013 amended: unambiguous indirect goodbyes get the canned 988
+    reply and the disclosed CRISIS flag before the model speaks. Live, "I've said
+    my goodbyes. I'm ready to go now." was answered with "take all the time you
+    need" and no check-in until the AUDIT pass flagged it a turn late."""
+
+    POSITIVES = [
+        "I've said my goodbyes. I'm ready to go now.",
+        "I have said my goodbyes.",
+        "I've said all my goodbyes",
+        "I made my final goodbyes.",
+        "This is goodbye.",
+        "This is my goodbye.",
+        "this is my last goodbye",
+        "I won't be here much longer.",
+        "I won\u2019t be around much longer",
+        "I will not be around much longer.",
+        "I'm not going to be here much longer.",
+        "I've put my affairs in order.",
+        "I'm getting my affairs in order",
+        "I'm giving my things away.",
+        "I've been giving away all my stuff",
+        "I'm ready to leave this world.",
+        # "ready to go" beside a first-person goodbye or death context
+        "I've had a good life. I'm ready to go.",
+        "My time has come. I'm ready to go now.",
+        "I'm dying, and I'm ready to go.",
+    ]
+    NEAR_MISSES = [
+        "I'm ready to go to the shops.",
+        "I'm ready to go to the shop now",
+        "I'm ready to go home.",
+        "I'm ready to go for a walk.",
+        "I said goodbye to Sarah at the door.",
+        "I said my goodbyes to Sarah at the door.",
+        "My friend said her goodbyes at the funeral.",
+        "My friend said her goodbyes at the funeral. I'm ready to go home.",
+        "This is goodbye for now, see you tomorrow.",
+        "The dog won't be here much longer, the vet takes him tomorrow.",
+        "I'm giving my things to charity.",
+        "I'm giving away my old books to the library.",
+        # a bare "ready to go" is the ADR-013 backstop example, left to AUDIT
+        "I'm ready to go now.",
+    ]
+
+    def test_indirect_goodbyes_trigger_the_crisis_reply(self):
+        for phrase in self.POSITIVES:
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertTrue(res.triggered)
+                self.assertEqual(res.severity, "crisis")
+                self.assertIn("988", res.immediate_reply)
+                self.assertTrue(res.caregiver_flag.startswith("URGENT CRISIS:"))
+
+    def test_near_misses_do_not_trigger(self):
+        for phrase in self.NEAR_MISSES:
+            with self.subTest(phrase=phrase):
+                self.assertFalse(fastpath.check(phrase).triggered)
+
+    def test_a_real_crisis_beside_a_benign_goodbye_still_fires(self):
+        res = fastpath.check("I said my goodbyes to Sarah at the door. I want to die.")
+        self.assertEqual(res.severity, "crisis")
+
+
 if __name__ == "__main__":
     unittest.main()

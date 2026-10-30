@@ -1253,7 +1253,7 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
         return result, captured
 
     def test_backstop_crisis_then_neutral_turn_gives_988_once(self):
-        crisis_text = "I have said my goodbyes."
+        crisis_text = "I have been saving up my sleeping pills."
         self.assertFalse(fastpath.check(crisis_text).triggered)
         r1, _ = self._turn(crisis_text, ["That sounds heavy."], audit=("CRISIS", "plan"))
         r2, cap2 = self._turn(
@@ -1269,14 +1269,14 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
         self.assertIn("do not mention 988", cap2["think_input"].lower())
 
     def test_marker_is_one_turn_only(self):
-        self._turn("I have said my goodbyes.", ["That sounds heavy."], audit=("CRISIS", "plan"))
+        self._turn("I have been saving up my sleeping pills.", ["That sounds heavy."], audit=("CRISIS", "plan"))
         self._turn("What is the weather like?", ["Mild today."])
         _, cap3 = self._turn("And tomorrow?", ["Mild again."])
         self.assertNotIn("audit flagged", cap3["think_input"])
 
     def test_undelivered_disclosure_lets_next_turn_offer_988_once(self):
         # No on_chunk consumer: the disclosure line is never attested as heard.
-        self._turn("I have said my goodbyes.", ["That sounds heavy."], audit=("CRISIS", "plan"), accept=False)
+        self._turn("I have been saving up my sleeping pills.", ["That sounds heavy."], audit=("CRISIS", "plan"), accept=False)
         r2, cap2 = self._turn(
             "What is the weather like?",
             ["Please call or text 988.", "Also, you can call 988 any time."],
@@ -1394,14 +1394,14 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
 
     def test_audit_disclosure_skips_988_when_the_reply_already_gave_it(self):
         r1, _ = self._turn(
-            "I have said my goodbyes.", ["Please call or text 988 right now."], audit=("CRISIS", "plan")
+            "I have been saving up my sleeping pills.", ["Please call or text 988 right now."], audit=("CRISIS", "plan")
         )
         self.assertEqual(" ".join(self.spoken).count("988"), 1, self.spoken)
         self.assertTrue(any("letting Sarah know" in s for s in self.spoken))
 
     def test_reply_988_without_attested_delivery_is_not_carried_as_given(self):
         # Codex review: a generated 988 the consumer never accepted is no evidence.
-        self._turn("I have said my goodbyes.", ["Please call or text 988."],
+        self._turn("I have been saving up my sleeping pills.", ["Please call or text 988."],
                    audit=("CRISIS", "plan"), accept=False)
         _, cap2 = self._turn("What is the weather like?", ["Mild today."])
         self.assertIn("exactly once", cap2["think_input"])
@@ -1419,7 +1419,7 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
              patch("pipeline.think.sentence_chunks", side_effect=lambda it: it), \
              patch("pipeline.audit.audit_reply", return_value=("CRISIS", "plan")), \
              patch("pipeline.think.extract_new_memory", return_value=None):
-            r = run_turn("I have said my goodbyes.", self.store, self.flags, self.audio_dir,
+            r = run_turn("I have been saving up my sleeping pills.", self.store, self.flags, self.audio_dir,
                          caregiver_name="Sarah", on_chunk=selective)
             if r.background_thread is not None:
                 r.background_thread.join(timeout=10)
@@ -1440,7 +1440,7 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
              patch("pipeline.think.sentence_chunks", side_effect=lambda it: it), \
              patch("pipeline.audit.audit_reply", return_value=("CRISIS", "plan")), \
              patch("pipeline.think.extract_new_memory", return_value=None):
-            r = run_turn("I have said my goodbyes.", self.store, self.flags, self.audio_dir,
+            r = run_turn("I have been saving up my sleeping pills.", self.store, self.flags, self.audio_dir,
                          caregiver_name="Sarah", on_chunk=selective)
             if r.background_thread is not None:
                 r.background_thread.join(timeout=10)
@@ -1449,7 +1449,7 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
     def test_consecutive_backstop_crises_give_988_once(self):
         # Final Codex review (P2): a second CRISIS verdict right after an
         # attested one must not add 988 again in its disclosure.
-        self._turn("I have said my goodbyes.", ["That sounds heavy."], audit=("CRISIS", "plan"))
+        self._turn("I have been saving up my sleeping pills.", ["That sounds heavy."], audit=("CRISIS", "plan"))
         self._turn("I just want everything to stop.", ["I am here with you."], audit=("CRISIS", "plan"))
         all_spoken = " ".join(self.spoken)
         self.assertEqual(all_spoken.count("988"), 1, all_spoken)
@@ -1476,7 +1476,7 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
         self.assertIn("Please call 988 now.", r.reply_text)
 
     def test_carry_survives_a_failed_think_turn(self):
-        self._turn("I have said my goodbyes.", ["That sounds heavy."], audit=("CRISIS", "plan"), accept=False)
+        self._turn("I have been saving up my sleeping pills.", ["That sounds heavy."], audit=("CRISIS", "plan"), accept=False)
         with patch("pipeline.think.stream_reply", side_effect=RuntimeError("boom")):
             r2 = run_turn("What is the weather like?", self.store, self.flags, self.audio_dir, caregiver_name="Sarah")
         self.assertTrue(r2.is_fallback)
@@ -1484,7 +1484,7 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
         self.assertIn("exactly once", cap3["think_input"])
 
     def test_reply_that_is_only_the_repeated_988_gets_a_crisis_aware_line(self):
-        self._turn("I have said my goodbyes.", ["That sounds heavy."], audit=("CRISIS", "plan"))
+        self._turn("I have been saving up my sleeping pills.", ["That sounds heavy."], audit=("CRISIS", "plan"))
         r2, _ = self._turn("What is the weather like?", ["Please call 988 now."])
         self.assertFalse(r2.is_fallback)
         self.assertIn("How are you feeling right now?", r2.reply_text)
@@ -1532,7 +1532,7 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
     def test_physical_emergency_turn_still_gives_an_owed_988(self):
         # A 988 line still owed from the previous turn's crisis verdict is not
         # taken away by a physical-emergency turn.
-        self._turn("I have said my goodbyes.", ["That sounds heavy."], audit=("CRISIS", "plan"), accept=False)
+        self._turn("I have been saving up my sleeping pills.", ["That sounds heavy."], audit=("CRISIS", "plan"), accept=False)
         r, _ = self._turn("I'm on the floor and can't reach the phone", ["You can call or text 988 any time."])
         self.assertIn("911", r.reply_text)
         self.assertEqual(r.reply_text.count("988"), 1, r.reply_text)
@@ -1569,7 +1569,7 @@ class TestCrisisCarryAndOne988(unittest.TestCase):
         self.assertIn("I am here.", r.reply_text)
 
     def test_audit_disclosure_skips_988_for_a_context_free_reply_mention(self):
-        self._turn("I have said my goodbyes.", ["988 is there for you."], audit=("CRISIS", "plan"))
+        self._turn("I have been saving up my sleeping pills.", ["988 is there for you."], audit=("CRISIS", "plan"))
         self.assertEqual(" ".join(self.spoken).count("988"), 1, self.spoken)
 
     def test_think_988_guard_is_per_reply_on_ordinary_turns(self):

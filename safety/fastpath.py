@@ -174,7 +174,37 @@ CRISIS_PATTERNS = [
     r"\b(no\s+(reason|point)\s+(to|in)\s+(live|living)|nothing\s+to\s+live\s+for|not\s+worth\s+living|(tired|sick)\s+of\s+living|had\s+enough\s+of\s+living)\b",
     r"\bsleep\s+and\s+(never|not)\s+wake\s+up\b",
     r"\bsuicidal\b",
+    # Unambiguous indirect goodbyes (#199, ADR-013 amended). Each is a first-person
+    # farewell or a settling of affairs. The live probe "I've said my goodbyes. I'm
+    # ready to go now." was answered with "take all the time you need" and no 988
+    # until the AUDIT pass flagged it, a turn late. The bare "I'm ready to go" stays
+    # backstop-tier unless a goodbye or death context sits beside it (see
+    # _READY_TO_GO_RE). A false positive is a warm check-in and a caregiver note.
+    r"\b(?:said|made)\s+(?:all\s+)?my\s+(?:final\s+|last\s+)?(?:goodbyes?|farewells?)\b",
+    r"\bthis\s+is\s+(?:my\s+)?(?:last\s+|final\s+)?(?:goodbye|good\s+bye|farewell)\b"
+    r"(?!\s+(?:for\s+(?:now|today|tonight|the\s+(?:day|night|moment|time\s+being))|until|till|then))",
+    r"\bi(?:\s+won'?t|(?:'ll|\s+will)\s+not|(?:'m|\s+am)\s+not\s+going\s+to)\s+be\s+(?:here|around)(?:\s+for)?\s+much\s+longer\b",
+    r"\b(?:put|putting|got|getting|set|setting)\s+(?:all\s+)?my\s+affairs\s+in\s+order\b",
+    r"\bgiving\s+(?:away\s+)?(?:all\s+(?:of\s+)?)?my\s+(?:things|stuff|belongings|possessions)(?:\s+away)?\b"
+    r"(?!\s+(?:to|for)\s+(?:the\s+)?(?:charity|charities|church|library|hospice|jumble|car\s+boot|school|sale|shop|grandchildren|bin))",
+    r"\bready\s+to\s+(?:leave|depart)\s+(?:this\s+)?(?:world|life|earth)\b",
 ]
+
+# "I'm ready to go (now)" is crisis only beside a first-person goodbye or death
+# context: "ready to go to the shops", "ready to go home" and a bare "ready to go"
+# (the ADR-013 backstop example) stay silent. The phrase must be a whole clause.
+_READY_TO_GO_RE = re.compile(
+    r"\bi(?:'m|\s+am|'ve\s+been)\s+(?:(?:just|truly|really|finally|now|so)\s+)*ready\s+to\s+(?:go|leave|depart|pass|die)"
+    r"(?:\s+(?:now|then|soon|tonight|today|whenever\s+(?:it'?s|it\s+is)\s+time|when\s+(?:it'?s|it\s+is)\s+time))?\s*$"
+)
+_GOODBYE_DEATH_CONTEXT_RE = re.compile(
+    r"\bmy\s+(?:final\s+|last\s+)?(?:goodbyes?|farewells?)\b"
+    r"|\b(?:said|say|saying)\s+(?:my\s+)?(?:final\s+|last\s+)?goodbyes?\s+to\s+(?:everyone|everybody|you|them|the\s+family|all)\b"
+    r"|\bi(?:'ve|\s+have)\s+had\s+a\s+(?:good|long|full|great|wonderful|happy)\s+life\b"
+    r"|\bmy\s+time\s+(?:is|has)\s+(?:come|up|near)\b"
+    r"|\bi(?:'m|\s+am)\s+(?:dying|going\s+to\s+die)\b"
+    r"|\bi(?:'m|\s+am)\s+(?:about\s+to\s+|going\s+to\s+)?pass(?:ing)?\s+(?:on|away)\b"
+)
 
 CONFUSION_PATTERNS = [
     r"\bwhere am i\b",
@@ -279,6 +309,8 @@ _BENIGN_CRISIS_IDIOMS = (
     r"\bdon'?t\s+want\s+to\s+live\s+in\s+(?:a|an|the|my\s+own)\s+(?:\w+\s+){0,2}?(?:flat|house|home|street|area|city|neighbourhood|neighborhood|town|village|apartment|bungalow)\b(?!\s+(?:without|any\s?more|in\s+pain|with\s+(?:out|this|that|it)))",
     r"\b(?:tired|sick)\s+of\s+living\s+(?:in\s+(?:this|my|a|the)\s+(?:\w+\s+){0,2}?(?:flat|house|home|street|area|city|neighbourhood|neighborhood|town|village|apartment|bungalow)\b(?!\s+(?:without|any\s?more|in\s+pain|with\s+(?:out|this|that|it)))|on\s+(?:takeaways?|toast|soup|sandwiches|ready\s+meals|my\s+own))",
     r"\bnot\s+(?:feeling\s+)?suicidal\b",
+    # #199: a goodbye said to someone at a door, station or gate is a visit ending.
+    r"\bsaid\s+my\s+goodbyes\s+to\s+(?:\w+\s+){1,2}?(?:at|on|by)\s+the\s+(?:door|doorstep|front\s+door|gate|station|airport|bus\s+stop)\b",
 )
 
 
@@ -386,12 +418,14 @@ def check(transcript: str) -> FastPathResult:
     physical = down_unable or any(re.search(p, text) for p in PHYSICAL_EMERGENCY_PATTERNS)
 
     clauses = re.split(r'[.!?;\n]+', text)
+    goodbye_context = bool(_GOODBYE_DEATH_CONTEXT_RE.search(_without_benign_crisis_idioms(text)))
     for clause in clauses:
         clause = clause.strip()
         if not clause:
             continue
         crisis_text = _without_benign_crisis_idioms(clause)
-        for pattern in CRISIS_PATTERNS:
+        ready_to_go = goodbye_context and _READY_TO_GO_RE.search(crisis_text.strip(" ,"))
+        for pattern in CRISIS_PATTERNS + ([_READY_TO_GO_RE.pattern] if ready_to_go else []):
             if re.search(pattern, crisis_text):
                 reply = (
                     "I am so sorry you are feeling this way. Please call or text 988 to speak with someone who can help right now. "
