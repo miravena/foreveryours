@@ -10,6 +10,10 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-10-30
+
+The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.4 plus safer replies to indirect crisis, overdose intent, softened falls and medicine-dose questions, and no apparent caregiver-only leaks. During judging only `v1.0.x` patches deploy (ADR-015).
+
 ### Docs
 - Known limitations name fall phrasings the rules still miss ("I slipped in the bathroom", "I ended up on the rug"); "I took a tumble" and "a bit of a fall" are caught since #300.
 
@@ -25,7 +29,7 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [1.0.4] - 2026-10-30
 
-The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.3 plus abuse limits, owner alerts, smooth reply audio on phones and a browser smoke test. During judging only `v1.0.x` patches deploy (ADR-015).
+v1.0.3 plus abuse limits, owner alerts, smooth reply audio on phones and a browser smoke test; superseded by 1.0.5 the same day.
 
 ### Fixed
 - The companion's spoken reply no longer stops in the middle of a word on a phone or a laptop (#194). Measured in a real browser, the reply played its first 1.3-1.8 s, went silent for 1.3-3.3 s, then played the rest: Gradio's streaming encoder keeps the tail of each sentence until the turn ends, and its player re-reads the playlist only about every two seconds. Each sentence is now sent as 0.4 s slices, followed by a one-millisecond silent nudge while the turn finishes in the background; the browser then has the whole sentence about a second after the first sound.
@@ -570,7 +574,8 @@ demo and the Gradio web demo).
 - Safety fast-path false positives ("I fell" vs "I fell asleep") (#29).
 - `.env` loading for the Hugging Face Spaces wrapper (`app.py`) (#31).
 
-[Unreleased]: ../../compare/v1.0.4...HEAD
+[Unreleased]: ../../compare/v1.0.5...HEAD
+[1.0.5]: ../../compare/v1.0.4...v1.0.5
 [1.0.4]: ../../compare/v1.0.3...v1.0.4
 [1.0.3]: ../../compare/v1.0.2...v1.0.3
 [1.0.2]: ../../compare/v1.0.1...v1.0.2
