@@ -10,6 +10,10 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-10-30
+
+The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.5 plus slips, ending up on the floor and losing one's footing as falls, and updated Known limitations. During judging only `v1.0.x` patches deploy (ADR-015).
+
 ### Fixed
 - "I slipped in the bathroom", "I ended up on the rug" and "I lost my footing" get the fall reply and the flag (#198). "It slipped my mind", "slipped out", "slipped my shoes off" and the like stay calm.
 
@@ -18,7 +22,7 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [1.0.5] - 2026-10-30
 
-The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.4 plus safer replies to indirect crisis, overdose intent, softened falls and medicine-dose questions, and no apparent caregiver-only leaks. During judging only `v1.0.x` patches deploy (ADR-015).
+v1.0.4 plus safer replies to indirect crisis, overdose intent, softened falls and medicine-dose questions; superseded by 1.0.6 the same day.
 
 ### Docs
 - Known limitations name fall phrasings the rules still miss ("I slipped in the bathroom", "I ended up on the rug"); "I took a tumble" and "a bit of a fall" are caught since #300.
@@ -580,7 +584,8 @@ demo and the Gradio web demo).
 - Safety fast-path false positives ("I fell" vs "I fell asleep") (#29).
 - `.env` loading for the Hugging Face Spaces wrapper (`app.py`) (#31).
 
-[Unreleased]: ../../compare/v1.0.5...HEAD
+[Unreleased]: ../../compare/v1.0.6...HEAD
+[1.0.6]: ../../compare/v1.0.5...v1.0.6
 [1.0.5]: ../../compare/v1.0.4...v1.0.5
 [1.0.4]: ../../compare/v1.0.3...v1.0.4
 [1.0.3]: ../../compare/v1.0.2...v1.0.3
