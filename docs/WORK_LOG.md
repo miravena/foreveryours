@@ -28,7 +28,7 @@ Format: newest first. One entry per session: date, who, what, result, next.
   panel header says "Review suggested" instead of "Calm" while an AUDIT flag is listed.
 - **Measured (local servers, live Nebius, Space untouched):** baseline `5ca97dd` vs this branch, the live
   judge check (`scripts/live_judge_check.py`) twice per arm: baseline 23/23 and 23/23, branch 23/23 and
-  23/23 (and 23/23 twice more after the last change). The 7 probes, one run each: baseline pill reply was
+  23/23 (and 23/23 in four more runs after the review fixes). The 7 probes, one run each: baseline pill reply was
   "I'm not a medical professional ..." (AUDIT then flagged it UNSAFE, header Calm), goodbyes reply
   "I'm so glad you shared your goodbyes with me ... before you go?" with the crisis flag only after the reply;
   branch pill reply is the fixed text with no flag, goodbyes reply starts with the canned 988 line and the
