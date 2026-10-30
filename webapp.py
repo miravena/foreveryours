@@ -1479,6 +1479,16 @@ def _pump_chunk(rate: int) -> bytes:
     return _wav_bytes(1, rate, b"\x00\x00" * max(1, rate // 1000))
 
 
+def _with_audio(full: tuple, audio) -> tuple:
+    """`full` (the last complete yield) with only the reply audio replaced. An audio
+    slice or nudge must not send gr.skip() for the other outputs: a browser keeps what
+    it shows, but an API client (gradio_client, the live judge check) reads the LAST
+    update, which would then have no conversation text. The last two outputs (the
+    cleared type box and mic) are left alone, so a repeat never wipes what Dad has
+    started typing for his next turn."""
+    return (full[0], audio, *full[2:-2], gr.skip(), gr.skip())
+
+
 def run_demo_turn(
     audio_in: str | None = None,
     text_in_or_history: str | list[dict] | None = None,
@@ -1661,18 +1671,21 @@ def _run_demo_turn_streaming_impl(
         if refusal is not None:  # refused/failed audio writes nothing
             out = (refusal, None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_")
             if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
-            yield (*out, session_id_val, "", None)
+            last_full = (*out, session_id_val, "", None)
+            yield last_full
             return
     else:
         out = ("Record audio or type what Dad says first.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_")
         if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
-        yield (*out, session_id_val, "", None)
+        last_full = (*out, session_id_val, "", None)
+        yield last_full
         return
 
     if not transcript.strip() and not is_proactive:
         out = ("Couldn't make out any speech or text -- try again.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_No audio detected_")
         if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
-        yield (*out, session_id_val, "", None)
+        last_full = (*out, session_id_val, "", None)
+        yield last_full
         return
 
     # Too long: refused before the safety scan, the cap or any model (#37). The
@@ -1694,7 +1707,8 @@ def _run_demo_turn_streaming_impl(
     if block_turn:
         out = (BUSY_REPLY if busy else "This demo has hit its daily request cap -- please try again tomorrow.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_Rate limited_")
         if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
-        yield (*out, session_id_val, "", None)
+        last_full = (*out, session_id_val, "", None)
+        yield last_full
         return
 
     # Deletes the PREVIOUS turn's *.wav only: every file this turn yields
@@ -1754,7 +1768,7 @@ def _run_demo_turn_streaming_impl(
             msg = consumer.get(timeout=_PUMP_INTERVAL_S if pumps_left else None)
         except queue.Empty:
             pumps_left -= 1
-            yield (gr.skip(), pump_wav, gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip())
+            yield _with_audio(last_full, pump_wav)
             continue
         if msg[0] == "DONE":
             result = msg[1]
@@ -1773,7 +1787,8 @@ def _run_demo_turn_streaming_impl(
                     "### 📊 Acoustic Biomarkers\n_Awaiting API Key_",
                 )
                 if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
-                yield (*out, session_id_val, "", None)
+                last_full = (*out, session_id_val, "", None)
+                yield last_full
                 return
             
             print(f"Pipeline error processing turn: {type(exc).__name__}")
@@ -1787,7 +1802,8 @@ def _run_demo_turn_streaming_impl(
                 "### 📊 Acoustic Biomarkers\n_Error_",
             )
             if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
-            yield (*out, session_id_val, "", None)
+            last_full = (*out, session_id_val, "", None)
+            yield last_full
             return
         elif msg[0] == "CHUNK":
             _, sentence, chunk_path, ack = msg
@@ -1809,9 +1825,10 @@ def _run_demo_turn_streaming_impl(
             
             out = (transcript_and_reply, reply_audio, history, panel(), biomarkers_panel)
             if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
-            yield (*out, session_id_val, "", None)
+            last_full = (*out, session_id_val, "", None)
+            yield last_full
             for part in parts[1:]:  # the rest of the sentence, audio only
-                yield (gr.skip(), part, gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip())
+                yield _with_audio(last_full, part)
             consumer.accept(ack, reply_audio is not None)
             if rate is not None:
                 pump_wav, pumps_left = _pump_chunk(rate), _PUMP_MAX
@@ -1859,7 +1876,8 @@ def _run_demo_turn_streaming_impl(
     out = (transcript_and_reply, None, new_history, panel(), biomarker_str)
     if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
     # The DONE-final yield: exactly once, immediately.
-    yield (*out, session_id_val, "", None)
+    last_full = (*out, session_id_val, "", None)
+    yield last_full
 
     # Drain. The background AUDIT/extraction thread may speak a
     # disclosure line seconds after DONE; keep consuming until it finishes or
@@ -1881,7 +1899,7 @@ def _run_demo_turn_streaming_impl(
         except queue.Empty:
             if pumps_left:
                 pumps_left -= 1
-                yield (gr.skip(), pump_wav, gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip())
+                yield _with_audio(last_full, pump_wav)
             continue
         if msg[0] != "CHUNK":
             continue
@@ -1892,9 +1910,10 @@ def _run_demo_turn_streaming_impl(
         late_parts, late_rate = _reply_audio_parts(chunk_path) if late_audio is not None else ([None], None)
         late_audio = late_parts[0]
         late = (out[0], late_audio, new_history, panel(), biomarker_str)
-        yield (*late, session_id_val, "", None)
+        last_full = (*late, session_id_val, "", None)
+        yield last_full
         for part in late_parts[1:]:
-            yield (gr.skip(), part, gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip())
+            yield _with_audio(last_full, part)
         consumer.accept(ack, late_audio is not None)
         if late_rate is not None:
             pump_wav, pumps_left = _pump_chunk(late_rate), _PUMP_MAX
@@ -1906,7 +1925,8 @@ def _run_demo_turn_streaming_impl(
     # (same history, no audio -- every chunk already went out) once the
     # background thread has finished.
     if late_yields and (bg is None or not bg.is_alive()):
-        yield (out[0], None, new_history, panel(), biomarker_str, session_id_val, "", None)
+        last_full = (out[0], None, new_history, panel(), biomarker_str, session_id_val, "", None)
+        yield last_full
 
 def run_proactive_turn_streaming(history, session, sim_time, trigger_type="silence", request: gr.Request | None = None):
     yield from run_demo_turn_streaming(None, None, history, session, sim_time, request, is_proactive=True, trigger_type=trigger_type)

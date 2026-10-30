@@ -116,7 +116,11 @@ class TestStreamedTurn(LateDisclosureHarness):
 
     @staticmethod
     def _audio_only(out) -> bool:
-        return all(o == gr.skip() for i, o in enumerate(out) if i != 1)
+        """A slice or nudge repeats the conversation text and the other outputs (an API
+        client reads the LAST update, so a gr.skip() there would leave it with no reply
+        text), and leaves the type box and the mic (the last two outputs) alone."""
+        return (isinstance(out[0], str) and "Companion replied" in out[0]
+                and all(o == gr.skip() for o in out[-2:]))
 
     def run_turn(self):
         outs = list(self.start())
@@ -135,7 +139,15 @@ class TestStreamedTurn(LateDisclosureHarness):
         rest = [o for o in outs if isinstance(o[1], bytes) and o is not first]
         self.assertTrue(rest)
         for o in rest:
-            self.assertTrue(self._audio_only(o), "later slices carry audio only")
+            self.assertTrue(self._audio_only(o), "later slices repeat the text and leave the inputs alone")
+
+    def test_the_last_update_still_carries_the_reply_text(self):
+        # The first version of this change sent gr.skip() for the text on every slice
+        # and nudge. The live judge check reads the last streamed update through
+        # gradio_client and found no reply on 16 of 23 turns.
+        last = self.run_turn()[-1]
+        self.assertIsInstance(last[0], str)
+        self.assertIn("Companion replied", last[0])
 
     def test_silent_nudges_follow_the_sentence_while_the_audit_thread_is_awaited(self):
         outs = self.run_turn()
