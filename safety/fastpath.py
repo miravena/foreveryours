@@ -23,6 +23,9 @@ from dataclasses import dataclass
 # his bike" and "I fell in love with jazz" trigger too.
 FALL_PATTERNS = [
     r"\b(i('ve| have)?\s+had\s+a\s+fall|had\s+a\s+fall|took\s+a\s+fall)\b",
+    # Softened first-person falls (live probe: "I took a tumble earlier" reached
+    # only the backstop): a tumble, a bit of a fall, a small fall.
+    r"\bi(?:'ve|\s+have)?\s+(?:just\s+)?(?:had|took)\s+(?:a\s+)?(?:bit\s+of\s+a\s+|bad\s+|little\s+|nasty\s+|small\s+|wee\s+)?(?:fall|tumble)\b(?!\s+dryers?\b)",
     r"\bi\s+have\s+fall\b",
     r"\b(i('ve| have)?\s+fallen|fall(en|ing)?\s+(down|over|off))\b",
     r"\bi('m| am)\s+falling(?!\s+asleep)\b",
@@ -38,7 +41,7 @@ _NOT_A_FALL = (
     r"|out\s+(?:with|of\s+(?:love|touch|favou?r|fashion))\b|into\s+(?:a\s+)?(?:habit|conversation|line)\b))"
 )
 FALL_REPORT_PATTERNS = [
-    r"\bi(?:'ve|\s+have)?\s+(?:just\s+)?(?:had|took)\s+a\s+(?:bad\s+|little\s+|nasty\s+)?fall\b",
+    r"\bi(?:'ve|\s+have)?\s+(?:just\s+)?(?:had|took)\s+a\s+(?:bit\s+of\s+a\s+|bad\s+|little\s+|nasty\s+|small\s+|wee\s+)?(?:fall|tumble)\b(?!\s+dryers?\b)",
     r"\bi\s+have\s+fall\b",
     r"\bi(?:'ve|\s+have)\s+(?:just\s+)?fallen" + _NOT_A_FALL + r"\b",
     r"\bi\s+(?:just\s+|have\s+)?fell" + _NOT_A_FALL + r"\b",
@@ -188,6 +191,12 @@ CRISIS_PATTERNS = [
     r"\bgiving\s+(?:away\s+)?(?:all\s+(?:of\s+)?)?my\s+(?:things|stuff|belongings|possessions)(?:\s+away)?\b"
     r"(?!\s+(?:to|for)\s+(?:the\s+)?(?:charity|charities|church|library|hospice|jumble|car\s+boot|school|sale|shop|grandchildren|bin))",
     r"\bready\s+to\s+(?:leave|depart)\s+(?:this\s+)?(?:world|life|earth)\b",
+    # Overdose intent: a stated wish or plan to take ALL of one's medicine. "Can I
+    # take all my pills tonight?" stays a dose question (the fixed medicine answer,
+    # with AUDIT behind it); "I want to take all my pills" is crisis-tier.
+    r"\b(?:want(?:s|ed)?\s+to|going\s+to|gonna|thinking\s+(?:about|of)|plan(?:ning)?\s+(?:to|on)|might\s+just|could\s+just|"
+    r"i'?ll\s+just|i\s+will\s+just)\s+(?:take|taking|swallow|swallowing)\s+all\s+(?:of\s+)?my\s+"
+    r"(?:pills|tablets|meds|medication|medicine|sleeping\s+pills)\b",
 ]
 
 # "I'm ready to go (now)" is crisis only beside a first-person goodbye or death

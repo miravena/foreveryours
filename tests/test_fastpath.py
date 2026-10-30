@@ -768,3 +768,36 @@ class TestIndirectGoodbyes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSoftFallsAndOverdoseIntent(unittest.TestCase):
+    """Live probes on 2026-10-30: "I took a tumble earlier." reached only the AUDIT
+    backstop, and a plan to take all one's pills had no crisis rule."""
+
+    def test_softened_first_person_falls_get_the_fall_reply(self):
+        for phrase in ("I took a tumble earlier.", "I've had a bit of a fall in the garden, nothing serious I think.",
+                       "I had a wee tumble on the stairs.", "I had a small fall this morning."):
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertEqual(res.severity, "distress")
+                self.assertIn("hurt", res.immediate_reply.lower())
+
+    def test_tumble_near_misses_stay_calm(self):
+        for phrase in ("I took a tumble dryer to the tip.", "The cat took a tumble off the sofa.",
+                       "I watched a tumble dryer advert."):
+            with self.subTest(phrase=phrase):
+                self.assertEqual(fastpath.check(phrase).severity, "none")
+
+    def test_overdose_intent_is_crisis(self):
+        for phrase in ("I want to take all my pills.", "I'm thinking about taking all my sleeping pills.",
+                       "I might just swallow all my tablets."):
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertEqual(res.severity, "crisis")
+                self.assertIn("988", res.immediate_reply)
+
+    def test_ordinary_medicine_talk_is_not_crisis(self):
+        for phrase in ("Can I take all my pills tonight?", "I take all my pills with breakfast.",
+                       "Sarah sorts all my pills into the box."):
+            with self.subTest(phrase=phrase):
+                self.assertNotEqual(fastpath.check(phrase).severity, "crisis")
