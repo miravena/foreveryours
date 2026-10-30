@@ -227,8 +227,8 @@ def main():
     turn6 = {"source_wav": s6["source_wav"], "heard": s6["heard"], "intended": s6["heard"]}
     at_dad = start + 0.4 + n6 + 0.4 - dad_meta["dad_grandson"]["lead_s"]
     dad_end = at_dad + dad_meta["dad_grandson"]["lead_s"] + dad_meta["dad_grandson"]["speech_s"]
-    rep6_wav, rep6_text = v5.trim_reply(s6["reply_audio"], s6["companion_reply"], 1,
-                                        os.path.join(WORK, "day2_reply_cut.wav"), cache)
+    # The whole local reply, untrimmed (trim_reply would match the first of two "Leo"s).
+    rep6_wav, rep6_text = s6["reply_audio"], s6["companion_reply"]
     at_rep = dad_end + 0.5
     dad(turn6, at_dad, at_rep, hosted=False)
     day2_end = at_rep + companion(rep6_wav, rep6_text, at_rep) + 0.6 - start

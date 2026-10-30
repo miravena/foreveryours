@@ -45,7 +45,12 @@ def main():
     if not names or None in files:
         sys.exit(f"reply audio not found: {names}")
     dst = os.path.join(OUT, "day2_reply.wav")
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", "concat:" + "|".join(files), dst], check=True)
+    # Decode and join (the concat filter); the byte-level concat: protocol would stop after the
+    # first WAV's header length.
+    ins = [x for f in files for x in ("-i", f)]
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *ins, "-filter_complex",
+                    "".join(f"[{i}:a]" for i in range(len(files))) + f"concat=n={len(files)}:v=0:a=1", dst],
+                   check=True)
     json.dump({"shot": "day2", "local_run": "main.py beat4 --audio dad_grandson.wav (fresh process)",
                "source_wav": WAV, "heard": said.group(1), "companion_reply": reply.group(1),
                "reply_audio": dst, "live_key_banner": "LIVE Nebius key in use" in (res.stderr + out),

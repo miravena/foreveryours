@@ -29,11 +29,11 @@ wait. How it is built: [`video/v6/README.md`](../video/v6/README.md).
 | 0:33-0:42 | Caregiver side: the daughter types the memo "Dad has a check-up with Dr. Tan on Thursday at 10 AM." and clicks Save Text Memo. The briefed memory shows it added. The narrator speaks over the typing. | "His daughter briefs it once, from work. One line: a check-up with Dr. Tan on Thursday. Nothing to set up on Dad's side." |
 | 0:42-1:02 | Same session, split screen: Dad asks aloud "Do I have any doctor's appointments this week?", then the real hearing and model wait, uncut; the reply names Dr. Tan, Thursday, 10 AM. | Before he asks: "When Dad asks, it already knows what she typed." Over the wait: "The reply is written by NVIDIA Nemotron on Nebius Token Factory." |
 | 1:02-1:40 | Senior side: Dad says "I feel lonely since my wife died." The companion answers warmly; the Caregiver side shows no new flag and none of his words. A short freeze, then he says "I want to end my life." The safety fast path answers with the 988 referral and the Caregiver side shows the crisis flag; the reply is cut after "I am also letting your family know you are in distress." | Over the first wait: "What he says in private stays private. His daughter sees no flag, and none of his words." Over the second: "Danger is different. Safety rules catch this before the model does." |
-| 1:40-1:49 | Day 2: a clean card reading "Local persistence test - not the hosted Space." with the line "Day 2: a fresh local run still remembers yesterday's briefing". Dad's question "I forgot, what is my grandson's name?" and the answer "Leo, that's his name." are heard and captioned; behind the card is `python main.py beat4 --audio` with his recorded question, in a fresh process. | "Next day, in a local test, it's still briefed." |
-| 1:49-2:06 | Plain screen, text only: "Replies: NVIDIA Nemotron 3 Nano · Safety backstop: NVIDIA Nemotron 3 Super, both on Nebius Token Factory" · "Hearing and voice: on the app's own server". No diagram, no logos. | "Two models on Nebius Token Factory: Nemotron 3 Nano writes the replies, and Nemotron 3 Super is the safety backstop. Hearing and voice run on the app's own server, so his voice recording never goes to Nebius." |
-| 2:06-2:18 | Plain screen: "ForeverYours", "The companion the family briefs", the Space URL, https://elevenbaselab-foreveryours.hf.space, and "Known limitations: in the README". | "This is a prototype: it can miss nuance, so it does not replace human judgment or emergency services. Try it yourself, no login, at the link on screen." |
+| 1:40-1:50 | Day 2: a clean card reading "Local persistence test - not the hosted Space." with the line "Day 2: a fresh local run still remembers yesterday's briefing". Dad's question "I forgot, what is my grandson's name?" and the answer "Leo. Sarah mentioned your grandson Leo." are heard and captioned; behind the card is `python main.py beat4 --audio` with his recorded question, in a fresh process. | "Next day, in a local test, it's still briefed." |
+| 1:50-2:07 | Plain screen, text only: "Replies: NVIDIA Nemotron 3 Nano · Safety backstop: NVIDIA Nemotron 3 Super, both on Nebius Token Factory" · "Hearing and voice: on the app's own server". No diagram, no logos. | "Two models on Nebius Token Factory: Nemotron 3 Nano writes the replies, and Nemotron 3 Super is the safety backstop. Hearing and voice run on the app's own server, so his voice recording never goes to Nebius." |
+| 2:07-2:19 | Plain screen: "ForeverYours", "The companion the family briefs", the Space URL, https://elevenbaselab-foreveryours.hf.space, and "Known limitations: in the README". | "This is a prototype: it can miss nuance, so it does not replace human judgment or emergency services. Try it yourself, no login, at the link on screen." |
 
-Total: 2:18, under 2:50. The companion's replies are cut only at the end of a
+Total: 2:19, under 2:50. The companion's replies are cut only at the end of a
 sentence and never overlap the narrator. Times are the plan; the assembler prints the real
 shot boundaries.
 
@@ -87,8 +87,8 @@ Thursday..."). On-screen labels:
 | 0:10-0:19 | **Dad was told**, once, from the frame the caregiver flag appears; no other overlay repeats it |
 | 1:13-1:20 | **Not shown to the family** over the unchanged Caregiver side after the private line; it ends when the freeze before the crisis line starts, so it is never on screen over "I want to end my life." |
 | 1:29-1:40 | **Crisis: 988 offered, simulated family alert** from the frame the crisis flag appears to the end of the shot, so the video never implies the crisis is hidden from the family |
-| 1:40-1:49 | The day-2 card, whose text is the label: **Local persistence test - not the hosted Space.** (the SRT carries it too) |
-| 1:49-2:18 | The card text is the caption; narrator caption below it |
+| 1:40-1:50 | The day-2 card, whose text is the label: **Local persistence test - not the hosted Space.** (the SRT carries it too) |
+| 1:50-2:19 | The card text is the caption; narrator caption below it |
 
 The same captions and labels ship as a sidecar `.srt` built from the same timeline.
 
@@ -119,7 +119,7 @@ Checked against #264's criteria, the issue #5 rules, [`SELF_JUDGING.md`](SELF_JU
 - Hosted and local evidence labelled where they appear: LIVE HOSTED SPACE (corner badge) on shots 1-5, "Local persistence test - not the hosted Space." on the shot 6 card.
 - Captions and the SRT use straight quotes only: a player that reads the SRT as cp1252 turns a curly apostrophe into mojibake (#275).
 - The crisis shot says what the panel shows: 988 offered, a simulated family alert; no claim that anyone is contacted or that a notification is delivered.
-- Day-2 shot 15 seconds or less: 9 seconds, on a clean card with no terminal and no audit line.
+- Day-2 shot 15 seconds or less: 10 seconds, on a clean card with no terminal and no audit line.
 - No AUDIT, biomarkers, proactive triggers, phone-notification shot, latency figure or music; the only names on screen are the sponsors' (NVIDIA, Nebius) in plain text. The narration voice is Kokoro (Apache-2.0).
 - Privacy wording matches PRIVACY.md: speech runs on the app's own server and the voice recording never goes to Nebius.
 - Limitations stated: the closing line is self-contained ("This is a prototype: it can miss nuance, so it does not replace human judgment or emergency services."), and the last card still points at the README's "Known limitations".

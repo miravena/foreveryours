@@ -17,7 +17,7 @@ on 2026-10-30 (after the #198 deploy), and every senior line is spoken input, no
   would give Dad two voices. Every Dad line was heard verbatim by the Space (and by the local run on day 2).
 - **Day 2 hears him too.** `day2_v6.py` runs `main.py beat4 --audio dad_v6/dad_grandson.wav` in a
   fresh local process (live key through `scripts/with_key.sh`). The shot is still the clean card;
-  its sound is his question and the start of the reply the app synthesised ("Leo, that's his name.").
+  its sound is his question and the reply the app synthesised ("Leo. Sarah mentioned your grandson Leo.").
 - **No dead air.** The narrator speaks over every hearing and model wait. Every wait from Send to
   the reply is uncut. Two jump cuts remove only idle time from the capture script: the memo hold
   and scroll between shots 3 and 4, and the pause before the crisis line. `assemble.py` stops if the
