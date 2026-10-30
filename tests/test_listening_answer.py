@@ -45,7 +45,6 @@ POSITIVES = (
     "Does Sarah hear everything I say?",
     "Is Sarah hearing this?",
     "Is Sarah watching me?",
-    "Are you recording this for Sarah?",
     "Are you reporting to Sarah?",
     "Are you telling Sarah everything?",
     "Are you telling Sarah what I say?",
@@ -64,6 +63,8 @@ NEGATIVES = (
     "Are you listening?",
     "Can you hear me?",
     "Are you recording?",
+    "Are you recording this for Sarah?",  # audio is kept briefly (docs/PRIVACY.md): THINK answers
+    "Are you recording me?",
     "Does Sarah know what time it is?",
     "Does Sarah know about my appointment?",
     "Is Sarah coming today?",

@@ -101,10 +101,10 @@ LISTENING_QUESTION_RE = re.compile(
     r"(?:(?:hear|overhear|listen\s+to)\s+(?:" + _WHAT_I_SAY + r"|us|me|this|everything|anything)\b"
     r"|(?:see|read|know)\s+(?:" + _WHAT_I_SAY + r")\b"
     r"|listen\s+in\b)"
-    # Are you recording this?  Are you reporting to Sarah?  Are you telling Sarah everything?
+    # Are you reporting to Sarah?  Are you telling Sarah everything?  (Not "Are you recording this?":
+    # the app does keep the audio for a while (docs/PRIVACY.md), so that answer is not "No".)
     r"|\b(?:are|were)\s+you\s+(?:\w+\s+){0,2}?"
-    r"(?:(?:recording|taping)\s+(?:me|us|this|our|everything|what)\b"
-    r"|reporting\s+(?:to|on|back)\b"
+    r"(?:reporting\s+(?:to|on|back)\b"
     r"|(?:telling|passing|sending|relaying|sharing|reading)\s+(?:\w+\s+){0,2}?(?:everything|all\s+(?:of\s+)?(?:this|it|that)|" + _WHAT_I_SAY + r"))",
     re.IGNORECASE,
 )
