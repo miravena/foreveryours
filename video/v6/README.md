@@ -1,5 +1,17 @@
 # Demo video v6
 
+**v6b** (#304) is the current cut. It changes captions and two narrator lines only, on the same
+captures: the fall and crisis labels say "simulated alert, nothing sent", each on one line in the
+band above "Today:" so they cover no panel text; the Leo cue is no longer
+zero-length and the two long companion lines are split into two cues; no caption cue is shorter
+than 0.5 s or overlaps another. The narrator lines at the crisis shot ("Here, the safety rules
+answer before any model is called.") and at day 2 ("In a fresh local run the next day, it
+remembers yesterday's briefing.") were re-rendered with the same voice and settings; the day-2
+line no longer reuses a v5 file. The crisis line is about 3.3 s of speech, which fills its gap
+without a silence of 1.5 s or more, so no exception to the dead-air check was needed. The cut is
+2:20.7, longer than v6 by the added day-2 narration. The word-timing cache is keyed to each WAV's
+content hash, so re-rendered or re-recorded audio is aligned again.
+
 The v5 cut ([`../v5/README.md`](../v5/README.md)) with Dad **speaking** (#304). All hosted
 footage is new: shots 1-5 were re-captured on the live Space, https://elevenbaselab-foreveryours.hf.space,
 on 2026-10-30 (after the #198 deploy), and every senior line is spoken input, not typed.

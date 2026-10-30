@@ -5,8 +5,8 @@
  "n4a": {"text": "When Dad asks, it already knows what she typed."},
  "n4b": {"text": "The reply is written by NVIDIA Nemotron on Nebius Token Factory."},
  "n5a": {"text": "What he says in private stays private. His daughter sees no flag, and none of his words."},
- "n5b": {"text": "Danger is different. Safety rules catch this before the model does."},
- "n6": {"text": "Next day, in a local test, it's still briefed.", "reuse": "narration_v5/shot6.wav"},
+ "n5b": {"text": "Here, the safety rules answer before any model is called."},
+ "n6": {"text": "In a fresh local run the next day, it remembers yesterday's briefing."},
  "n7": {"text": "Two models on Nebius Token Factory: Nemotron 3 Nano writes the replies, and Nemotron 3 Super is the safety backstop. Hearing and voice run on the app's own server, so his voice recording never goes to Nebius.", "reuse": "narration_v5/shot7.wav"},
  "n8": {"text": "This is a prototype: it can miss nuance, so it does not replace human judgment or emergency services. Try it yourself, no login, at the link on screen.", "reuse": "narration_v5/shot8.wav"}
 }

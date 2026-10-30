@@ -1,6 +1,6 @@
 {
  "video": "foreveryours_demo_v6.mp4",
- "duration": 139.17,
+ "duration": 140.7,
  "lufs": -16.1,
  "true_peak": -4.9,
  "flag_at": 9.84,
@@ -39,17 +39,17 @@
   [
    6,
    99.99,
-   110.44
+   111.97
   ],
   [
    7,
-   110.44,
-   126.99
+   111.97,
+   128.53
   ],
   [
    8,
-   126.99,
-   139.15
+   128.53,
+   140.68
   ]
  ],
  "dad_turns": [
@@ -99,8 +99,8 @@
    "source_wav": "dad_v6/dad_grandson.wav",
    "input": "local run, beat4 --audio",
    "speech": [
-    103.52,
-    106.51
+    105.06,
+    108.05
    ]
   }
  ],
@@ -109,7 +109,7 @@
   [
    9.84,
    18.79,
-   "Dad was told"
+   "Dad was told \u00b7 simulated alert, nothing sent"
   ],
   [
    72.76,
@@ -119,7 +119,7 @@
   [
    88.54,
    99.99,
-   "Crisis: 988 offered, simulated family alert"
+   "Crisis: 988 offered \u00b7 simulated alert, nothing sent"
   ]
  ],
  "audio": [
@@ -202,8 +202,8 @@
    "dad_crisis.wav"
   ],
   [
-   83.46,
-   88.02,
+   84.0,
+   87.48,
    "narrator",
    "n5b.wav"
   ],
@@ -215,31 +215,31 @@
   ],
   [
    100.39,
-   103.12,
+   104.66,
    "narrator",
    "n6.wav"
   ],
   [
-   102.92,
-   107.71,
+   104.46,
+   109.24,
    "dad",
    "dad_grandson.wav"
   ],
   [
-   107.01,
-   109.84,
+   108.55,
+   111.37,
    "companion",
    "day2_reply.wav"
   ],
   [
-   110.84,
-   126.49,
+   112.37,
+   128.03,
    "narrator",
    "n7.wav"
   ],
   [
-   127.39,
-   137.95,
+   128.93,
+   139.48,
    "narrator",
    "n8.wav"
   ]
