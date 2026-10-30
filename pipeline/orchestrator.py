@@ -2378,6 +2378,7 @@ def run_turn(
     reply_text = ""
     think_audio_paths: list[Path] = []
     think_unavailable = False
+    medication_fixed = False  # #280: the reply is the fixed medicine answer
     hosted_call_capped = False
     is_fallback = False
     if not allow_hosted_call:
@@ -2415,6 +2416,7 @@ def run_turn(
                 token_stream = iter([listening_answer])
             elif medication_answer is not None:
                 readout = True  # fixed text: never checked as THINK prose, no THINK call, no flag
+                medication_fixed = True
                 token_stream = iter([medication_answer])
             elif readout:
                 token_stream = iter([visitor_answer])
@@ -2849,6 +2851,13 @@ def run_turn(
             try:
                 status, verdict = audit.audit_reply(transcript, reply_text)
                 result.audit_verdict = verdict
+                if medication_fixed and status == "UNSAFE":
+                    # #280: the AUDIT model calls even the vetted "ask your doctor
+                    # or pharmacist" text unsafe because the question was about a
+                    # dose (3 of 3 live runs). The reply is fixed text and gave no
+                    # advice, so no flag and no spoken disclosure; a CRISIS or
+                    # DISTRESS verdict on the senior's own words still stands.
+                    status = "SAFE"
                 if status in {"CRISIS", "DISTRESS", "UNSAFE"}:
                     disclosed = False
                     hotline_already_heard = False

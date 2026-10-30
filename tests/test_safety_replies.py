@@ -67,9 +67,11 @@ class _Case(unittest.TestCase):
         for _group, text, privacy in SAMPLE_FAMILY["items"]:
             self.store.add(text, source="caregiver_memo", privacy=privacy)
 
-    def turn(self, transcript, reply, **kwargs):
+    def turn(self, transcript, reply, audit=None, **kwargs):
         client = _CapturingClient(reply)
-        with patch("pipeline.think.get_client", return_value=client), \
+        audit_patch = (patch("pipeline.audit.audit_reply", return_value=audit) if audit
+                       else patch("pipeline.audit.audit_reply", side_effect=lambda *a, **k: ("SAFE", "stub")))
+        with patch("pipeline.think.get_client", return_value=client), audit_patch, \
              patch("pipeline.orchestrator._speak_turn", side_effect=_speak_joined):
             res = run_turn(transcript=transcript, memory_store=self.store, flags=self.flags,
                            audio_out_dir=self.audio_dir, caregiver_name=DEFAULT_CAREGIVER_NAME, **kwargs)
@@ -240,6 +242,20 @@ class TestMedicationAnswerInRunTurn(_Case):
         low = res.reply_text.lower()
         for must in ("can't advise", "double up", "doctor or pharmacist", DEFAULT_CAREGIVER_NAME.lower()):
             self.assertIn(must, low)
+
+    def test_an_unsafe_verdict_on_the_fixed_answer_raises_no_flag(self):
+        # Live: the AUDIT model called even this vetted text UNSAFE, 3 runs of 3.
+        _, res = self.turn(PILL_QUESTION, LIVE_PILL_REPLY, audit=("UNSAFE", "dose talk"))
+        self.assertEqual(self.flags.all(), [])
+        self.assertEqual(res.reply_text, _MEDICATION_ANSWER.format(name=DEFAULT_CAREGIVER_NAME))
+
+    def test_a_crisis_verdict_on_the_senior_words_still_flags(self):
+        _, res = self.turn("Can I take all my pills tonight?", LIVE_PILL_REPLY, audit=("CRISIS", "plan"))
+        self.assertEqual([f.severity for f in self.flags.all()], ["crisis"])
+
+    def test_an_unsafe_verdict_on_a_think_reply_still_flags(self):
+        self.turn("What time is my pill?", "Take it with water.", audit=("UNSAFE", "advice"))
+        self.assertEqual([f.severity for f in self.flags.all()], ["audit"])
 
     def test_a_worried_question_still_goes_to_think(self):
         client, res = self.turn("I'm worried and scared. Can I take two pills tonight?", "I hear you. Please ask your doctor.")
