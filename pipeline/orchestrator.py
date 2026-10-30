@@ -1649,8 +1649,21 @@ def states_caregiver_only_topic(sentence: str, topics: frozenset[str]) -> bool:
     plain = sentence.replace("\u2019", "'")
     if _UNSURE_RE.search(plain) and not _BUT_RE.search(plain):
         return False
+    # A real question ("Have you had a fall recently?") and general prevention
+    # advice ("keep walkways clear to prevent falls") state nothing private.
+    if plain.rstrip().rstrip("\"')").endswith("?") and _QUESTION_START_RE.search(plain):
+        return False
+    if _PREVENTION_RE.search(plain):
+        return False
     plain = _SEASON_RE.sub(" ", plain)
     return any(_topic_form(w) in topics for w in _detail_words(plain))
+
+
+_PREVENTION_RE = re.compile(
+    r"\b(?:prevent|preventing|avoid|avoiding|reduce|reducing)\s+(?:the\s+)?(?:risk\s+of\s+)?(?:a\s+)?(?:falls?|trips?)\b"
+    r"|\b(?:in\s+case\s+(?:of\s+)?(?:a\s+)?fall|if\s+you\s+(?:ever\s+)?(?:fall|feel\s+unsteady))\b",
+    re.IGNORECASE,
+)
 
 
 # The sentence right after a dropped one that points back at it ("It helps you
