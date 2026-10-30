@@ -25,6 +25,7 @@ the design rationale and `caregiver.py`/`pipeline/orchestrator.py` for where it'
 | Memory store | `memory/store.py` | caregiver facts always recalled, stopword pruning & semantic domain synonym expansion, dedupe on save, atomic writes |
 | Caregiver flags | `caregiver.py` | `disclosed_to_senior` is a required, honest argument everywhere |
 | Caregiver notification | `notify.py` | optional, off when `FY_NOTIFY_CHANNEL` is unset: one fixed-text SMTP or webhook message per safety flag, hourly cap, result recorded on the flag ([ADR-014](decisions/ADR-014-outbound-notification.md)) |
+| Abuse guardrails, owner alerts | `guardrails.py` | input caps, a process-wide hosted-turn budget and per-visitor limits (in memory, salted-hash keys, every limit an env var); a spent budget withholds only the paid model calls, never a safety reply; optional owner alerts (counts only) over `notify.py`'s transports (#37) |
 | THINK (model call) | `pipeline/think.py` | streamed, sentence-chunked (abbreviation-aware), facts/guardrails split in prompt, off-critical-path async memory extraction |
 | SPEAK (TTS) | `pipeline/speak.py` | native subprocess `espeak-ng` CLI on Linux/macOS eliminates in-process C-buffer leak and 19-sentence silence bug ([ADR-001](decisions/ADR-001-tts-backend.md)); PowerShell `System.Speech` on Windows. Built for long sessions |
 | HEAR (ASR) | `pipeline/hear.py` | wired with `--audio` into all CLI beats & `webapp.py`, backed by local `faster-whisper` (Token Factory has no ASR endpoint, PR #25), bundled with `samples/` audio |
