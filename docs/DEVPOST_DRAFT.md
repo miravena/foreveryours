@@ -355,15 +355,19 @@ correction CHANGELOG.md (#54, #34), pipeline/think.py:289-291. -->
 
 Written down on purpose, so the judges and any family know where this stops.
 
-- A fall described in other words ("I slipped in the bathroom this morning", "I ended up on the
-  rug") is not caught by the rules. "I took a tumble", "a bit of a fall", and a floor or room
-  phrasing with "can't get up" or "can't reach the phone" are; the last gets the 911 reply. The missed ones depend on the background backstop, which
+- A fall described in other words ("I went flying in the garden", "I came a cropper on the path")
+  is not caught by the rules. Slips, tumbles, "a bit of a fall", losing one's footing, and a floor
+  or room phrasing with "can't get up" or "can't reach the phone" are; the last gets the 911 reply. The missed ones depend on the background backstop, which
   runs after the reply and, on Nemotron 3 Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
   including falls). A small labelled set is not proof of coverage.
 - Some crisis paraphrases come back SAFE from the backstop; the rules catch the direct phrases.
 - Replies the rules do not cover are written by the model. It is told to use only what the family
   briefed, but it can still add a detail that was never there.
 - On the hosted demo the alert stays on the caregiver's half of the screen. Nothing reaches a phone.
+- The background check sometimes flags a good reply (for example a correct answer about a bank-scam
+  call). The caregiver panel then shows "Review suggested", not an alert.
+- On a very busy day the demo's usage limits pause the chat replies with a short "busy" message.
+  The safety replies (fall, crisis, emergency) never pause.
 - A flag is marked "Dad was told" once the spoken line is synthesised, not once it is heard; a
   browser that blocks autoplay still shows it as told.
 - The hosted demo is slower than the command line (about 0.9 s to first audio there; a hosted turn

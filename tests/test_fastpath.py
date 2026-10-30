@@ -801,3 +801,25 @@ class TestSoftFallsAndOverdoseIntent(unittest.TestCase):
                        "Sarah sorts all my pills into the box."):
             with self.subTest(phrase=phrase):
                 self.assertNotEqual(fastpath.check(phrase).severity, "crisis")
+
+
+class TestSlipsAndFootingAreFalls(unittest.TestCase):
+    """The 10-30 Known-limitations examples ("I slipped in the bathroom", "I ended up on the
+    rug") are first-person fall reports and get the fall reply; idioms stay calm."""
+
+    def test_slips_and_footing_get_the_fall_reply(self):
+        for phrase in ("I slipped in the bathroom this morning.", "I slipped on the ice.",
+                       "I've slipped twice this week.", "I ended up on the rug.",
+                       "I ended up on the kitchen floor.", "I lost my footing on the stairs.",
+                       "I lost my balance in the hall."):
+            with self.subTest(phrase=phrase):
+                res = fastpath.check(phrase)
+                self.assertEqual(res.severity, "distress")
+                self.assertIn("hurt", res.immediate_reply.lower())
+
+    def test_slip_idioms_stay_calm(self):
+        for phrase in ("It slipped my mind.", "I slipped out to the shop.", "I slipped on my coat and went out.",
+                       "I slipped my shoes off.", "I slipped in quietly.", "I slipped up on the crossword.",
+                       "Sarah slipped on the ice.", "I ended up on the bus."):
+            with self.subTest(phrase=phrase):
+                self.assertEqual(fastpath.check(phrase).severity, "none")
