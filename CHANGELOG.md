@@ -10,6 +10,12 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Fixed
+- "I slipped in the bathroom", "I ended up on the rug" and "I lost my footing" get the fall reply and the flag (#198). "It slipped my mind", "slipped out", "slipped my shoes off" and the like stay calm.
+
+### Docs
+- Known limitations: a fall the rules still miss ("I went flying", "I came a cropper"), the background check's occasional "Review suggested" on a good reply, and the usage limits (#204).
+
 ## [1.0.5] - 2026-10-30
 
 The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.4 plus safer replies to indirect crisis, overdose intent, softened falls and medicine-dose questions, and no apparent caregiver-only leaks. During judging only `v1.0.x` patches deploy (ADR-015).

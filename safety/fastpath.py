@@ -26,6 +26,12 @@ FALL_PATTERNS = [
     # Softened first-person falls (live probe: "I took a tumble earlier" reached
     # only the backstop): a tumble, a bit of a fall, a small fall.
     r"\bi(?:'ve|\s+have)?\s+(?:just\s+)?(?:had|took)\s+(?:a\s+)?(?:bit\s+of\s+a\s+|bad\s+|little\s+|nasty\s+|small\s+|wee\s+)?(?:fall|tumble)\b(?!\s+dryers?\b)",
+    # "I slipped" and "I ended up on the floor" (live probe 2026-10-30: the Known-limitations
+    # examples). Not "slipped my mind / out / away / into / up", nor slipping clothes on or off.
+    r"\bi(?:'ve|\s+have)?\s+(?:just\s+)?slipped\b(?!\s+(?:my\s+mind|out|away|off\s+to|into|in\s+(?:quietly|unnoticed|late)\b|up\b|it\b|them\b|"
+    r"(?:(?:on|off)\s+)?(?:my|a|the|her|his)\s+(?:coat|jumper|shoes?|slippers?|socks?|ring|watch|cardigan|dress|top|glasses)))",
+    r"\bi(?:'ve|\s+have)?\s+(?:just\s+)?ended\s+up\s+on\s+(?:the|my)\s+(?:\w+\s+)?(?:floor|ground|rug|carpet|mat)\b",
+    r"\bi(?:'ve|\s+have)?\s+(?:just\s+)?lost\s+my\s+(?:footing|balance)\b",
     r"\bi\s+have\s+fall\b",
     r"\b(i('ve| have)?\s+fallen|fall(en|ing)?\s+(down|over|off))\b",
     r"\bi('m| am)\s+falling(?!\s+asleep)\b",
@@ -47,6 +53,12 @@ FALL_REPORT_PATTERNS = [
     r"\bi\s+(?:just\s+|have\s+)?fell" + _NOT_A_FALL + r"\b",
     r"\bi(?:'m|\s+am)\s+falling" + _NOT_A_FALL + r"\b",
     r"\bi\s+(?:just\s+)?(?:fall|fell)\s+(?:down|over|off)\b",
+    # "I slipped" and "I ended up on the floor" (live probe 2026-10-30: the Known-limitations
+    # examples). Not "slipped my mind / out / away / into / up", nor slipping clothes on or off.
+    r"\bi(?:'ve|\s+have)?\s+(?:just\s+)?slipped\b(?!\s+(?:my\s+mind|out|away|off\s+to|into|in\s+(?:quietly|unnoticed|late)\b|up\b|it\b|them\b|"
+    r"(?:(?:on|off)\s+)?(?:my|a|the|her|his)\s+(?:coat|jumper|shoes?|slippers?|socks?|ring|watch|cardigan|dress|top|glasses)))",
+    r"\bi(?:'ve|\s+have)?\s+(?:just\s+)?ended\s+up\s+on\s+(?:the|my)\s+(?:\w+\s+)?(?:floor|ground|rug|carpet|mat)\b",
+    r"\bi(?:'ve|\s+have)?\s+(?:just\s+)?lost\s+my\s+(?:footing|balance)\b",
 ]
 
 DISTRESS_PATTERNS = FALL_PATTERNS + [

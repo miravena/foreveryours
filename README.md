@@ -50,9 +50,9 @@ settings are not built yet.
 
 Written down on purpose: a judge or a family should know where this stops.
 
-- A fall described in other words ("I slipped in the bathroom this morning", "I ended up on the
-  rug") is not caught by the rules. "I took a tumble", "a bit of a fall", and a floor or room
-  phrasing with "can't get up" or "can't reach the phone" are; the last gets the 911 reply. The missed ones depend on the background backstop, which
+- A fall described in other words ("I went flying in the garden", "I came a cropper on the path")
+  is not caught by the rules. Slips, tumbles, "a bit of a fall", losing one's footing, and a floor
+  or room phrasing with "can't get up" or "can't reach the phone" are; the last gets the 911 reply. The missed ones depend on the background backstop, which
   runs after the reply and, on Nemotron 3 Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
   including falls; [ADR-016](docs/decisions/ADR-016-audit-model-super.md)). A small labelled set is
   not proof of coverage.
@@ -65,6 +65,10 @@ Written down on purpose: a judge or a family should know where this stops.
   compares words, not meaning: it can drop a warm, true paraphrase, and an invented detail made only
   of words the memos happen to contain still passes.
 - On the hosted demo the alert stays on the caregiver's half of the screen. Nothing reaches a phone.
+- The background check sometimes flags a good reply (for example a correct answer about a bank-scam
+  call). The caregiver panel then shows "Review suggested", not an alert.
+- On a very busy day the demo's usage limits pause the chat replies with a short "busy" message.
+  The safety replies (fall, crisis, emergency) never pause.
 - A flag is marked "Dad was told" once the spoken line is synthesised, not once it is heard; a
   browser that blocks autoplay still shows it as told.
 - The hosted demo is slower than the command line (about 0.9 s to first audio there; a hosted turn
