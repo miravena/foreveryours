@@ -9,6 +9,15 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-30: v5 rebuilt, the last word of the fall and crisis replies is no longer clipped (#275)
+- **Found by the founder watching v5:** "you are in distress" ended mid-word. `trim_reply` cut at
+  Whisper's end time for the last kept word (+0.15 s, capped at the next word), and Whisper ends a
+  soft tail early. The source shows "distress" dipping for about 60 ms before its final "ss".
+- **Fix:** `quiet_after` reads the audio and cuts at the first silence of at least 0.15 s after the
+  word, or at the quietest frame before the next word. Crisis clip 10.57 s -> 10.82 s.
+- **Release:** `foreveryours_demo_v5.mp4` replaced on `video-v5-draft`. The sha256 prefix changed
+  96fed0fe -> 0621f314, the duration is 2:21.6, -16.1 LUFS, and the SRT is still ASCII. The first
+  build is kept outside git in `<build>/v5-first-build/`.
 ### 2026-10-29: briefing moves out of the system message (#280), A/B tested locally first
 - **Why:** a memo with no avoid/never word became a profile fact or an update, and both were
   written into the THINK system message, beside the safety rules, with nothing marking it as data.
