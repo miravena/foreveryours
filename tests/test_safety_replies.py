@@ -224,6 +224,8 @@ class TestMedicationQuestion(unittest.TestCase):
         "I missed my pill. Can I take the dog out?",
         "Can I take two pills and what is for dinner?",
         "I missed my pill. Tell me about my grandson.",
+        "I missed my pill. Who visits?",
+        "I missed my pill. What time is my pill tomorrow?",
         "Should I take my pill? Tell me today's schedule.",
         "Can I take my pill with tea? And is Sarah coming?",
         "Can I take two biscuits?",

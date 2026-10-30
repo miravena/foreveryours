@@ -207,6 +207,8 @@ def is_medication_dose_question(transcript: str) -> bool:
             return False
         if ask or _MED_MISSED_RE.search(part):
             found = True
+        elif "?" in part or _QUESTION_OPENER_RE.match(part):
+            return False  # "Who visits?", "What time is my pill tomorrow?": THINK answers
         elif not has_med and len(part.split()) > 3:
             # Any other sentence ("Tell me about my grandson.", "Can I take the
             # dog out?") is a request THINK must answer; fixed text only for a
