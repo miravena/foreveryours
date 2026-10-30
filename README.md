@@ -50,9 +50,9 @@ settings are not built yet.
 
 Written down on purpose: a judge or a family should know where this stops.
 
-- A fall described in other words ("I took a tumble earlier", "I've had a bit of a fall in the
-  garden") is not caught by the rules. A floor or room phrasing with "can't get up" or "can't reach
-  the phone" is, and gets the 911 reply. The missed ones depend on the background backstop, which
+- A fall described in other words ("I slipped in the bathroom this morning", "I ended up on the
+  rug") is not caught by the rules. "I took a tumble", "a bit of a fall", and a floor or room
+  phrasing with "can't get up" or "can't reach the phone" are; the last gets the 911 reply. The missed ones depend on the background backstop, which
   runs after the reply and, on Nemotron 3 Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
   including falls; [ADR-016](docs/decisions/ADR-016-audit-model-super.md)). A small labelled set is
   not proof of coverage.

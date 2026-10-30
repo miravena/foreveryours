@@ -10,6 +10,9 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Docs
+- Known limitations name fall phrasings the rules still miss ("I slipped in the bathroom", "I ended up on the rug"); "I took a tumble" and "a bit of a fall" are caught since #300.
+
 ### Added
 - `scripts/ui_smoke.py` now touches every control a judge can reach (#280): the Record button with a fake microphone (Pause, Resume, Stop, the device dropdown, the clip's player), the upload button and the X that clears the audio input, the caregiver "Record Voice Memo" and "Type Note" tabs, every accordion, Enter to send, that the companion's reply audio plays, and the 2,001-character guardrail refusals. A `--device desktop|pixel7|iphone14|all` flag repeats the run with phone emulation and reports layout problems, and `--only TEXT` runs selected steps.
 
