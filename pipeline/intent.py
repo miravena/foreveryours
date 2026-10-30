@@ -6,6 +6,7 @@ reach the LLM (e.g. suppressing grocery delivery logistics during emotional disc
 """
 from __future__ import annotations
 
+import functools
 import re
 from enum import Enum
 
@@ -75,6 +76,69 @@ VISITOR_QUESTION_RE = re.compile(
 def is_visitor_question(transcript: str) -> bool:
     """True when the senior asks who (if anyone) is visiting today."""
     return bool(transcript) and bool(VISITOR_QUESTION_RE.search(transcript))
+
+
+# "Is Sarah listening to us?" and its phrasings (live judge T05/T06). Rule 19's
+# answer needs a limit the model keeps dropping ("she only sees safety flags"),
+# so the orchestrator answers it itself, the same way every time. Not "you" (the
+# assistant), not a statement such as "Don't tell Sarah about the biscuits", and
+# not a question about a company ("Is Google listening?", "Are you sharing what I
+# say with Nebius?"): the answer "No, Sarah can't hear us" would dodge it, and
+# docs/PRIVACY.md says what the app really keeps and sends. So when the
+# caregiver's name is known, the third party must be that name, a family word,
+# "anyone", or she/he/they.
+_NOT_A_PERSON = r"(?!(?:you|i|we|it|this|that|there|the|a|an|what|who|how|why|when|where|my|our|your|these|those)\b)"
+_FAMILY = r"(?:my\s+|the\s+)?(?:family|daughter|son|grandson|granddaughter|wife|husband|kids|children|carers?|caregivers?|nurse)"
+_ANYONE = r"(?:anyone|anybody|someone|somebody|everyone|everybody)"
+_OVERHEARING = r"(?:listening|eavesdropping|overhearing|spying|monitoring)"
+_WHAT_I_SAY = (r"what\s+(?:i|we)\s+(?:say|said|tell|told|talk|talked|discuss|discussed|chat|chatted)\w*"
+               r"|everything\s+(?:i|we)\s+(?:say|tell|talk)\w*|(?:our|this)\s+(?:chat|conversation|talk)s?")
+
+
+def _who(caregiver_name: str) -> str:
+    names = "|".join(re.escape(p) for p in caregiver_name.split() if len(p) > 1)
+    if not names:  # name unknown: any first name will do
+        return "(?:" + _ANYONE + "|" + _FAMILY + "|she|he|they|" + _NOT_A_PERSON + r"\w+)"
+    return "(?:" + _ANYONE + "|" + _FAMILY + "|she|he|they|" + names + ")"
+
+
+@functools.lru_cache(maxsize=16)
+def _listening_re(caregiver_name: str) -> re.Pattern:
+    who = _who(caregiver_name)
+    tail = r"(?:everything|all\s+(?:of\s+)?(?:this|it|that)|" + _WHAT_I_SAY + r")"
+    verb = r"(?:telling|passing|sending|relaying|sharing|reading)"
+    return re.compile(
+        # Is Sarah listening (in / to us)?  Is anyone listening?  Is Sarah watching me?
+        r"\b(?:is|are)\s+" + who + r"\s+(?:\w+\s+){0,2}?"
+        r"(?:" + _OVERHEARING + r"(?:\s+(?:in|on)\b|\s+to\s+(?:us|me|everything|(?:" + _WHAT_I_SAY + r"))\b|\s*[?.!,]|\s*$|\s+(?:right\s+now|now|all|always|too)\b)"
+        r"|(?:hearing|watching)\s+(?:us|me|everything|(?:" + _WHAT_I_SAY + r"))\b)"
+        # Can Sarah hear what I tell you?  Can anyone hear us?  Can Sarah see what I say?
+        r"|\b(?:can|could|does|do|did|will|would)\s+" + who + r"\s+(?:\w+\s+){0,2}?"
+        r"(?:(?:hear|overhear|listen\s+to)\s+(?:" + _WHAT_I_SAY + r"|us|me|everything)\b"
+        r"|(?:see|read|know)\s+(?:" + _WHAT_I_SAY + r")\b"
+        r"|listen\s+in\b)"
+        # Are you reporting to Sarah?  Are you telling Sarah everything?  Are you sharing what I say with Sarah?
+        # ("Are you recording this?" is not here: the app keeps the audio a while, docs/PRIVACY.md.)
+        r"|\b(?:are|were)\s+you\s+(?:\w+\s+){0,2}?(?:"
+        r"reporting\s+(?:back\s+)?to\s+" + who + r"\b"
+        r"|" + verb + r"\s+" + who + r"\s+" + tail +
+        r"|" + verb + r"\s+" + tail + r"\s+(?:on\s+)?(?:to|with)\s+" + who + r"\b)",
+        re.IGNORECASE,
+    )
+
+
+def is_listening_question(transcript: str, caregiver_name: str = "") -> bool:
+    """True when the senior asks whether the caregiver (or anyone) can hear,
+    see or is being told what he says to the assistant."""
+    if not transcript:
+        return False
+    m = _listening_re(caregiver_name or "").search(transcript)
+    if not m:
+        return False
+    # Standalone only: "Is Sarah listening to us? What time is my appointment?"
+    # is two questions, and THINK must get the other one too.
+    rest = (transcript[:m.start()] + " " + transcript[m.end():]).strip(" \t,.!?")
+    return not re.search(r"[?.!]\s*\S|\b(?:and|also|what|when|where|who|how|why|which|can|could|do|does|is|are)\b", rest, re.IGNORECASE)
 
 
 def detect_intent(transcript: str) -> Intent:

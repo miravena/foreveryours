@@ -9,6 +9,30 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-30: the no-listening answer is fixed text (live T05/T06 flake, #37)
+- **Why:** 2 of the last 8 live runs failed T05/T06: "Sarah can't hear our conversation, but she
+  does see safety flags if I send any." True, but the check needs the limit ("only"). Rule 19 is
+  right; the model words it differently each time, so the answer is now the same every time.
+- **Fix:** `pipeline.intent.is_listening_question` (any third party: a name, "my family", "anyone";
+  not "Don't tell Sarah about the biscuits", not "Are you listening?") and `_listening_answer` in the
+  orchestrator, which speaks fixed text the way the visitor read-out does. The fast path wins on a
+  safety turn, and a worried question ("I'm scared, is Sarah listening?") still goes to THINK. No
+  flag is raised; history and AUDIT behave as for the read-out.
+- **A/B (local, live key, Space untouched):** `live_judge_check.py --space http://127.0.0.1:<port>/`
+  three times each. v1.0.2+ (79329c1): 23, 23, 23. Branch: 21, 23, 23 -- run 1 failed T13 ("Have a
+  nice drive") and T15 (reply without Sarah/family), neither on a listening path (the detector is
+  False for both turns; the baseline passed them 3 of 3). T05 and T06 passed on every branch run
+  with the fixed text. The baseline did not reproduce the T05/T06 flake in 3 runs (about 1 in 4 per
+  run was expected), so this shows no regression, not a measured gain; the gain is that the
+  failing wording can no longer be spoken (`tests/test_listening_answer.py`).
+- **After review:** the detector was narrowed three times by the OpenAI review (recording questions,
+  company recipients like Nebius, and non-standalone or music questions all go to THINK now), then
+  two more live runs on the final branch code: 23, 23 (T05/T06 pass with the fixed text).
+- **Test change:** two tests in `test_invented_household_facts.py` used "Is Sarah listening to us?" /
+  "Can Sarah hear what I tell you?" to check that the detail guard keeps a privacy answer in any
+  words. Those two questions now get the fixed text, so the tests use phrasings the detector does
+  not cover ("Would Sarah ever find out ..."), which still reach THINK and the guard.
+
 ### 2026-10-30: v5 rebuilt, the last word of the fall and crisis replies is no longer clipped (#275)
 - **Found by the founder watching v5:** "you are in distress" ended mid-word. `trim_reply` cut at
   Whisper's end time for the last kept word (+0.15 s, capped at the next word), and Whisper ends a
