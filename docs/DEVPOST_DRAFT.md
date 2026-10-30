@@ -354,9 +354,10 @@ correction CHANGELOG.md (#54, #34), pipeline/think.py:289-291. -->
 
 Written down on purpose, so the judges and any family know where this stops.
 
-- A fall described in other words ("I'm on the floor and can't reach the phone") is not caught by
-  the rules. It depends on the background backstop, which runs after the reply and, on Nemotron 3
-  Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
+- A fall described in other words ("I took a tumble earlier", "I've had a bit of a fall in the
+  garden") is not caught by the rules. A floor or room phrasing with "can't get up" or "can't reach
+  the phone" is, and gets the 911 reply. The missed ones depend on the background backstop, which
+  runs after the reply and, on Nemotron 3 Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
   including falls). A small labelled set is not proof of coverage.
 - Some crisis paraphrases come back SAFE from the backstop; the rules catch the direct phrases.
 - Replies the rules do not cover are written by the model. It is told to use only what the family

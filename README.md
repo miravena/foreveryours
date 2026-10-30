@@ -50,9 +50,10 @@ settings are not built yet.
 
 Written down on purpose: a judge or a family should know where this stops.
 
-- A fall described in other words ("I'm on the floor and can't reach the phone") is not caught by
-  the rules. It depends on the background backstop, which runs after the reply and, on Nemotron 3
-  Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
+- A fall described in other words ("I took a tumble earlier", "I've had a bit of a fall in the
+  garden") is not caught by the rules. A floor or room phrasing with "can't get up" or "can't reach
+  the phone" is, and gets the 911 reply. The missed ones depend on the background backstop, which
+  runs after the reply and, on Nemotron 3 Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
   including falls; [ADR-016](docs/decisions/ADR-016-audit-model-super.md)). A small labelled set is
   not proof of coverage.
 - Some crisis paraphrases come back SAFE from the backstop; the rules catch the direct phrases.
