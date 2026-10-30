@@ -10,6 +10,8 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Fixed
+- The companion's spoken reply no longer stops in the middle of a word on a phone or a laptop (#194). Measured in a real browser, the reply played its first 1.3-1.8 s, went silent for 1.3-3.3 s, then played the rest: Gradio's streaming encoder keeps the tail of each sentence until the turn ends, and its player re-reads the playlist only about every two seconds. Each sentence is now sent as 0.4 s slices, followed by a one-millisecond silent nudge while the turn finishes in the background; the browser then has the whole sentence about a second after the first sound.
 ### Changed
 - The type box no longer suggests "Who is Sarah?". The default household does not say who she is, so the answer was weak. It suggests "What's my grandson's name?" instead.
 
