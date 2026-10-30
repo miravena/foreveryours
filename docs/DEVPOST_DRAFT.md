@@ -223,9 +223,9 @@ so everything in this entry was built during it.
 | Try it (no login) | https://elevenbaselab-foreveryours.hf.space |
 | Space page | https://huggingface.co/spaces/elevenbaselab/foreveryours |
 | Repository | https://github.com/miravena/foreveryours (MIT) |
-| Video | **PLACEHOLDER (#5): public YouTube link, under 3 minutes. Do not submit with this line.** |
-| Thumbnail | `00-thumbnail.png` from the `gallery-draft` release (1800x1200, 3:2, the ratio the form asks for). |
-| Gallery images | Upload four 1920x1080 files from the `gallery-draft` release (collaborators only; #218), in this order: `01-fall.png`, `02-briefed-memory.png`, `03-crisis.png`, `04c-stack-card-clean.png`. Captions below. |
+| Video | **PLACEHOLDER (#5): public YouTube link of `foreveryours_demo_release7.mp4` from the `release-7` draft release (2:20.7). Do not submit with this line.** |
+| Thumbnail | `00-thumbnail.png` from the `release-7` draft release (1800x1200, 3:2, the ratio the form asks for). |
+| Gallery images | Upload four 1920x1080 files from the `release-7` draft release (collaborators only; #218), in this order: `01-fall.png`, `02-briefed-memory.png`, `03-crisis.png`, `04c-stack-card-clean.png`. Captions below. |
 | Representative | SirTehTarik (decided in #6; enters the submission) |
 | Builders & Brews city | Leave blank (neither team member attended) |
 
