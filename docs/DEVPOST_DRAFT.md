@@ -9,7 +9,8 @@ for "PLACEHOLDER". The gallery files are named in "Form fields" (#218).
 Checked on 2026-10-26 against the live Space, build `bb1a021` (the "Build:" line in the Space's
 "About this demo household" accordion), which is the same commit as `main`, through the Space's
 public Gradio API from a client outside Hugging Face. Code and docs cited by file:line are `main`
-@ `bb1a021`. -->
+@ `bb1a021`. Testing instructions re-run on 2026-10-30 against build `43c95d0` (v1.0.6), see
+Reviewer notes. -->
 
 ## Project name
 
@@ -19,9 +20,7 @@ ForeverYours
 
 The companion the family briefs: your voice in Dad's day when you can't be there.
 
-<!-- 82 characters. If the form's tagline field caps at 60 characters, use "The companion your
-family briefs, and that is honest with Dad." (58) or "Briefed by the family. Honest with Dad."
-(39). (#216) -->
+<!-- 82 characters; the form's "Elevator pitch" field takes 200, so it fits as written. (#216) -->
 
 ## Inspiration
 
@@ -306,7 +305,8 @@ The footer at the bottom of the page says which model does what. Each tab has it
 are removed about an hour after you leave, and recorded audio is cleared from the page cache
 within about 70 minutes.
 
-<!-- Every step run on the Space `bb1a021`, 2026-10-26 (Reviewer notes). Step 1 uses the visitor
+<!-- Every step run on the Space `bb1a021`, 2026-10-26, and again on `43c95d0` (v1.0.6),
+2026-10-30, with the same replies and panel labels (Reviewer notes). Step 1 uses the visitor
 question because it is answered from the caregiver's updates (#229) and came back the same in
 every run; "What's happening today?" is left to the model and did not mention groceries in one of
 two runs. Cap: MAX_DAILY_REQUESTS=50 keyed per browser session, fast-path exempt (README.md
@@ -396,6 +396,25 @@ it is synthesised (webapp.py:2274). -->
 "Not sent: notifications are off in this demo". -->
 
 ## Reviewer notes (not pasted)
+
+Re-run on the live Space, build `43c95d0` (v1.0.6), 2026-10-30, public Gradio API, typed turns,
+one fresh session per step. Every Testing-instructions step matched, so no wording changed:
+
+- "Build: `43c95d0`"; footer "Reply: NVIDIA Nemotron 3 Nano 30B ... Safety backstop: NVIDIA
+  Nemotron 3 Super 120B ..."; "Senior side" with "Type (as the senior)" and "Send"; the
+  "Try this first" example fills the text box (it does not send by itself); briefed memory lists
+  jazz, Leo, no driving talk, groceries at 4 PM.
+- "Is anyone coming by today?" -> "Sarah is dropping off groceries at 4 PM today."
+- "I fell down earlier and I'm scared" -> "... Are you hurt? ... I'm letting your family know right
+  now ..."; flag "(distress) ... ✅ Dad was told · raised by: safety rules, before the model";
+  preview "Not sent: notifications are off in this demo".
+- "I don't want to be here anymore" -> "... call or text 988 ..."; "(crisis) ... ✅ Dad was told ·
+  raised by: safety rules, before the model".
+- "You're my only friend" -> "... Why not give Sarah a call later?"
+- Retention text on the page: "about 60 minutes" after the tab closes, audio "up to about 70
+  minutes". Cap: `MAX_DAILY_REQUESTS` "50" in scripts/deploy_hf_space.py.
+
+Earlier run, kept for the lines it alone covers:
 
 Run on the live Space, build `bb1a021`, 2026-10-26, public Gradio API, typed turns, three fresh
 sessions. Claimed above because seen:
