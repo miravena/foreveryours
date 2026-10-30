@@ -48,36 +48,26 @@ ForeverYours is a voice companion for an older adult, briefed by their caregiver
 speaks and hears the reply, with no app to learn, typing or reading required. The hosted demo shows
 both sides together.
 
-- **A worrying remark is handled out loud, on both sides of the screen.** Dad says "I fell down
-  earlier and I'm scared." Before any model is called, the companion asks whether he is hurt and
-  tells him it is letting his family know right now so someone can check on him. In the same
-  moment the caregiver's column shows the flag, marked "Dad was told" and "raised by: safety
-  rules, before the model". Then the conversation carries on instead of ending on the alert.
-- **A crisis phrase gets a referral, not a pep talk.** If Dad says "I don't want to be here
-  anymore", the companion tells him to call or text 988, says it is letting his family know, and
-  the flag is disclosed like every other flag.
-- **The caregiver briefs it.** A short memo ("Dad loves jazz. His grandson is named Leo. Avoid
-  talking about driving. I'm dropping off groceries at 4 PM today.") becomes the companion's
-  context, typed, recorded as a voice memo, or given through a five-question guided interview.
-  Lifelong facts are kept as permanent; today's errand is kept as temporary and drops out of the
-  companion's context on its own about a day after it was written.
-- **The senior just talks.** Speech in, a warm spoken reply out, and the reply uses the briefing.
-  Ask "Is anyone coming by today?" and it answers that Sarah is dropping off groceries at 4 PM.
-  Tell it "You're my only friend" and it sends him back to his family: Sarah would love to hear
-  his voice.
-- **The caregiver can inspect the briefing and safety flags.** Briefed items are labelled
-  permanent or temporary. Each flag identifies the layer that raised it (the safety rules before
-  the model, or the Nemotron backstop after the reply) and whether the senior was told; if the
-  spoken line cannot be produced, it says "NOT yet disclosed". A preview shows the alert Sarah
-  would receive, including its kind, severity and disclosure status, without a transcript.
-  Notifications are off in this demo.
-- **It says what it is.** The page opens with a notice that this is an AI companion, not a human.
-  Next to the microphone it says that what Dad says is turned into text and that the text, not his
-  voice, is sent to Nebius Token Factory. A footer names which model does what.
+- **A fall is handled out loud, on both sides.** Dad says "I fell down earlier and I'm scared."
+  Before any model is called, the companion asks whether he is hurt and tells him his family is
+  being told. Sarah's column shows the flag: "Dad was told", "raised by: safety rules, before the
+  model". Then the conversation carries on.
+- **A crisis gets a referral, not a pep talk.** "I don't want to be here anymore" gets the 988
+  line, and the flag is disclosed like every other.
+- **The family briefs it.** A short memo ("Dad loves jazz. His grandson is named Leo. Avoid talking
+  about driving. I'm dropping off groceries at 4 PM today.") is typed, recorded as a voice memo or
+  given through a five-question interview. Lifelong facts stay; today's errand drops out on its own
+  after about a day.
+- **Dad just talks.** "Is anyone coming by today?" gets "Sarah is dropping off groceries at 4 PM
+  today." "You're my only friend" gets him pointed back to his family.
+- **Sarah sees what it knows and what it flagged.** Each flag says which layer raised it and
+  whether Dad was told; if the spoken line fails, it says "NOT yet disclosed". A preview shows the
+  alert she would receive, without a transcript. Notifications are off in this demo.
+- **It says what it is.** An AI notice opens the page, the microphone label says only the text of
+  what Dad says goes to Nebius, never his voice, and a footer names which model does what.
 
-On the hosted demo the alert stays on the caregiver's side of the screen: nothing is sent to a
-phone or an inbox. What it is not: not a medical device, not a diagnosis, not an emergency
-dispatcher. A caregiver flag is a notification, not a 911 call.
+Not a medical device, not a diagnosis, not an emergency dispatcher: a flag is a notification, not a
+911 call.
 
 <!-- Evidence, all seen on the Space `bb1a021` on 2026-10-26 through the Gradio API:
 - Fall: "I fell down earlier and I'm scared" -> "I hear you, and I'm taking this seriously. Are you
@@ -125,44 +115,28 @@ is sent on the Space. -->
 
 ## How we built it
 
-One pipeline, in Python, whose first step is the safety check, so the highest-stakes reply is
-also the fastest one and the one that works offline.
+One Python pipeline with the safety check first, so the most important reply is also the fastest
+one, and it works offline.
 
-1. **HEAR.** Speech is transcribed locally with `faster-whisper` (`base.en`, CPU, int8). Nebius
-   Token Factory has no transcription endpoint, so local recognition was a choice we made on
-   purpose: the safety step below works with no network and no key, and raw audio is never sent
-   to a model provider.
-2. **Fast-path safety check.** Before any model is called, a deliberately conservative set of
-   rules looks for a fall, injury, physical distress, confusion and crisis phrases. On a match the
-   companion speaks a fixed reply that tells the senior his family is being told, the flag is
-   written as disclosed, and the turn continues into the model so the conversation picks back up.
-   The rules are biased toward false positives by design, and a benchmark test guards that bias.
-3. **RECALL.** Memory is a JSON file per senior, read by keyword overlap with stopword pruning and
-   a small synonym table. No vector database and no embedding call: at this size it is fast and
-   inspectable, and caregiver-only items are never returned to the senior's prompt.
-4. **THINK.** `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` on Nebius Token Factory, through the
-   OpenAI-compatible API, streamed. The system prompt is written for this audience: never claim a
-   body or an in-person action, never diagnose or advise on medication, never invent memories,
-   attribute every errand to the family, refer a crisis to 988 and a physical emergency to 911,
-   and steer the senior back toward his family if he says the companion is his only friend.
-   Nemotron's reasoning tokens are turned off for this call; that one change took a live turn from
-   4.22 s to about 0.9 s to first audio on the command line.
-5. **SPEAK.** Replies are spoken offline with Piper, with `espeak-ng` as the fallback, one sentence
-   at a time; the browser receives each sentence as it is synthesised.
-6. **Off the critical path.** After the reply is on its way, a background pass on Nemotron 3 Super
-   rereads the senior's words and the reply as a safety backstop (crisis, distress, unsafe
-   advice), and a second pass on Nano turns what was said into memory updates (add, replace,
-   forget). A flag from the backstop is spoken to the senior as a follow-up before it is marked as
-   told, and if the backstop cannot reach a verdict the turn is recorded as unknown, never as safe.
-7. **The two columns.** The web demo is Gradio over the same pipeline, no second code path. Each
-   visitor gets a private, pre-briefed household for their tab, removed about an hour after they
-   leave; the caregiver column refreshes on its own timer, so the flag appears whether or not the
-   senior's turn has finished rendering.
+1. **Hear.** `faster-whisper` transcribes speech on the app's own server. Token Factory has no
+   speech endpoint, and this way raw audio never leaves the server.
+2. **Safety rules.** Before any model runs, deliberately cautious rules catch falls, distress,
+   confusion and crisis phrases. They speak a fixed reply that tells Dad his family is being told,
+   record the flag as disclosed, and hand the turn on so the conversation continues.
+3. **Recall.** One JSON memory file per senior, searched by keyword. Caregiver-only notes never
+   reach Dad's prompt.
+4. **Think.** Nemotron 3 Nano on Token Factory, streamed, with reasoning turned off for speed. The
+   prompt forbids claiming a body, diagnosing or inventing memories, and sends a crisis to 988 and
+   a physical emergency to 911.
+5. **Speak.** Piper voices each sentence as it arrives, with `espeak-ng` as the fallback.
+6. **After the reply.** Nemotron 3 Super rereads the turn as a safety backstop, and Nano turns what
+   was said into memory updates (add, replace, forget). A backstop flag is spoken to Dad before it
+   counts as told; a turn it cannot judge is recorded as unknown, never as safe.
 
-The repository has more than 650 unit tests (standard library only) that run on every push,
-including benchmarks that fail if the fast-path drifts toward missing alerts, if a caregiver-only
-note leaks into the senior's conversation, or if the prompt starts claiming a body or giving
-medical advice, and seventeen written architecture decision records for the choices above.
+The web demo is Gradio over the same pipeline. Each visitor gets a private, pre-briefed household,
+removed about an hour after they leave. More than 1,000 standard-library tests run on every push,
+including benchmarks that fail if the safety rules start missing alerts or a caregiver-only note
+leaks into Dad's conversation, and seventeen decision records explain the choices.
 
 <!-- HEAR pipeline/hear.py; no /audio/transcriptions on Token Factory VENDOR_DECISIONS.md, ADR-004.
 Fast-path safety/fastpath.py, ADR-005, Benchmark 2 in tests/test_mature_benchmarks.py.
@@ -418,23 +392,19 @@ correction CHANGELOG.md (#54, #34), pipeline/think.py:289-291. -->
 
 ## Known limitations
 
-- A fall described in other words ("I went flying in the garden", "I came a cropper on the path")
-  is not caught by the rules. Slips, tumbles, "a bit of a fall", losing one's footing, and a floor
-  or room phrasing with "can't get up" or "can't reach the phone" are; the last gets the 911 reply. The missed ones depend on the background backstop, which
-  runs after the reply and, on Nemotron 3 Super, caught every labelled event in our evaluation (Nano, the previous backstop, missed some,
-  including falls). A small labelled set is not proof of coverage.
-- Some crisis paraphrases come back SAFE from the backstop; the rules catch the direct phrases.
-- Replies the rules do not cover are written by the model. It is told to use only what the family
-  briefed, but it can still add a detail that was never there.
-- On the hosted demo the alert stays on the caregiver's half of the screen. Nothing reaches a phone.
-- The background check sometimes flags a good reply (for example a correct answer about a bank-scam
-  call). The caregiver panel then shows "Review suggested", not an alert.
-- On a very busy day the demo's usage limits pause the chat replies with a short "busy" message.
-  The safety replies (fall, crisis, emergency) never pause.
-- A flag is marked "Dad was told" once the spoken line is synthesised, not once it is heard; a
-  browser that blocks autoplay still shows it as told.
-- The hosted demo is slower than the command line (about 0.9 s to first audio there; a hosted turn
-  took several seconds in our checks). No hosted latency figure is claimed.
+- **Falls in unusual words.** Slips, tumbles and "I'm on the floor and can't reach the phone" are
+  caught (the last gets the 911 reply), but "I came a cropper on the path" is not. Those depend on
+  the Super backstop after the reply, which caught every labelled event in our evaluation. A small
+  labelled set is not proof of coverage.
+- **Crisis paraphrases.** Some come back safe from the backstop; the rules catch the direct phrases.
+- **Invented details.** Replies the rules don't cover are written by the model, which is told to use
+  only what the family briefed but can still add a detail that was never there.
+- **"Dad was told"** means the line was synthesised, not heard: a browser that blocks autoplay
+  still shows it as told.
+- **Demo limits.** The alert stays on the caregiver's half of the screen and nothing reaches a
+  phone. The hosted demo is slower than the command line (about 0.9 s to first audio there). On a
+  very busy day chat replies pause; the safety replies never do. The background check sometimes
+  marks a good reply "Review suggested".
 - English only. Not a medical device, not a diagnosis, not an emergency dispatcher.
 
 <!-- Same lines as README.md "Known limitations" (#216). Sources: ADR-010 and ADR-016 (recall);
@@ -447,12 +417,11 @@ it is synthesised (webapp.py:2274). -->
 
 ## What's next
 
-- **The alert reaches a person.** An email and webhook channel that carries the same "Dad was
-  told" line is built, but it is switched off on the public demo; next is turning it on for real
-  households. Still a notification, never emergency dispatch.
-- **Distress the rules cannot reach.** Phrases outside the rule set currently depend on the
-  background backstop, which runs after the reply; the goal is to catch them before the reply.
-- A real caregiver and a real older adult using it for a week, which is the measurement that
+- **Real alerts.** An email and webhook channel carrying the same "Dad was told" line is built but
+  off in the demo. Next is turning it on for real households, still never emergency dispatch.
+- **Catch more before the reply.** Move distress the rules miss from the after-reply backstop to
+  before the reply.
+- **A real week.** One caregiver and one older adult using it for a week: the measurement that
   matters.
 
 <!-- Notification channel notify.py, ADR-014: off unless FY_NOTIFY_CHANNEL is set; the Space shows
