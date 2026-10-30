@@ -36,7 +36,7 @@ from memory.store import DOMAIN_SYNONYMS, STOPWORDS, MemoryStore, PrivacyLevel  
 from safety import fastpath  # noqa: E402
 
 from . import audit, speak, think  # noqa: E402
-from .intent import Intent, detect_intent, is_topic_invitation, is_visitor_question  # noqa: E402
+from .intent import Intent, detect_intent, is_listening_question, is_topic_invitation, is_visitor_question  # noqa: E402
 from .nebius_client import NebiusNotConfigured  # noqa: E402
 
 DISCLOSURE_LINE = "I want to let {caregiver} know about something I just said."
@@ -55,11 +55,12 @@ CRISIS_DISCLOSURE_LINE_NO_988 = "I am also letting {caregiver} know that you may
 # no lecture. enforce_driving_alternative() still checks the reply after.
 DRIVING_CONTINUATION_NOTE = (
     "The person plans to drive himself. Offer, first, that {caregiver} or family "
-    "could give him a lift or drive him, as an offer to pass on, for example "
-    "\"{caregiver} could take you, shall I let {caregiver} know?\". Never say a lift "
+    "could give him a lift or drive him, and suggest he ask {caregiver} for one "
+    "himself, for example \"Could you ask {caregiver} for a lift instead?\". Never say a lift "
     "is arranged, booked or on its way, and never say you will drive or take him "
-    "yourself (rules 4, 5 and 25); do not praise or encourage the drive, and do not "
-    "lecture him: it is his choice (rule 16); then rule 12."
+    "yourself (rules 4, 5 and 25); never offer to tell, let know, call or message "
+    "{caregiver} or anyone for him (rule 26); do not praise or encourage the drive, "
+    "and do not lecture him: it is his choice (rule 16); then rule 12."
 )
 # Spoken after the reply on a driving-plan turn; the low-severity note
 # (fastpath.CAREGIVER_FLAG_TEXT["driving"]) is recorded as disclosed only when
@@ -1545,6 +1546,22 @@ def _visitor_answer(transcript: str, updates: list[str], caregiver_name: str) ->
     return " ".join(parts) or None
 
 
+# SYSTEM_PROMPT rule 19, said the same way every time (live judge T05/T06: the
+# model's "Sarah can't hear our conversation, but she does see safety flags"
+# is true but never says the "only").
+_LISTENING_ANSWER = ("No, {name} can't hear what we talk about, and no one is listening in. "
+                     "{name} only gets a safety flag if something worrying comes up, like a fall, "
+                     "and I'll always tell you when one is sent.")
+
+
+def _listening_answer(transcript: str, caregiver_name: str) -> str | None:
+    """Fixed answer to "Is Sarah listening to us?" (T05/T06), or None when the
+    turn is not that question. The caller still lets the safety fast path win."""
+    if not is_listening_question(transcript, caregiver_name or "Sarah"):
+        return None
+    return _LISTENING_ANSWER.format(name=caregiver_name or "Sarah")
+
+
 MATCH_IGNORE_WORDS = {
     "the", "a", "an", "is", "are", "was", "were", "my", "your", "i", "you",
     "he", "she", "it", "we", "they", "in", "on", "at", "to", "for", "with",
@@ -2289,7 +2306,13 @@ def run_turn(
             # Only a plain logistics question gets the read-out; an emotional
             # "is anyone coming?" still goes to THINK for a warm reply.
             readout = visitor_answer is not None and not fast.triggered and intent == Intent.LOGISTICAL
-            if readout:
+            # Rule 19 as fixed text; a worried "is she listening? I'm scared" still goes to THINK.
+            listening_answer = (None if fast.triggered or intent in (Intent.EMOTIONAL_SUPPORT, Intent.MIXED)
+                                else _listening_answer(transcript, caregiver_name))
+            if listening_answer is not None:
+                readout = True  # fixed text, like the visitor read-out: no family-detail or appointment checks
+                token_stream = iter([listening_answer])
+            elif readout:
                 token_stream = iter([visitor_answer])
             else:
                 token_stream = think.stream_reply(

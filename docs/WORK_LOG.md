@@ -9,6 +9,66 @@ Format: newest first. One entry per session: date, who, what, result, next.
 
 ## Session entries
 
+### 2026-10-30: abuse guardrails and owner alerts (#37)
+- **Why:** a security review found three ways a script could hurt a judged, owner-paid demo:
+  `safety/fastpath.check` is quadratic on tens of thousands of characters and holds the GIL (one
+  typed input freezes the app), `MAX_DAILY_REQUESTS` is per session (open sessions, spend credits), and
+  `MemoryStore.add` is quadratic in a memo's facts (one huge memo stalls every save).
+- **Change:** `guardrails.py` (new, shipped to the Space via `STAGE_FILES`): input caps checked before
+  `_cap_decision`, the safety scan and any model call; a process-wide hourly/daily budget and per-visitor
+  limits folded into `_cap_decision`, so a spent budget takes the existing `allow_hosted_call=False` path
+  (fast path speaks and flags; THINK, AUDIT, extraction withheld; "busy, try again shortly" wording);
+  owner alerts over `notify.py`'s SMTP/HTTP transports (now module functions `send_smtp`, `post_http`).
+  `notify.py` behaviour is unchanged. Also: espeak `--`, `enable_monitoring=False`, driving note reworded.
+- **Client address:** on a Space the socket peer is Hugging Face's proxy, so keying on it would throttle all
+  judges together. `X-Forwarded-For` is read from the right, skipping private hops, taking the first
+  public address (a visitor can only forge the left side). Not verified against the live Space (a
+  rule for this work: never probe it), so the first line the app logs, `client identity: ...
+  resolved=yes|no`, is the check after deploy; `FY_CLIENT_IP_SOURCE=off` is the switch if it misbehaves.
+- **Gotcha:** `ipaddress.is_global` is False for documentation ranges (192.0.2/24, 198.51.100/24,
+  203.0.113/24), so tests use real public addresses.
+- **Review (OpenAI, 3 rounds):** SMTP security typo no longer falls back to plaintext; a refund removes
+  its own budget entry (tickets); an over-long input that starts or ends with an emergency phrase still
+  gets the fast-path reply (only a head and tail slice, each within the cap, is scanned; an emergency
+  buried in the middle is refused, a stated limit); every handler that can start a household counts it;
+  daily-usage alerts wait until the turn is really charged.
+- **Verify (local, live key, Space untouched):** full suite 977 tests OK; `live_judge_check.py --fake good`
+  exits 0; `--space http://127.0.0.1:<port>/` 23/23 twice on the first build and 23/23 twice more on the
+  final build. A 65,000-character typed input was refused in 0.2 s with the text handed back.
+
+### 2026-10-30: the no-listening answer is fixed text (live T05/T06 flake, #37)
+- **Why:** 2 of the last 8 live runs failed T05/T06: "Sarah can't hear our conversation, but she
+  does see safety flags if I send any." True, but the check needs the limit ("only"). Rule 19 is
+  right; the model words it differently each time, so the answer is now the same every time.
+- **Fix:** `pipeline.intent.is_listening_question` (any third party: a name, "my family", "anyone";
+  not "Don't tell Sarah about the biscuits", not "Are you listening?") and `_listening_answer` in the
+  orchestrator, which speaks fixed text the way the visitor read-out does. The fast path wins on a
+  safety turn, and a worried question ("I'm scared, is Sarah listening?") still goes to THINK. No
+  flag is raised; history and AUDIT behave as for the read-out.
+- **A/B (local, live key, Space untouched):** `live_judge_check.py --space http://127.0.0.1:<port>/`
+  three times each. v1.0.2+ (79329c1): 23, 23, 23. Branch: 21, 23, 23 -- run 1 failed T13 ("Have a
+  nice drive") and T15 (reply without Sarah/family), neither on a listening path (the detector is
+  False for both turns; the baseline passed them 3 of 3). T05 and T06 passed on every branch run
+  with the fixed text. The baseline did not reproduce the T05/T06 flake in 3 runs (about 1 in 4 per
+  run was expected), so this shows no regression, not a measured gain; the gain is that the
+  failing wording can no longer be spoken (`tests/test_listening_answer.py`).
+- **After review:** the detector was narrowed three times by the OpenAI review (recording questions,
+  company recipients like Nebius, and non-standalone or music questions all go to THINK now), then
+  two more live runs on the final branch code: 23, 23 (T05/T06 pass with the fixed text).
+- **Test change:** two tests in `test_invented_household_facts.py` used "Is Sarah listening to us?" /
+  "Can Sarah hear what I tell you?" to check that the detail guard keeps a privacy answer in any
+  words. Those two questions now get the fixed text, so the tests use phrasings the detector does
+  not cover ("Would Sarah ever find out ..."), which still reach THINK and the guard.
+
+### 2026-10-30: v5 rebuilt, the last word of the fall and crisis replies is no longer clipped (#275)
+- **Found by the founder watching v5:** "you are in distress" ended mid-word. `trim_reply` cut at
+  Whisper's end time for the last kept word (+0.15 s, capped at the next word), and Whisper ends a
+  soft tail early. The source shows "distress" dipping for about 60 ms before its final "ss".
+- **Fix:** `quiet_after` reads the audio and cuts at the first silence of at least 0.15 s after the
+  word, or at the quietest frame before the next word. Crisis clip 10.57 s -> 10.82 s.
+- **Release:** `foreveryours_demo_v5.mp4` replaced on `video-v5-draft`. The sha256 prefix changed
+  96fed0fe -> 0621f314, the duration is 2:21.6, -16.1 LUFS, and the SRT is still ASCII. The first
+  build is kept outside git in `<build>/v5-first-build/`.
 ### 2026-10-29: briefing moves out of the system message (#280), A/B tested locally first
 - **Why:** a memo with no avoid/never word became a profile fact or an update, and both were
   written into the THINK system message, beside the safety rules, with nothing marking it as data.

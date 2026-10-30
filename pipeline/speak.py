@@ -411,8 +411,10 @@ def _synthesize_file(sentence: str, out_path: Path, engine) -> None:
         # -s 150: comfortable eldercare speech rate (default is 175 wpm)
         # -p 45: slightly lower pitch for warmer, less metallic timbre
         # -w: output to WAV file
+        # "--" ends option parsing, so a sentence that starts with "-" (a senior
+        # typing "-v" or "--stdout") is spoken, never read as an espeak flag.
         subprocess.run(
-            [cli, "-s", "150", "-p", "45", "-w", str(out_path), sentence],
+            [cli, "-s", "150", "-p", "45", "-w", str(out_path), "--", sentence],
             check=True,
             capture_output=True,
             timeout=TTS_TIMEOUT_S,  # TimeoutExpired propagates to the caller

@@ -570,9 +570,11 @@ class TestDetailGuardInRunTurn(_TurnBase):
         self.assertEqual(res.reply_text.count("news about"), 1)
 
     def test_the_privacy_answer_about_the_caregiver_is_kept_in_any_words(self):
-        for q, reply in (("Is Sarah listening to us?",
+        # Phrasings the fixed listening answer does not cover (test_listening_answer.py)
+        # still reach THINK, and the guard keeps its privacy answer.
+        for q, reply in (("Would Sarah ever find out what we talk about?",
                           "Sarah can't hear our conversation. She'd only be contacted if your wellbeing was at risk."),
-                         ("Can Sarah hear what I tell you?",
+                         ("Is Sarah going to see our chats?",
                           "She can't hear our chat. She only gets word if something urgent comes up.")):
             res, _ = self.turn(q, reply)
             self.assertEqual(res.reply_text, reply)
@@ -662,7 +664,7 @@ class TestDetailGuardInRunTurn(_TurnBase):
 
     def test_the_privacy_answer_in_new_words_is_kept(self):
         reply = "No, Sarah can't hear us. She only sees brief safety alerts if something needs attention."
-        res, _ = self.turn("Can Sarah hear what I tell you?", reply)
+        res, _ = self.turn("Would Sarah ever learn what I tell you?", reply)
         self.assertEqual(res.reply_text, reply)
 
     def test_a_time_in_words_matches_the_memo(self):

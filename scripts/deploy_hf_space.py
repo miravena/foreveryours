@@ -57,7 +57,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD_INFO = "BUILD_INFO"  # staged file: one line, the full git sha the Space was built from
 
 STAGE_FILES = [
-    "app.py", "webapp.py", "caregiver.py", "envload.py", "notify.py", "__init__.py",
+    "app.py", "webapp.py", "caregiver.py", "envload.py", "notify.py", "guardrails.py", "__init__.py",
     "requirements.txt", "packages.txt", "LICENSE",
 ]
 STAGE_DIRS = ["memory", "pipeline", "safety"]

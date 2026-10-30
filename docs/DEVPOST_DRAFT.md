@@ -175,7 +175,7 @@ also the fastest one and the one that works offline.
 The repository has more than 650 unit tests (standard library only) that run on every push,
 including benchmarks that fail if the fast-path drifts toward missing alerts, if a caregiver-only
 note leaks into the senior's conversation, or if the prompt starts claiming a body or giving
-medical advice, and sixteen written architecture decision records for the choices above.
+medical advice, and seventeen written architecture decision records for the choices above.
 
 <!-- HEAR pipeline/hear.py; no /audio/transcriptions on Token Factory VENDOR_DECISIONS.md, ADR-004.
 Fast-path safety/fastpath.py, ADR-005, Benchmark 2 in tests/test_mature_benchmarks.py.
@@ -189,7 +189,7 @@ extraction uses THINK_MODEL (pipeline/think.py:369), commands :289-291; follow-u
 "unknown, never safe" README.md Pipeline. Two columns: README "Web demo"; SESSION_TTL_S
 webapp.py:138. Tests: `.venv/bin/python -m unittest discover tests` on `bb1a021`, 2026-10-26:
 "Ran 661 tests ... OK (skipped=9)"; CI .github/workflows/tests.yml. ADRs: docs/decisions/ADR-001
-to ADR-016 (ADR-006 has two files; 16 numbered decisions plus the template). -->
+to ADR-017 (ADR-006 has two files; 17 numbered decisions plus the template). -->
 
 ## Built with
 
@@ -265,6 +265,7 @@ so everything in this entry was built during it.
 | Video | **PLACEHOLDER (#5): public YouTube link, under 3 minutes. Do not submit with this line.** |
 | Gallery images | Upload four 1920x1080 files from the `gallery-draft` release (collaborators only; #218), in this order: `01-fall.png`, `02-briefed-memory.png`, `03-crisis.png`, `04c-stack-card-clean.png`. Captions below. |
 | Representative | SirTehTarik (decided in #6; enters the submission) |
+| Builders & Brews city | Leave blank (neither team member attended) |
 
 <!-- Track docs/HACKATHON_RULES.md "Personal AI". Both URLs answered on 2026-10-26; the direct
 *.hf.space address is listed first per the #20 coverage-check comment. -->

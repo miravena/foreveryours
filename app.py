@@ -32,4 +32,5 @@ if __name__ == "__main__" and app:
         server_name="0.0.0.0",
         server_port=int(os.environ.get("PORT", "7860")),
         max_file_size=f"{MAX_AUDIO_UPLOAD_BYTES}b",  # Gradio refuses oversize uploads too
+        enable_monitoring=False,  # no /monitoring dashboard: it lists usage and request details to anyone
     )
