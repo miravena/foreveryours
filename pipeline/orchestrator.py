@@ -1562,6 +1562,79 @@ def _listening_answer(transcript: str, caregiver_name: str) -> str | None:
     return _LISTENING_ANSWER.format(name=caregiver_name or "Sarah")
 
 
+# Caregiver-only notes never reach THINK (rule 15), but the model can still
+# guess a fact the note holds ("since your fall last fall" for "Uses a cane
+# since a fall in March"), and next to the panel's lock note that reads as a
+# leak (#245). A reply sentence that states a topic of such a note, when neither
+# what Dad may hear nor his own words this session carry it, is dropped.
+# Generic words of a note ("uses", "keep", "short") are no topic.
+_PRIVATE_NOTE_GENERIC = set("""
+uses use used using since mild keep keeps kept short long sentences sentence loss lately recently currently
+sometimes often usually always never also with from that this have been does doing done into over about after
+before during while only just some more most very much many other another each every make makes made take takes
+took give gives gave tell tells told ask asks asked need needs needed want wants wanted help helps helped feel feels
+felt like likes liked know knows knew think thinks thought remind reminds avoid avoids topic topics subject
+mention mentions mentioned talk talks talking say says said gets getting going goes went come comes came
+sore bit little quite really easily easy hard well good great nice better best bad worse worst
+""".split())
+_PRIVATE_NOTE_IRREGULAR = {"fell": "fall", "fallen": "fall", "falls": "fall", "falling": "fall"}
+
+
+def _topic_form(word: str) -> str:
+    """Plural and a few irregulars folded, nothing more: "hearing" and "hear"
+    stay apart so "glad to hear that" is not a leak of a hearing-loss note."""
+    word = _PRIVATE_NOTE_IRREGULAR.get(word, word)
+    return word[:-1] if len(word) > 4 and word.endswith("s") and not word.endswith("ss") else word
+
+
+def caregiver_only_topics(private_notes: list[str], open_texts: list[str], caregiver_name: str = "") -> frozenset[str]:
+    """Distinctive content words of the caregiver-only notes that nothing Dad
+    may hear (open_texts: speakable memories, today's updates, his own words)
+    carries. A word the open texts carry is grounded, so it is no topic."""
+    open_words = {_topic_form(w) for t in open_texts for w in _detail_words(str(t))}
+    skip = _caregiver_parts(caregiver_name) | _PRIVATE_NOTE_GENERIC | MATCH_IGNORE_WORDS
+    topics: set[str] = set()
+    for note in private_notes:
+        for w in _detail_words(str(note)):
+            if len(w) < 4 or w.isdigit() or w in skip:
+                continue
+            f = _topic_form(w)
+            if f not in open_words:
+                topics.add(f)
+    return frozenset(topics)
+
+
+def states_caregiver_only_topic(sentence: str, topics: frozenset[str]) -> bool:
+    return bool(topics) and any(_topic_form(w) in topics for w in _detail_words(sentence))
+
+
+# The sentence right after a dropped one that points back at it ("It helps you
+# stay steady") or reports who noticed ("Sarah and the family have noticed ...")
+# goes too: with the claim gone it states a guess about the family on its own.
+_PRIVATE_FOLLOWUP_RE = re.compile(r"^\W*(?:it|that|this|those|these|she|he|they)\b", re.IGNORECASE)
+_NOTICED_RE = re.compile(r"\b(?:notic\w+|aware|know|knows|knew|told|said|mentioned|saw|seen)\b", re.IGNORECASE)
+_NO_NOTE_LINE = "I don't have that noted down. {name} would know best, or you could tell me about it."
+
+# "As I mentioned before, ..." claims an earlier turn. With no companion turn in
+# this session's history there is none to point back to, so only the opener goes.
+_AS_MENTIONED_RE = re.compile(
+    r"^\W*(?:as|like)\s+i\s+(?:mentioned|said|told\s+you|noted|explained)"
+    r"(?:\s+(?:before|earlier|previously|already|a\s+moment\s+ago|just\s+now|last\s+time))?\s*[,:;\u2014-]?\s*",
+    re.IGNORECASE)
+
+
+def strip_unbacked_mention(sentence: str, history: list[dict] | None) -> str:
+    """Drops an "As I mentioned before," opener when the history holds no turn
+    of the companion's to have mentioned it in; the rest of the sentence stays."""
+    if any(m.get("role") == "assistant" for m in (history or [])):
+        return sentence
+    m = _AS_MENTIONED_RE.match(sentence)
+    if not m or not re.search(r"\w", sentence[m.end():]):
+        return sentence
+    rest = sentence[m.end():]
+    return rest[0].upper() + rest[1:]
+
+
 MATCH_IGNORE_WORDS = {
     "the", "a", "an", "is", "are", "was", "were", "my", "your", "i", "you",
     "he", "she", "it", "we", "they", "in", "on", "at", "to", "for", "with",
@@ -2345,6 +2418,14 @@ def run_turn(
             speakable = [i.text for i in memory_store.all() if i.is_active(t_now)
                          and i.privacy != PrivacyLevel.CAREGIVER_ONLY.value]
             known_household = household_corpus(speakable, transcript, history, caregiver_name)
+            # #245: topics of the caregiver-only notes that nothing Dad may hear carries.
+            said_by_dad = [str(transcript or "")] + [str(m.get("content", "")) for m in (history or [])
+                                                    if m.get("role") == "user"]
+            private_topics = caregiver_only_topics(
+                [i.text for i in memory_store.all() if i.is_active(t_now)
+                 and i.privacy == PrivacyLevel.CAREGIVER_ONLY.value],
+                speakable + list(caregiver_updates) + said_by_dad, caregiver_name)
+            dropped_private: list[str] = []
             # ... and a statement about a briefed family member is spoken only
             # when the briefing or the senior grounds it (invented_family_detail).
             # The visitor read-out is the notes verbatim, so it is not checked.
@@ -2376,6 +2457,7 @@ def run_turn(
             def filter_sentences(s_iter):
                 budget = hotline_budget
                 follows_dropped = False
+                follows_private = False
                 strangers: set[str] = set()
                 # The question is the sentence before the reply, for a pronoun
                 # only: "How is my grandson?" -> "He's doing great at school" is
@@ -2405,10 +2487,20 @@ def run_turn(
                     # that opens with a pronoun ("She is bringing soup.").
                     is_safety = (fast.triggered or _hotline_match(s) is not None
                                  or _OTHER_EMERGENCY_RE.search(s))
+                    if not readout and not fast.triggered:
+                        s = strip_unbacked_mention(s, history)
                     # Advice, not news: "call 911", "an ambulance", but not "Leo
                     # had emergency surgery yesterday".
                     detail_safety = (fast.triggered or _hotline_match(s) is not None
                                      or _EMERGENCY_ADVICE_RE.search(s))
+                    if (not readout and not is_safety and not detail_safety and private_topics
+                            and (states_caregiver_only_topic(s, private_topics)
+                                 or (follows_private and (_PRIVATE_FOLLOWUP_RE.match(s) or (
+                                     _mentions_caregiver(s, caregiver_name) and _NOTICED_RE.search(s)))))):
+                        dropped_private.append(s)
+                        follows_private = True
+                        continue
+                    follows_private = False
                     mentions_stranger = bool(strangers & {_name_key(n) for n in _NAME_RE.findall(s)})
                     recalled = bool(_RECALLED_QUESTION_RE.search(s.replace("\u2019", "'")))  # rule 24
                     if not is_safety and not recalled and (unbriefed_relative(s, known_household) or mentions_stranger
@@ -2541,6 +2633,9 @@ def run_turn(
                 reply_text, think_audio_paths, think_first_audio_time = _speak_turn(filter_sentences(sentences), audio_out_dir, on_chunk=think_tracker)
             if first_audio_time is None:
                 first_audio_time = think_first_audio_time
+            if dropped_private:
+                print(f"[orchestrator] dropped {len(dropped_private)} sentence(s) stating a caregiver-only topic (#245)",
+                      file=sys.stderr)
             if dropped_unbriefed:
                 print(f"[orchestrator] dropped {len(dropped_unbriefed)} sentence(s) naming an unbriefed relative (#245)",
                       file=sys.stderr)
@@ -2593,6 +2688,18 @@ def run_turn(
                     # messages" beside it (live T12 on v1.0.1).
                     line = enforce_driving_alternative("I'm here with you.", caregiver_name)
                 reply_text, empty_paths, empty_first = _speak_turn(iter([line]), audio_out_dir, on_chunk=on_chunk)
+                think_audio_paths.extend(empty_paths)
+                if first_audio_time is None:
+                    first_audio_time = empty_first
+            if dropped_private and not dropped_hotline and not reply_text.strip():
+                # Everything THINK said stated a fact only the caregiver's private
+                # note holds: say honestly that nothing is noted, not the guess.
+                # A driving-plan turn still gets its lift-first line (#192).
+                empty_line = (enforce_driving_alternative("I'm here with you.", caregiver_name)
+                              if driving_guard else _NO_NOTE_LINE.format(name=caregiver_name))
+                reply_text, empty_paths, empty_first = _speak_turn(
+                    iter([empty_line]), audio_out_dir, on_chunk=on_chunk
+                )
                 think_audio_paths.extend(empty_paths)
                 if first_audio_time is None:
                     first_audio_time = empty_first

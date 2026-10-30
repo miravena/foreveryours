@@ -20,8 +20,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from caregiver import DEFAULT_CAREGIVER_NAME, SAMPLE_FAMILY, CaregiverFlags
-from memory.store import MemoryStore
-from pipeline.orchestrator import run_turn
+from memory.store import MemoryStore, PrivacyLevel
+from pipeline.orchestrator import (
+    _NO_NOTE_LINE,
+    caregiver_only_topics,
+    run_turn,
+    states_caregiver_only_topic,
+    strip_unbacked_mention,
+)
 from safety import fastpath
 from tests.test_offer_briefed_topic import _CapturingClient
 from tests.test_reply_honesty import _speak_joined
@@ -30,6 +36,11 @@ LIVE_GOODBYE_REPLY = (
     "I'm so glad you've shared those moments with me. Take all the time you need - there's no rush at all. "
     "Whenever you're ready, we can keep chatting or just sit quietly together. I'm right here with you."
 )
+LIVE_CANE_REPLY = (
+    "Ah, I see you've been using a cane for a while now, since your fall last fall. "
+    "Sarah and the family have noticed how much it helps you stay steady."
+)
+CANE_NOTE = SAMPLE_FAMILY["items"][-1][1]
 GOODBYES = "I've said my goodbyes. I'm ready to go now."
 
 
@@ -74,6 +85,107 @@ class TestIndirectGoodbyeInRunTurn(_Case):
         _, res = self.turn("I said goodbye to Sarah at the door. I'm ready to go home.", "That sounds nice.")
         self.assertNotIn("988", res.reply_text)
         self.assertEqual([f for f in self.flags.all() if f.severity == "crisis"], [])
+
+
+class TestCaregiverOnlyTopics(unittest.TestCase):
+    OPEN = ["Dad is Walter, 82, a retired trumpet teacher.",
+            "His grandson Leo is nine and loves hearing his trumpet stories.",
+            "Avoid talking about driving: he gave up his licence in March and it is a sore subject."]
+
+    def test_distinctive_words_of_the_note_minus_what_dad_may_hear(self):
+        topics = caregiver_only_topics([CANE_NOTE], self.OPEN + ["Why do I use a cane?"], "Sarah")
+        # "march" and "hearing" are grounded by briefed notes, "cane" by Dad's question.
+        self.assertEqual(topics, frozenset({"fall"}))
+
+    def test_without_grounding_every_distinctive_word_counts(self):
+        topics = caregiver_only_topics([CANE_NOTE], [], "Sarah")
+        self.assertEqual(topics, frozenset({"cane", "fall", "march", "hearing"}))
+
+    def test_sentences(self):
+        topics = frozenset({"fall", "hearing"})
+        for s in ("You've been using a cane since your fall last fall.", "It was after you fell.",
+                  "Your hearing is not what it was.", "Falls happen."):
+            with self.subTest(s=s):
+                self.assertTrue(states_caregiver_only_topic(s, topics))
+        for s in ("Glad to hear that.", "I enjoy a good chat.", "Would you like some music?"):
+            with self.subTest(s=s):
+                self.assertFalse(states_caregiver_only_topic(s, topics))
+
+
+class TestCaregiverOnlyGuardInRunTurn(_Case):
+    def test_the_live_cane_guess_gets_the_honest_line(self):
+        self.load_family()
+        _, res = self.turn("Why do I use a cane?", LIVE_CANE_REPLY)
+        self.assertEqual(res.reply_text, _NO_NOTE_LINE.format(name=DEFAULT_CAREGIVER_NAME))
+
+    def test_the_rest_of_a_reply_is_kept(self):
+        self.load_family()
+        _, res = self.turn("Why do I use a cane?", LIVE_CANE_REPLY + " Shall we put on some Ella Fitzgerald?")
+        self.assertEqual(res.reply_text, "Shall we put on some Ella Fitzgerald?")
+
+    def test_a_reply_that_only_states_the_private_fact_gets_the_honest_line(self):
+        self.load_family()
+        _, res = self.turn("Why do I use a cane?", "You use a cane because of your fall in March.")
+        self.assertEqual(res.reply_text, _NO_NOTE_LINE.format(name=DEFAULT_CAREGIVER_NAME))
+
+    def test_a_fact_dad_said_this_session_is_not_dropped(self):
+        self.load_family()
+        history = [{"role": "user", "content": "I had a fall in the spring."},
+                   {"role": "assistant", "content": "Oh dear."}]
+        _, res = self.turn("Why do I use a cane?", "That would be since your fall.", history=history)
+        self.assertIn("your fall", res.reply_text)
+
+    def test_safety_advice_is_never_dropped(self):
+        self.load_family()
+        _, res = self.turn("Why do I use a cane?", "Please call 911 if you fall.")
+        self.assertIn("call 911 if you fall", res.reply_text)
+
+    def test_nothing_is_dropped_on_a_fast_path_turn(self):
+        self.load_family()
+        _, res = self.turn("I fell down and I'm scared.", "Stay where you are, since your fall could mean a sore hip.")
+        self.assertIn("since your fall", res.reply_text)
+
+    def test_without_a_caregiver_only_note_nothing_changes(self):
+        self.store.add("Dad loves jazz", source="caregiver_memo")
+        _, res = self.turn("Why do I use a cane?", LIVE_CANE_REPLY)
+        self.assertIn("since your fall", res.reply_text)
+
+    def test_the_note_is_still_off_the_panel_of_what_dad_hears(self):
+        self.load_family()
+        items = [i for i in self.store.all() if i.privacy == PrivacyLevel.CAREGIVER_ONLY.value]
+        self.assertEqual([i.text for i in items], [CANE_NOTE])
+
+
+class TestUnbackedMention(unittest.TestCase):
+    def test_opener_goes_when_the_companion_has_said_nothing_yet(self):
+        self.assertEqual(strip_unbacked_mention("As I mentioned before, Leo visits on Saturday.", []),
+                         "Leo visits on Saturday.")
+        self.assertEqual(strip_unbacked_mention("As I said earlier, it is sunny.", None), "It is sunny.")
+
+    def test_opener_stays_when_an_earlier_reply_exists(self):
+        history = [{"role": "user", "content": "Hi"}, {"role": "assistant", "content": "Hello Walter."}]
+        s = "As I mentioned before, Leo visits on Saturday."
+        self.assertEqual(strip_unbacked_mention(s, history), s)
+
+    def test_other_sentences_are_untouched(self):
+        for s in ("Leo visits on Saturday.", "As you know, it is sunny.", "As I mentioned before."):
+            self.assertEqual(strip_unbacked_mention(s, []), s)
+
+    def test_run_turn_speaks_the_sentence_without_the_claim(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "data").mkdir()
+            (root / "audio").mkdir()
+            store = MemoryStore("t", root / "data")
+            flags = CaregiverFlags("t", root / "data")
+            client = _CapturingClient("As I mentioned before, jazz is wonderful.")
+            with patch("pipeline.think.get_client", return_value=client), \
+                 patch("pipeline.orchestrator._speak_turn", side_effect=_speak_joined):
+                res = run_turn(transcript="Tell me something nice.", memory_store=store, flags=flags,
+                               audio_out_dir=root / "audio", caregiver_name="Sarah")
+            if res.background_thread:
+                res.background_thread.join(timeout=10)
+        self.assertEqual(res.reply_text, "Jazz is wonderful.")
 
 
 if __name__ == "__main__":
