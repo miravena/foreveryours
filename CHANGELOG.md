@@ -10,26 +10,28 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-30
+
+The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.3 plus abuse limits, owner alerts, smooth reply audio on phones and a browser smoke test. During judging only `v1.0.x` patches deploy (ADR-015).
+
 ### Fixed
 - The companion's spoken reply no longer stops in the middle of a word on a phone or a laptop (#194). Measured in a real browser, the reply played its first 1.3-1.8 s, went silent for 1.3-3.3 s, then played the rest: Gradio's streaming encoder keeps the tail of each sentence until the turn ends, and its player re-reads the playlist only about every two seconds. Each sentence is now sent as 0.4 s slices, followed by a one-millisecond silent nudge while the turn finishes in the background; the browser then has the whole sentence about a second after the first sound.
+- One huge typed input could freeze the app for everyone (the safety scan is quadratic on tens of thousands of characters), unlimited new sessions could spend the owner's Nebius credits past the per-session cap, and one huge memo could block every visitor's memo saves (#37).
+- espeak is called with `--` before the sentence, so a sentence that starts with "-" is spoken, not read as an option; the Gradio `/monitoring` dashboard is off.
+- The driving-plan note no longer suggests "shall I let Sarah know?", which rule 26 forbids: it suggests Dad ask Sarah for a lift himself.
+
 ### Changed
 - The type box no longer suggests "Who is Sarah?". The default household does not say who she is, so the answer was weak. It suggests "What's my grandson's name?" instead.
 
 ### Added
 - `scripts/ui_smoke.py`: a local Playwright smoke test that opens the web demo in Chromium and clicks what a judge clicks (chips, sample clips, Send, sample family, memo, guided interview, the fall alert), with a screenshot per step and a non-zero exit on any failure. Run by hand against a local server; not part of the suite or CI (#280).
-### Added
 - Abuse guardrails for the public demo (#37, `guardrails.py`): size limits on typed text, speech transcripts, memos and interview answers (`FY_MAX_INPUT_CHARS`, `FY_MAX_MEMO_CHARS`, `FY_MAX_MEMO_FACTS`); a process-wide budget for hosted turns (`FY_GLOBAL_TURNS_PER_HOUR`, `FY_GLOBAL_TURNS_PER_DAY`) and per-visitor limits (`FY_CLIENT_TURNS_PER_HOUR`, `FY_CLIENT_NEW_SESSIONS_PER_HOUR`) keyed by a salted hash of the client address. A spent budget answers "busy" and withholds only THINK, AUDIT and extraction: a fall or crisis phrase still gets the fast-path reply and the flag. Defaults are generous; every limit is an environment variable (`.env.example`, README). An over-long input is refused without a model call, but a fall or crisis phrase at its start or end still gets the fast-path reply and the flag.
 - Owner alerts, off unless `FY_OWNER_ALERT_WEBHOOK` (e.g. an ntfy.sh topic) or `FY_OWNER_ALERT_SMTP_*` is set: daily usage at 50/80/100%, the hourly cap, a throttled visitor and a burst of oversize refusals, at most `FY_OWNER_ALERTS_PER_HOUR` an hour, counts only.
 - `SECURITY.md` describes the limits and alerts.
 
-### Fixed
-- One huge typed input could freeze the app for everyone (the safety scan is quadratic on tens of thousands of characters), unlimited new sessions could spend the owner's Nebius credits past the per-session cap, and one huge memo could block every visitor's memo saves (#37).
-- espeak is called with `--` before the sentence, so a sentence that starts with "-" is spoken, not read as an option; the Gradio `/monitoring` dashboard is off.
-- The driving-plan note no longer suggests "shall I let Sarah know?", which rule 26 forbids: it suggests Dad ask Sarah for a lift himself.
-
 ## [1.0.3] - 2026-10-30
 
-The build submitted to the Nebius x NVIDIA Global AI Hackathon (Personal AI track): v1.0.2 plus the fixes below. During judging only `v1.0.x` patches deploy (ADR-015).
+v1.0.2 plus the fixes below; superseded by 1.0.4 the same day.
 
 ### Fixed
 - "Is Sarah listening to us?" and "Can Sarah hear what I tell you?" get one fixed answer (rule 19), not the model's, which sometimes dropped the "only" ("she does see safety flags if I send any"). A safety turn still takes the fast path, and "Don't tell Sarah about the biscuits" still goes to the model (#37).
@@ -555,7 +557,8 @@ demo and the Gradio web demo).
 - Safety fast-path false positives ("I fell" vs "I fell asleep") (#29).
 - `.env` loading for the Hugging Face Spaces wrapper (`app.py`) (#31).
 
-[Unreleased]: ../../compare/v1.0.3...HEAD
+[Unreleased]: ../../compare/v1.0.4...HEAD
+[1.0.4]: ../../compare/v1.0.3...v1.0.4
 [1.0.3]: ../../compare/v1.0.2...v1.0.3
 [1.0.2]: ../../compare/v1.0.1...v1.0.2
 [1.0.1]: ../../compare/v1.0.0...v1.0.1
