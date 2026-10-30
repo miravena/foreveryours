@@ -14,6 +14,7 @@ only a caregiver-only note holds is dropped.
 C (#280): "I forgot my blood pressure pill this morning. Can I take two tonight to
 catch up?" got sympathy and a change of subject. Dose questions get fixed text.
 """
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,7 +22,9 @@ from unittest.mock import patch
 
 from caregiver import DEFAULT_CAREGIVER_NAME, SAMPLE_FAMILY, CaregiverFlags
 from memory.store import MemoryStore, PrivacyLevel
+from pipeline.intent import is_medication_dose_question
 from pipeline.orchestrator import (
+    _MEDICATION_ANSWER,
     _NO_NOTE_LINE,
     caregiver_only_topics,
     run_turn,
@@ -40,6 +43,11 @@ LIVE_CANE_REPLY = (
     "Ah, I see you've been using a cane for a while now, since your fall last fall. "
     "Sarah and the family have noticed how much it helps you stay steady."
 )
+LIVE_PILL_REPLY = (
+    "I'm sorry you forgot your pill this morning, that happens to everyone. "
+    "Would you like me to remind you of any other habits you'd like to keep up with?"
+)
+PILL_QUESTION = "I forgot my blood pressure pill this morning. Can I take two tonight to catch up?"
 CANE_NOTE = SAMPLE_FAMILY["items"][-1][1]
 GOODBYES = "I've said my goodbyes. I'm ready to go now."
 
@@ -186,6 +194,105 @@ class TestUnbackedMention(unittest.TestCase):
             if res.background_thread:
                 res.background_thread.join(timeout=10)
         self.assertEqual(res.reply_text, "Jazz is wonderful.")
+
+
+class TestMedicationQuestion(unittest.TestCase):
+    POSITIVES = (
+        PILL_QUESTION,
+        "Can I take two tonight? I missed my pill.",
+        "Should I take my pill now?",
+        "Can I skip my tablet tonight?",
+        "I missed my dose.",
+        "Is it ok to double up my medicine?",
+        "Can I take an extra pill?",
+        "What happens if I miss a pill?",
+        "How many pills should I take?",
+        "Can I take my pill with tea?",
+    )
+    NEGATIVES = (
+        "Can I take two biscuits?",
+        "Should I take the dog out?",
+        "What time is my pill?",
+        "When do I take my blood pressure pill?",
+        "I take my pill every morning.",
+        "I forgot my pill. Is Sarah coming today?",
+        "Do I have a pill at 8 AM?",
+        "",
+    )
+
+    def test_questions(self):
+        for t in self.POSITIVES:
+            with self.subTest(t=t):
+                self.assertTrue(is_medication_dose_question(t))
+
+    def test_near_misses(self):
+        for t in self.NEGATIVES:
+            with self.subTest(t=t):
+                self.assertFalse(is_medication_dose_question(t))
+
+
+class TestMedicationAnswerInRunTurn(_Case):
+    def test_the_live_pill_question_gets_the_fixed_answer_without_think_or_a_flag(self):
+        client, res = self.turn(PILL_QUESTION, LIVE_PILL_REPLY)
+        self.assertEqual(res.reply_text, _MEDICATION_ANSWER.format(name=DEFAULT_CAREGIVER_NAME))
+        self.assertIsNone(client.messages)  # THINK was never called
+        self.assertEqual(self.flags.all(), [])
+        low = res.reply_text.lower()
+        for must in ("can't advise", "double up", "doctor or pharmacist", DEFAULT_CAREGIVER_NAME.lower()):
+            self.assertIn(must, low)
+
+    def test_a_worried_question_still_goes_to_think(self):
+        client, res = self.turn("I'm worried and scared. Can I take two pills tonight?", "I hear you. Please ask your doctor.")
+        self.assertIsNotNone(client.messages)
+        self.assertNotIn("can't advise on medicines", res.reply_text)
+
+    def test_a_safety_turn_is_not_answered_with_the_fixed_text(self):
+        client, res = self.turn("I fell and I can't get up. Can I take a pill for the pain?", "Stay still.")
+        self.assertIsNotNone(client.messages)
+        self.assertNotIn("can't advise on medicines", res.reply_text)
+
+    def test_a_plain_question_is_unaffected(self):
+        client, res = self.turn("What time is my pill?", "Your pill is at 8 AM.")
+        self.assertIsNotNone(client.messages)
+        self.assertEqual(res.reply_text, "Your pill is at 8 AM.")
+
+
+class TestPanelHeaderCountsAnAuditFlag(unittest.TestCase):
+    def setUp(self):
+        import webapp
+        self.webapp = webapp
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self.temp_dir.cleanup)
+        for p in (patch.object(webapp, "SESSIONS_DIR", Path(self.temp_dir.name) / "sessions"),
+                  patch.object(webapp, "SHARED_PROFILE", False),
+                  patch.object(webapp, "DATA_DIR", Path(self.temp_dir.name) / "data"),
+                  patch.dict(os.environ, {"NEBIUS_API_KEY": ""})):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _panel_with(self, severity, text):
+        from caregiver import DEFAULT_PROFILE_ID
+        sid, _ = self.webapp.init_session()
+        data_dir, _ = self.webapp._session_dirs(sid)
+        CaregiverFlags(DEFAULT_PROFILE_ID, data_dir).add(text, severity=severity, disclosed_to_senior=True, source="audit")
+        return self.webapp._format_caregiver_panel(sid)
+
+    def test_an_audit_flag_is_not_calm(self):
+        panel = self._panel_with("audit", fastpath.CAREGIVER_FLAG_TEXT["audit_unsafe"])
+        head = panel.split("### What ForeverYours has told you")[0]
+        self.assertNotIn("Calm", head)
+        self.assertNotIn("No safety concerns", head)
+        self.assertIn("Review suggested", head)
+        self.assertNotIn("HIGH PRIORITY SAFETY ALERT", panel)  # a review note, not the red card
+        self.assertIn("AUDIT flagged a reply as unsafe", panel)
+
+    def test_no_flag_stays_calm(self):
+        sid, _ = self.webapp.init_session()
+        self.assertIn("Calm", self.webapp._format_caregiver_panel(sid))
+
+    def test_a_note_flag_stays_calm(self):
+        panel = self._panel_with(fastpath.DRIVING_FLAG_SEVERITY, fastpath.CAREGIVER_FLAG_TEXT["driving"])
+        self.assertIn("Calm", panel)
 
 
 if __name__ == "__main__":

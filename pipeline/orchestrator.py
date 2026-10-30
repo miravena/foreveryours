@@ -36,7 +36,14 @@ from memory.store import DOMAIN_SYNONYMS, STOPWORDS, MemoryStore, PrivacyLevel  
 from safety import fastpath  # noqa: E402
 
 from . import audit, speak, think  # noqa: E402
-from .intent import Intent, detect_intent, is_listening_question, is_topic_invitation, is_visitor_question  # noqa: E402
+from .intent import (  # noqa: E402
+    Intent,
+    detect_intent,
+    is_listening_question,
+    is_medication_dose_question,
+    is_topic_invitation,
+    is_visitor_question,
+)
 from .nebius_client import NebiusNotConfigured  # noqa: E402
 
 DISCLOSURE_LINE = "I want to let {caregiver} know about something I just said."
@@ -1562,6 +1569,24 @@ def _listening_answer(transcript: str, caregiver_name: str) -> str | None:
     return _LISTENING_ANSWER.format(name=caregiver_name or "Sarah")
 
 
+# Medicine and dose questions (#280, THINK rule 7), said the same way every
+# time. Live, the model answered "I forgot my blood pressure pill. Can I take
+# two tonight to catch up?" with sympathy and a change of subject, never saying
+# not to double up or to ask a doctor, and AUDIT then called it unsafe advice.
+_MEDICATION_ANSWER = ("I can't advise on medicines or doses. Please don't take extra or double up "
+                      "without checking first: your doctor or pharmacist can tell you what's safe, "
+                      "and {name} can help you ask them.")
+
+
+def _medication_answer(transcript: str, caregiver_name: str) -> str | None:
+    """Fixed answer to a medicine or dose question (#280), or None when the turn
+    is not one. The caller still lets the safety fast path and a worried
+    question win, and no flag is raised: the answer is the safe one."""
+    if not is_medication_dose_question(transcript):
+        return None
+    return _MEDICATION_ANSWER.format(name=caregiver_name or "your family")
+
+
 # Caregiver-only notes never reach THINK (rule 15), but the model can still
 # guess a fact the note holds ("since your fall last fall" for "Uses a cane
 # since a fall in March"), and next to the panel's lock note that reads as a
@@ -2382,9 +2407,15 @@ def run_turn(
             # Rule 19 as fixed text; a worried "is she listening? I'm scared" still goes to THINK.
             listening_answer = (None if fast.triggered or intent in (Intent.EMOTIONAL_SUPPORT, Intent.MIXED)
                                 else _listening_answer(transcript, caregiver_name))
+            # Rule 7 as fixed text (#280); a worried question still goes to THINK.
+            medication_answer = (None if fast.triggered or intent in (Intent.EMOTIONAL_SUPPORT, Intent.MIXED)
+                                 else _medication_answer(transcript, caregiver_name))
             if listening_answer is not None:
                 readout = True  # fixed text, like the visitor read-out: no family-detail or appointment checks
                 token_stream = iter([listening_answer])
+            elif medication_answer is not None:
+                readout = True  # fixed text: never checked as THINK prose, no THINK call, no flag
+                token_stream = iter([medication_answer])
             elif readout:
                 token_stream = iter([visitor_answer])
             else:
