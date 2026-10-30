@@ -2622,7 +2622,7 @@ def build_demo() -> gr.Blocks:
                 )
                 audio_in = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Speak (as the senior)")
                 text_in = gr.Textbox(
-                    placeholder="Or type what Dad says (e.g. 'I fell down earlier' or 'Who is Sarah?')...",
+                    placeholder="Or type what Dad says (e.g. 'I fell down earlier' or 'What's my grandson's name?')...",
                     label="Type (as the senior)",
                     lines=1,
                 )

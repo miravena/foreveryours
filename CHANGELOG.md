@@ -10,6 +10,11 @@ rename `Unreleased` to the version and date, then tag it.
 
 ## [Unreleased]
 
+### Changed
+- The type box no longer suggests "Who is Sarah?". The default household does not say who she is, so the answer was weak. It suggests "What's my grandson's name?" instead.
+
+### Added
+- `scripts/ui_smoke.py`: a local Playwright smoke test that opens the web demo in Chromium and clicks what a judge clicks (chips, sample clips, Send, sample family, memo, guided interview, the fall alert), with a screenshot per step and a non-zero exit on any failure. Run by hand against a local server; not part of the suite or CI (#280).
 ### Added
 - Abuse guardrails for the public demo (#37, `guardrails.py`): size limits on typed text, speech transcripts, memos and interview answers (`FY_MAX_INPUT_CHARS`, `FY_MAX_MEMO_CHARS`, `FY_MAX_MEMO_FACTS`); a process-wide budget for hosted turns (`FY_GLOBAL_TURNS_PER_HOUR`, `FY_GLOBAL_TURNS_PER_DAY`) and per-visitor limits (`FY_CLIENT_TURNS_PER_HOUR`, `FY_CLIENT_NEW_SESSIONS_PER_HOUR`) keyed by a salted hash of the client address. A spent budget answers "busy" and withholds only THINK, AUDIT and extraction: a fall or crisis phrase still gets the fast-path reply and the flag. Defaults are generous; every limit is an environment variable (`.env.example`, README). An over-long input is refused without a model call, but a fall or crisis phrase at its start or end still gets the fast-path reply and the flag.
 - Owner alerts, off unless `FY_OWNER_ALERT_WEBHOOK` (e.g. an ntfy.sh topic) or `FY_OWNER_ALERT_SMTP_*` is set: daily usage at 50/80/100%, the hourly cap, a throttled visitor and a burst of oversize refusals, at most `FY_OWNER_ALERTS_PER_HOUR` an hour, counts only.
