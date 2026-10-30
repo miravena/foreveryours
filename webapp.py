@@ -686,7 +686,18 @@ def _will_call_nebius() -> bool:
     return bool(os.environ.get("NEBIUS_API_KEY", "").strip())
 
 
-def _cap_notice(spoke: bool, flagged: bool, busy: bool = False) -> str:
+def _oversize_safety_window(transcript: str) -> str | None:
+    """For an input over FY_MAX_INPUT_CHARS: the head or tail slice (each within
+    the cap) that the safety fast path answers, else None. A long utterance that
+    starts or ends with "I fell down and can't get up" must not be refused as too
+    long; the scan stays bounded because it never sees more than the cap (#37)."""
+    for window in GUARDRAILS.safety_windows(transcript):
+        if fastpath.check(window).triggered:
+            return window
+    return None
+
+
+def _cap_notice(spoke: bool, flagged: bool, busy: bool = False, too_long: bool = False) -> str:
     """The cap footnote on a capped fast-path turn. It claims only what
     happened: "still played" only when reply audio was produced (a TTS failure
     or timeout leaves the reply as text), and "the family has been
@@ -696,6 +707,9 @@ def _cap_notice(spoke: bool, flagged: bool, busy: bool = False) -> str:
     said = ("the safety message above still played" if spoke
             else "the safety message above is shown as text because speech was unavailable")
     family = " and the family has been notified" if flagged else ""
+    if too_long:
+        return ("\n\n_That was too long for the companion to continue the conversation -- "
+                f"{said}{family}. Please try a shorter message._")
     if busy:
         return ("\n\n_This demo is busy right now, so the companion can't continue "
                 f"the conversation for a moment -- {said}{family}. Please try again shortly._")
@@ -842,6 +856,14 @@ def _resolve_session(session_id_val: str | None, client_key: str | None) -> str:
     if created:
         GUARDRAILS.note_new_session(client_key)
     return session_id_val
+
+
+def _fresh_session(client_key: str | None) -> str:
+    """`_new_session()` for a handler that starts a household on behalf of a
+    client: the new household counts toward that client's new-session limit (#37)."""
+    session_id = _new_session()
+    GUARDRAILS.note_new_session(client_key)
+    return session_id
 
 
 def _normalize_or_new_session(session_id: str) -> str:
@@ -1600,13 +1622,19 @@ def _run_demo_turn_streaming_impl(
     # Too long: refused before the safety scan, the cap or any model (#37). The
     # typed text goes back into the box; an over-long transcript has none to hand back.
     too_long = None if is_proactive else GUARDRAILS.input_refusal(transcript)
-    if too_long:
+    safety_window = _oversize_safety_window(transcript) if too_long else None
+    if too_long and safety_window is None:
         out = (too_long, None, history, panel(), "### 📊 Acoustic Biomarkers\n_Nothing was sent_")
         if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
         yield (*out, session_id_val, actual_text or "", None)
         return
-
-    block_turn, allow_hosted_call, busy = _cap_decision(data_dir, transcript, client_key)
+    if safety_window is not None:
+        # An emergency at either end of a long input: answer it from the fast path
+        # alone, on that slice, with no hosted call and nothing counted.
+        transcript = safety_window
+        block_turn, allow_hosted_call, busy = False, False, False
+    else:
+        block_turn, allow_hosted_call, busy = _cap_decision(data_dir, transcript, client_key)
     if block_turn:
         out = (BUSY_REPLY if busy else "This demo has hit its daily request cap -- please try again tomorrow.", None, history, panel(), "### 📊 Acoustic Biomarkers\n_Rate limited_")
         if session_expired: out = (_RESET_NOTICE + "\n\n" + out[0], *out[1:])
@@ -1752,7 +1780,7 @@ def _run_demo_turn_streaming_impl(
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
     if not allow_hosted_call:
-        transcript_and_reply += _cap_notice(spoke, bool(result.caregiver_flag), busy)
+        transcript_and_reply += _cap_notice(spoke, bool(result.caregiver_flag), busy, safety_window is not None)
         biomarker_str = CAP_BIOMARKERS
     elif wpm > 0:
         biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
@@ -1886,10 +1914,14 @@ def _run_demo_turn_impl(
     # sends and no-key misses handled above. A fast-path utterance at the cap
     # still runs, with only its THINK continuation withheld (#81 A1).
     too_long = None if is_proactive else GUARDRAILS.input_refusal(transcript)
-    if too_long:  # refused before the safety scan, the cap or any model (#37)
+    safety_window = _oversize_safety_window(transcript) if too_long else None
+    if too_long and safety_window is None:  # refused before the cap or any model (#37)
         return too_long, None, history, panel(), "### 📊 Acoustic Biomarkers\n_Nothing was sent_"
-
-    block_turn, allow_hosted_call, busy = _cap_decision(data_dir, transcript, client_key)
+    if safety_window is not None:  # an emergency at either end: fast path only, nothing counted
+        transcript = safety_window
+        block_turn, allow_hosted_call, busy = False, False, False
+    else:
+        block_turn, allow_hosted_call, busy = _cap_decision(data_dir, transcript, client_key)
     if block_turn:
         return (
             BUSY_REPLY if busy else "This demo has hit its daily request cap -- please try again tomorrow.",
@@ -1987,7 +2019,7 @@ def _run_demo_turn_impl(
     wpm = biomarkers.get("wpm", 0.0)
     pause = biomarkers.get("avg_pause_s", 0.0)
     if not allow_hosted_call:
-        transcript_and_reply += _cap_notice(bool(reply_audio), bool(result.caregiver_flag), busy)
+        transcript_and_reply += _cap_notice(bool(reply_audio), bool(result.caregiver_flag), busy, safety_window is not None)
         biomarker_str = CAP_BIOMARKERS
     elif wpm > 0:
         biomarker_str = f"### 📊 Acoustic Biomarkers\n- **Speaking Rate:** {wpm} wpm\n- **Avg Pause:** {pause}s\n\n_Computed from this clip only; nothing is tracked across sessions._"
@@ -2045,7 +2077,8 @@ def _save_memo_text(session_id: str, memo_text: str, scope: str | None = None) -
         store.add(line, source="caregiver_memo", keep_texts=facts, **extra)
 
 
-def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> tuple[str, str, str]:
+def save_caregiver_text_memo(memo_text: str | None, session_id: str | None,
+                             request: gr.Request | None = None) -> tuple[str, str, str]:
     """Caregiver submits context via text note (e.g. from work / phone).
 
     The whole session-dependent body -- empty-input branch, join, writes and
@@ -2055,7 +2088,8 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
     for a household already deleted is REFUSED rather than recreating it:
     the memo is written nowhere, a fresh household answers with
     the reset notice, and the typed text stays in the box to resubmit."""
-    session_id = session_id or _new_session()
+    client_key = GUARDRAILS.client_key(request)
+    session_id = session_id or _fresh_session(client_key)
     if _session_id_invalid(session_id):
         # Malformed/foreign id (#149): nothing to write to, so return the
         # same placeholder panel text rather than raise.
@@ -2076,15 +2110,17 @@ def save_caregiver_text_memo(memo_text: str | None, session_id: str | None) -> t
     except SessionGone:
         # Never _format_caregiver_panel(old id): it builds a store and would
         # recreate the deleted directory.
-        new_sid = _new_session()
+        new_sid = _fresh_session(client_key)
         return _RESET_NOTICE + "\n\n" + _format_caregiver_panel(new_sid), new_sid, memo_text or ""
 
 
-def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) -> tuple[str, str]:
+def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None,
+                              request: gr.Request | None = None) -> tuple[str, str]:
     """Caregiver submits onboarding context via voice memo (Beat 1). Same
     session lifecycle as save_caregiver_text_memo; transcription
     runs before registering, since it reads Gradio's upload, not the session."""
-    session_id = session_id or _new_session()
+    client_key = GUARDRAILS.client_key(request)
+    session_id = session_id or _fresh_session(client_key)
     if _session_id_invalid(session_id):
         return _format_caregiver_panel(session_id), session_id  # malformed/foreign id (#149)
     transcript = refusal = None
@@ -2112,7 +2148,7 @@ def save_caregiver_voice_memo(memo_audio: str | None, session_id: str | None) ->
     except SessionGone:
         # The household is gone: the transcript is dropped (the voice memo has
         # no textbox to hand it back in) and nothing is written anywhere.
-        new_sid = _new_session()
+        new_sid = _fresh_session(client_key)
         return _RESET_NOTICE + "\n\n" + _format_caregiver_panel(new_sid), new_sid
 
 
@@ -2227,7 +2263,8 @@ def interview_skip(state, session_id: str | None = None) -> tuple[dict, str]:
     return state, _render_interview(state)
 
 
-def interview_confirm(answer: str | None, state, session_id: str | None) -> tuple[str, str, dict, str, str]:
+def interview_confirm(answer: str | None, state, session_id: str | None,
+                      request: gr.Request | None = None) -> tuple[str, str, dict, str, str]:
     """Confirm the typed answer to the current question. It is first checked
     with caregiver.validate_sample_profile (dosing, diagnosis, clinical claims;
     the memo path itself does not do that): a refused answer is shown with its
@@ -2235,7 +2272,8 @@ def interview_confirm(answer: str | None, state, session_id: str | None) -> tupl
     through _save_memo_text, exactly as a typed memo, and the interview moves
     on. No model call is made and the senior side is not involved.
     Returns (caregiver panel, session id, state, interview text, answer box)."""
-    session_id = session_id or _new_session()
+    client_key = GUARDRAILS.client_key(request)
+    session_id = session_id or _fresh_session(client_key)
     state = _interview_state(state, _interview_binding(session_id))
     if _session_id_invalid(session_id):
         return _format_caregiver_panel(session_id), session_id, state, _render_interview(state), ""
@@ -2275,13 +2313,13 @@ def interview_confirm(answer: str | None, state, session_id: str | None) -> tupl
     except SessionGone:
         # The household is gone: nothing was saved, the interview restarts
         # with the new one, and the typed answer stays in the box.
-        new_sid = _new_session()
+        new_sid = _fresh_session(client_key)
         fresh = _interview_new_state(_interview_binding(new_sid))
         return (_RESET_NOTICE + "\n\n" + _format_caregiver_panel(new_sid), new_sid, fresh,
                 _render_interview(fresh), answer)
 
 
-def load_sample_family(session_id: str | None) -> tuple[str, str]:
+def load_sample_family(session_id: str | None, request: gr.Request | None = None) -> tuple[str, str]:
     """One click, before anyone speaks: seed this session's own MemoryStore
     with caregiver.SAMPLE_FAMILY (a labelled-fictional senior, family, likes,
     daily routine and caregiver-entered medication REMINDER times) and return
@@ -2291,7 +2329,7 @@ def load_sample_family(session_id: str | None) -> tuple[str, str]:
     writes nothing. store.add no-ops on duplicates, so a second click adds
     nothing. Lives only under the session's data dir, so _end_session and
     _sweep_stale_sessions delete it with everything else."""
-    session_id = session_id or _new_session()
+    session_id = session_id or _fresh_session(GUARDRAILS.client_key(request))
     try:
         data_dir, _ = _session_dirs(session_id)
     except ValueError:

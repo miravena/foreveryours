@@ -234,7 +234,7 @@ the paid model calls are withheld (the reply says the demo is busy and to try ag
 
 | Variable | Default | What it limits |
 |---|---|---|
-| `FY_MAX_INPUT_CHARS` | 2000 | One typed message or speech transcript. Over it: a short refusal, no model call, nothing stored, the typed text stays in the box. |
+| `FY_MAX_INPUT_CHARS` | 2000 | One typed message or speech transcript. Over it: a short refusal, no model call, nothing stored, the typed text stays in the box. An emergency phrase at the start or end of an over-long input is still answered by the fast path (only those two slices are scanned). |
 | `FY_MAX_MEMO_CHARS` | 2000 | One caregiver memo (typed or spoken) or interview answer. Over it: refused, nothing saved. |
 | `FY_MAX_MEMO_FACTS` | 30 | Separate facts in one memo. |
 | `FY_GLOBAL_TURNS_PER_HOUR` | 600 | Hosted (Nebius) turns, all visitors together, rolling hour. |

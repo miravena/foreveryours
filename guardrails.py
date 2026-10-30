@@ -343,6 +343,14 @@ class Guardrails:
         self._note_refusal()
         return INPUT_REFUSAL.format(n=n, cap=self.config.max_input_chars)
 
+    def safety_windows(self, text: str) -> list[str]:
+        """The head and the tail of an over-long input, each at most the input cap.
+        The safety scan never sees more than that (it is the part that does not
+        scale), yet an emergency said at either end of a long utterance is still
+        answered rather than refused (see webapp._oversize_safety_window)."""
+        cap = self.config.max_input_chars
+        return [text[:cap], text[-cap:]] if len(text) > cap else [text]
+
     def memo_refusal(self, text: str | None, count_facts: Callable[[str], int]) -> str | None:
         """Refusal text for a memo (typed, dictated or an interview answer) over
         the character or fact cap, else None. `count_facts` runs only on text

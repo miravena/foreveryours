@@ -21,7 +21,8 @@ The public demo is anonymous and the owner pays for the model calls, so it limit
 
 - **Input size.** A typed message, a speech transcript, a caregiver memo and an interview answer each
   have a size limit, and a memo a limit on separate facts. An over-long input gets a short, friendly
-  refusal before any safety scan or model call, and nothing is stored.
+  refusal before any model call, and nothing is stored; the safety scan never sees more than the limit,
+  and an emergency phrase at either end of an over-long input still gets the fast-path reply and the flag.
 - **Shared budget.** Hosted model turns are limited per hour and per day across all visitors, and per
   visitor address (a salted hash held in memory only, never written to disk or a log). When a budget is
   spent the demo says it is busy; the offline safety fast path still answers, tells the senior and flags

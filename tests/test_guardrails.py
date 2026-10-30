@@ -121,11 +121,21 @@ class _WebappCase(unittest.TestCase):
 
 class TestTypedInputRefusal(_WebappCase):
     def _forbid_everything_after_the_cap(self):
-        """Nothing past the cap check may run for an oversize input."""
-        for target, name in ((webapp, "_cap_decision"), (webapp, "run_turn"), (webapp.fastpath, "check")):
+        """Nothing past the cap check may run for an oversize input, and the safety
+        scan never sees more than the cap (it is the part that does not scale)."""
+        for target, name in ((webapp, "_cap_decision"), (webapp, "run_turn")):
             p = patch.object(target, name, side_effect=AssertionError(f"{name} ran for an oversize input"))
             p.start()
             self.addCleanup(p.stop)
+        real_check = webapp.fastpath.check
+
+        def bounded_check(text, *args, **kwargs):
+            self.assertLessEqual(len(text), 2000, "the safety scan saw an oversize input")
+            return real_check(text, *args, **kwargs)
+
+        p = patch.object(webapp.fastpath, "check", side_effect=bounded_check)
+        p.start()
+        self.addCleanup(p.stop)
 
     def test_oversize_typed_text_is_refused_without_model_safety_scan_or_state_change(self):
         self._forbid_everything_after_the_cap()
@@ -166,10 +176,29 @@ class TestTypedInputRefusal(_WebappCase):
             self.assertEqual(result[2], [])
             self.assertEqual(result[6], "")
 
-    def test_a_long_fall_report_is_refused_before_the_safety_scan(self):
-        """The cap sits ahead of fastpath.check on purpose (it is quadratic on huge text)."""
+    def test_a_long_input_that_starts_or_ends_with_an_emergency_still_gets_the_safety_reply(self):
+        """Review of #37: the cap must not suppress a safety reply. The fast path sees
+        only the head and the tail slice (each within the cap); the paid continuation
+        is withheld and the family is flagged."""
+        filler = "The weather was lovely and the garden looked nice today. " * 60
+        for text in ("I fell down earlier and I'm scared. " + filler,
+                     filler + " I fell down earlier and I'm scared."):
+            sid, _ = webapp.init_session()
+            for run in (
+                lambda: webapp._run_demo_turn(None, text, [], sid),
+                lambda: list(webapp.run_demo_turn_streaming(None, text, [], sid))[-1][:5],
+            ):
+                out = run()
+                self.assertIn("letting your family know", out[0])
+                self.assertIn("too long", out[0])
+            self.assertIn("URGENT", webapp._format_caregiver_panel(sid))
+
+    def test_an_emergency_buried_in_the_middle_of_a_huge_input_is_refused_unscanned(self):
+        """The documented limit of the bounded scan: only the two ends are looked at."""
         self._forbid_everything_after_the_cap()
-        out = webapp.run_demo_turn(None, "I fell down. " * 200, [], self.session_id)
+        text = ("The weather was lovely today. " * 100 + "I fell down earlier and I'm scared. "
+                + "The garden looked nice. " * 100)
+        out = webapp.run_demo_turn(None, text, [], self.session_id)
         self.assertIn("Nothing was sent", out[0])
 
 
@@ -424,6 +453,43 @@ class TestCapKeepsSafetyReplies(_WebappCase):
             out = webapp._run_demo_turn(None, "Tell me about jazz", [], self.session_id)
         self.assertIn("daily request cap", out[0])
         self.assertEqual(len(self.guard._hour), 1)  # only the setUp turn; the refused one was refunded
+
+
+class TestSessionCreationPaths(_WebappCase):
+    """Every handler that can start a household counts it toward the client's limit."""
+
+    def setUp(self):
+        super().setUp()
+        self.guard._on_space = True
+        self.req = request("10.0.0.1", f"{GOOD_IP}, 10.0.0.1")
+        self.key = self.guard.client_key(self.req)
+
+    def started(self) -> int:
+        return len(self.guard._clients[self.key]["sessions"]) if self.key in self.guard._clients else 0
+
+    def test_handlers_without_a_session_count_the_new_one(self):
+        calls = (
+            lambda: webapp.save_caregiver_text_memo("Sarah visits on Friday.", None, self.req),
+            lambda: webapp.save_caregiver_voice_memo(None, None, self.req),
+            lambda: webapp.interview_confirm("", None, None, self.req),
+            lambda: webapp.load_sample_family(None, self.req),
+            lambda: webapp.init_session(self.req),
+        )
+        for n, call in enumerate(calls, start=1):
+            call()
+            self.assertEqual(self.started(), n)
+
+    def test_a_turn_with_no_session_counts_the_new_one_but_an_existing_session_does_not(self):
+        webapp.run_demo_turn(None, "Hello", [], None, "Morning (Default)", self.req)
+        self.assertEqual(self.started(), 1)
+        webapp.run_demo_turn(None, "Hello again", [], self.session_id, "Morning (Default)", self.req)
+        self.assertEqual(self.started(), 1)
+
+    def test_too_many_started_sessions_make_that_clients_turns_busy(self):
+        self.guard.config = Config(client_new_sessions_per_hour=2)
+        for _ in range(3):
+            webapp.load_sample_family(None, self.req)
+        self.assertFalse(self.guard.admit_hosted_turn(self.key))
 
 
 class TestOwnerAlerts(unittest.TestCase):
