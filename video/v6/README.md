@@ -1,7 +1,8 @@
 # Demo video v6
 
 **v6b** (#304) is the current cut. It changes captions and two narrator lines only, on the same
-captures: the fall and crisis labels say "simulated alert, nothing sent"; the Leo cue is no longer
+captures: the fall and crisis labels say "simulated alert, nothing sent", each on one line in the
+band above "Today:" so they cover no panel text; the Leo cue is no longer
 zero-length and the two long companion lines are split into two cues; no caption cue is shorter
 than 0.5 s or overlaps another. The narrator lines at the crisis shot ("Here, the safety rules
 answer before any model is called.") and at day 2 ("In a fresh local run the next day, it

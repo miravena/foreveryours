@@ -56,12 +56,14 @@ MAX_GAP = 1.5           # no silence this long outside the companion's own pause
 LIVE, LOCAL, CURLY = v5.LIVE, v5.LOCAL, v5.CURLY
 TAG, LBL = v5.TAG, v5.LBL
 APPT_TAKE = os.environ.get("APPT_TAKE", "appt_t1")
-# v6b: the labels say what happened to the alert. Two lines each (ASS \N); the fall label is a
-# 44 pt style so its second line fits the caregiver panel.
+# v6b: the labels say what happened to the alert. Each is one line at 36 pt, in the band between
+# the panel rule and the "Today:" row, so it covers no panel text (a two-line crisis label covered
+# the caregiver intro paragraph).
 FALL_LBL = "Dad was told · simulated alert, nothing sent"
-CRISIS_LBL = "Crisis: 988 offered ·\\Nsimulated alert, nothing sent"
-FALL_LBL_POS = (1427, 180)   # one line, in the band between the panel rule and the "Today:" row
+CRISIS_LBL = "Crisis: 988 offered · simulated alert, nothing sent"
+FALL_LBL_POS = (1427, 180)
 LABEL2 = "Label2"
+LABEL_CRISIS = "CrisisOne"
 MIN_CUE = 0.5           # no caption event (SRT or ASS) shorter than this
 # Long companion lines, each split into two cues; the time is shared out by word count.
 SPLITS = {
@@ -72,6 +74,8 @@ SPLITS = {
 }
 ASS_HEAD = v5.ASS_HEAD.replace("\n[Events]",
                                "Style: Label2,DejaVu Sans,36,&H00FFFFFF,&H00FFFFFF,&H00267A1E,&H00267A1E,"
+                               "1,0,0,0,100,100,0,0,3,16,0,5,0,0,0,1\n"
+                               "Style: CrisisOne,DejaVu Sans,36,&H00FFFFFF,&H00FFFFFF,&H001E1ECC,&H001E1ECC,"
                                "1,0,0,0,100,100,0,0,3,16,0,5,0,0,0,1\n\n[Events]")
 
 
@@ -294,7 +298,7 @@ def main():
     # The privacy label ends when the freeze before the crisis line starts.
     tl.labels.append((g(k5["lonely_reply_text_visible"]), g(CUT - 0.001), "LabelGrey", *LBL,
                       "Not shown to the family"))
-    tl.labels.append((g(k5["crisis_flag_visible"]), g(B5), "Crisis", LBL[0], LBL[1] - 28, CRISIS_LBL))
+    tl.labels.append((g(k5["crisis_flag_visible"]), g(B5), LABEL_CRISIS, *FALL_LBL_POS, CRISIS_LBL))
     dad(tc5, g(tc5["mic_audio_start"]), g(r2["starts_playing_at"]))
     narr_between("n5b", g(speech(tc5)[1]), g(r2["starts_playing_at"]), "shot 5 crisis")
     companion(crisis_wav, crisis_text, g(r2["starts_playing_at"]))
